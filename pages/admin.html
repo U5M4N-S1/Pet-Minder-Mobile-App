@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PawPal – Pet Minder</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Caveat:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles/shared.css">
+<link rel="stylesheet" href="/styles/admin.css">
+</head>
+<body>
+<!-- ADMIN -->
+<div class="screen active" id="screen-admin">
+  <div class="admin-header">
+    <h1>Admin Dashboard</h1>
+    <button class="logout-btn" onclick="logout()">Logout</button>
+  </div>
+  <div class="admin-stats">
+    <div class="stat-card"><h3>Total Users</h3><div class="stat-number">1,247</div></div>
+    <div class="stat-card"><h3>Active Minders</h3><div class="stat-number">89</div></div>
+    <div class="stat-card"><h3>Bookings Today</h3><div class="stat-number">23</div></div>
+    <div class="stat-card"><h3>Revenue</h3><div class="stat-number">$2,450</div></div>
+  </div>
+  <div class="admin-tabs">
+    <button class="admin-tab active" onclick="switchAdminTab('users')">Users</button>
+    <button class="admin-tab" onclick="switchAdminTab('minders')">Minders</button>
+    <button class="admin-tab" onclick="switchAdminTab('bookings')">Bookings</button>
+    <button class="admin-tab" onclick="switchAdminTab('reports')">Reports</button>
+  </div>
+  <div class="admin-content" id="admin-content">
+    <div class="admin-section" id="admin-users">
+      <h3>User Management</h3>
+      <div class="admin-table">
+        <div class="table-header"><span>Name</span><span>Email</span><span>Status</span><span>Actions</span></div>
+        <div class="table-row"><span>John Doe</span><span>john@email.com</span><span>Active</span><span><button class="action-btn">Edit</button><button class="action-btn danger">Suspend</button></span></div>
+        <div class="table-row"><span>Jane Smith</span><span>jane@email.com</span><span>Active</span><span><button class="action-btn">Edit</button><button class="action-btn danger">Suspend</button></span></div>
+      </div>
+    </div>
+    <div class="admin-section" id="admin-minders" style="display:none">
+      <h3>Minder Management</h3>
+      <div class="admin-table">
+        <div class="table-header"><span>Name</span><span>Rating</span><span>Status</span><span>Actions</span></div>
+        <div class="table-row"><span>Sarah K.</span><span>4.9</span><span>Verified</span><span><button class="action-btn">View</button><button class="action-btn danger">Deactivate</button></span></div>
+        <div class="table-row"><span>Emma T.</span><span>4.7</span><span>Verified</span><span><button class="action-btn">View</button><button class="action-btn danger">Deactivate</button></span></div>
+      </div>
+    </div>
+    <div class="admin-section" id="admin-bookings" style="display:none">
+      <h3>Recent Bookings</h3>
+      <div class="admin-table">
+        <div class="table-header"><span>Booking ID</span><span>Service</span><span>Status</span><span>Actions</span></div>
+        <div class="table-row"><span>#1234</span><span>Dog Walking</span><span>Confirmed</span><span><button class="action-btn">View</button><button class="action-btn danger">Cancel</button></span></div>
+        <div class="table-row"><span>#1235</span><span>Overnight Stay</span><span>Pending</span><span><button class="action-btn">View</button><button class="action-btn danger">Cancel</button></span></div>
+      </div>
+    </div>
+    <div class="admin-section" id="admin-reports" style="display:none">
+      <h3>Reports & Analytics</h3>
+      <div class="report-chart">
+        <h4>Monthly Revenue</h4>
+        <div class="chart-placeholder">📊 Chart would go here</div>
+      </div>
+      <div class="report-chart">
+        <h4>User Growth</h4>
+        <div class="chart-placeholder">📈 Chart would go here</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/js/app.js"></script>
+<script>
+function switchAdminTab(tab) {
+  document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.admin-section').forEach(s => s.style.display = 'none');
+  document.querySelector(`.admin-tab[onclick="switchAdminTab('${tab}')"]`).classList.add('active');
+  document.getElementById(`admin-${tab}`).style.display = 'block';
+}
+</script>
+</body>
+</html>

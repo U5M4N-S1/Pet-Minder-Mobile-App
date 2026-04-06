@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PawPal – Pet Minder</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Caveat:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles/shared.css">
+<link rel="stylesheet" href="/styles/profile.css">
+</head>
+<body>
+<!-- NAV -->
+<nav class="app-nav" id="app-nav">
+  <div class="nav-logo" onclick="window.location.href='home.html'"><span>🐾</span> <span class="logo-paw">Paw</span><span class="logo-pal">Pal</span></div>
+  <div class="nav-links">
+    <button class="nav-link" id="nav-home" onclick="window.location.href='home.html'">🏠 Home</button>
+    <button class="nav-link" id="nav-search" onclick="window.location.href='search.html'">🔍 Find Minders</button>
+    <button class="nav-link" id="nav-bookings" onclick="window.location.href='bookings.html'">📅 Bookings</button>
+    <button class="nav-link" id="nav-messages" onclick="window.location.href='messages.html'">💬 Messages</button>
+    <button class="nav-link active" id="nav-profile" onclick="window.location.href='profile.html'">👤 Profile</button>
+  </div>
+</nav>
+<!-- Mobile logo header -->
+<div class="mobile-header" id="mobile-header">
+  <span class="mobile-header-paw">🐾</span><span class="logo-paw">Paw</span><span class="logo-pal">Pal</span>
+</div>
+<!-- PROFILE -->
+<div class="screen active" id="screen-profile">
+  <div class="profile-header">
+    <div class="profile-avatar">👤</div>
+    <div class="profile-info">
+      <h1 id="profile-name">John Doe</h1>
+      <p id="profile-email">john.doe@email.com</p>
+      <p id="profile-phone">+1 (555) 123-4567</p>
+    </div>
+    <button class="edit-profile-btn" onclick="openModal('edit-profile-modal')">Edit Profile</button>
+  </div>
+  <div class="profile-section">
+    <h2>My Pets</h2>
+    <div class="pets-grid" id="pets-grid">
+      <!-- Pets will be populated here -->
+    </div>
+    <button class="add-pet-btn" onclick="openModal('add-pet-modal')">+ Add Pet</button>
+  </div>
+  <div class="profile-section">
+    <h2>Account Settings</h2>
+    <div class="settings-list">
+      <div class="setting-item" onclick="openModal('edit-profile-modal')"><span>👤</span> Edit Profile</div>
+      <div class="setting-item" onclick="openModal('change-password-modal')"><span>🔒</span> Change Password</div>
+      <div class="setting-item" onclick="openModal('notification-settings-modal')"><span>🔔</span> Notifications</div>
+      <div class="setting-item" onclick="openModal('privacy-settings-modal')"><span>🔒</span> Privacy</div>
+      <div class="setting-item" onclick="logout()"><span>🚪</span> Logout</div>
+    </div>
+  </div>
+  <nav class="bottom-nav"><button class="bottom-nav-item" onclick="window.location.href='home.html'"><span>🏠</span><span>Home</span></button><button class="bottom-nav-item" onclick="window.location.href='search.html'"><span>🔍</span><span>Search</span></button><button class="bottom-nav-item" onclick="window.location.href='bookings.html'"><span>📅</span><span>Bookings</span></button><button class="bottom-nav-item" onclick="window.location.href='messages.html'"><span>💬</span><span>Messages</span></button><button class="bottom-nav-item active" onclick="window.location.href='profile.html'"><span>👤</span><span>Profile</span></button></nav>
+</div>
+<script src="/js/app.js"></script>
+<script>
+document.getElementById('nav-profile').classList.add('active');
+document.querySelector('.bottom-nav .bottom-nav-item:nth-child(5)').classList.add('active');
+refreshPetsUI();
+</script>
+</body>
+</html>

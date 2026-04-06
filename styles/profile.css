@@ -1,0 +1,31 @@
+/* Profile page */
+.profile-header { background: var(--bark); padding: 32px 24px; text-align: center; position: relative; }
+.profile-avatar { width: 80px; height: 80px; border-radius: 50%; background: var(--sand-light); display: flex; align-items: center; justify-content: center; font-size: 40px; margin: 0 auto 16px; border: 3px solid var(--terra-light); }
+.profile-info { color: white; }
+.profile-name { font-family: 'Playfair Display', serif; font-size: 24px; margin-bottom: 4px; }
+.profile-email { font-size: 14px; opacity: 0.9; margin-bottom: 16px; }
+.profile-stats { display: flex; justify-content: center; gap: 24px; }
+.stat-item { text-align: center; }
+.stat-item .stat-num { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; }
+.stat-item .stat-label { font-size: 12px; opacity: 0.8; margin-top: 2px; }
+
+.pets-section { padding: 24px; }
+.pets-section h3 { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--bark); margin-bottom: 16px; }
+.pets-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+.pet-item { background: white; border-radius: var(--radius); padding: 16px; text-align: center; box-shadow: 0 2px 12px var(--shadow); cursor: pointer; transition: transform 0.2s; }
+.pet-item:hover { transform: translateY(-2px); }
+.pet-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--sand-light); display: flex; align-items: center; justify-content: center; font-size: 24px; margin: 0 auto 10px; }
+.pet-info { color: var(--bark); }
+.pet-name { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+.pet-details { font-size: 12px; color: var(--bark-light); }
+.add-pet-btn { background: var(--sand-light); border: 2px dashed var(--sand); border-radius: var(--radius); padding: 16px; text-align: center; cursor: pointer; transition: all 0.2s; color: var(--bark-light); font-size: 14px; }
+.add-pet-btn:hover { border-color: var(--terra); color: var(--terra); background: #fef3ed; }
+
+.settings-section { padding: 24px; }
+.settings-section h3 { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--bark); margin-bottom: 16px; }
+.setting-item { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; border-bottom: 1px solid var(--sand-light); cursor: pointer; }
+.setting-item:last-child { border-bottom: none; }
+.setting-item .setting-label { font-size: 15px; color: var(--bark); }
+.setting-item .setting-value { font-size: 14px; color: var(--bark-light); }
+.logout-btn { background: #ffebee; color: #c62828; border: none; padding: 14px 24px; border-radius: 50px; font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 24px; width: 100%; transition: background 0.2s; }
+.logout-btn:hover { background: #ffcdd2; }

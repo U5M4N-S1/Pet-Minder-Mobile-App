@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PawPal – Pet Minder</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Caveat:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles/shared.css">
+<link rel="stylesheet" href="/styles/minder-profile.css">
+</head>
+<body>
+<!-- MINDER PROFILE -->
+<div class="screen active" id="screen-minder-profile">
+  <div class="minder-profile-header">
+    <button class="back-btn" onclick="history.back()">← Back</button>
+    <div class="minder-avatar">🧑‍🦱</div>
+    <div class="minder-info">
+      <h1 id="minder-name">Sarah K.</h1>
+      <div class="minder-rating">⭐⭐⭐⭐⭐ (4.9)</div>
+      <p id="minder-location">Downtown, City</p>
+      <p id="minder-bio">Loving pet sitter with 5+ years experience. I treat every pet like family! 🐕🐈</p>
+    </div>
+  </div>
+  <div class="minder-details">
+    <div class="detail-section">
+      <h3>Services</h3>
+      <div class="services-list">
+        <div class="service-item">🐕 Dog Walking</div>
+        <div class="service-item">🏠 House Sitting</div>
+        <div class="service-item">🐈 Cat Care</div>
+        <div class="service-item">🛁 Pet Bathing</div>
+      </div>
+    </div>
+    <div class="detail-section">
+      <h3>Rates</h3>
+      <div class="rates-list">
+        <div class="rate-item"><span>Walk (30 min)</span><span>$15</span></div>
+        <div class="rate-item"><span>Overnight Stay</span><span>$45</span></div>
+        <div class="rate-item"><span>Cat Visit</span><span>$20</span></div>
+      </div>
+    </div>
+    <div class="detail-section">
+      <h3>Availability</h3>
+      <div class="availability-grid">
+        <div class="day-item"><span>Mon</span><span>✅</span></div>
+        <div class="day-item"><span>Tue</span><span>✅</span></div>
+        <div class="day-item"><span>Wed</span><span>✅</span></div>
+        <div class="day-item"><span>Thu</span><span>❌</span></div>
+        <div class="day-item"><span>Fri</span><span>✅</span></div>
+        <div class="day-item"><span>Sat</span><span>✅</span></div>
+        <div class="day-item"><span>Sun</span><span>✅</span></div>
+      </div>
+    </div>
+    <div class="detail-section">
+      <h3>Reviews</h3>
+      <div class="reviews-list">
+        <div class="review-item">
+          <div class="review-header"><span class="review-name">John D.</span><span class="review-rating">⭐⭐⭐⭐⭐</span></div>
+          <p class="review-text">"Sarah is amazing! Buddy loves her and she sends updates all the time."</p>
+        </div>
+        <div class="review-item">
+          <div class="review-header"><span class="review-name">Emma T.</span><span class="review-rating">⭐⭐⭐⭐⭐</span></div>
+          <p class="review-text">"Very professional and caring. Highly recommend!"</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="minder-actions">
+    <button class="message-btn" onclick="window.location.href='messages.html?chat=sarah'">💬 Message</button>
+    <button class="book-btn" onclick="window.location.href='booking.html'">📅 Book Now</button>
+  </div>
+</div>
+<script src="/js/app.js"></script>
+</body>
+</html>

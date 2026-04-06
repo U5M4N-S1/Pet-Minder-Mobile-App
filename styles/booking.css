@@ -1,0 +1,35 @@
+/* Booking flow */
+.book-section { padding: 24px; }
+.book-section h3 { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--bark); margin-bottom: 16px; }
+.date-grid { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; }
+.date-chip { flex-shrink: 0; padding: 12px 16px; border-radius: 12px; border: 1.5px solid var(--sand); background: white; text-align: center; cursor: pointer; transition: all 0.2s; min-width: 60px; }
+.date-chip.selected { background: var(--terra); border-color: var(--terra); color: white; }
+.date-chip .day-name { font-size: 11px; opacity: 0.7; }
+.date-chip .day-num { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 700; margin-top: 2px; }
+.time-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px; }
+.time-chip { padding: 12px; border-radius: 10px; border: 1.5px solid var(--sand); background: white; text-align: center; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+.time-chip.selected { background: var(--terra); border-color: var(--terra); color: white; }
+.time-chip.unavailable { opacity: 0.4; cursor: not-allowed; background: var(--sand-light); }
+
+/* Service and pet selection */
+.service-list { display: flex; flex-direction: column; gap: 10px; }
+.service-option { background: white; border-radius: var(--radius-sm); padding: 16px; display: flex; align-items: center; gap: 12px; cursor: pointer; border: 2px solid var(--sand-light); transition: all 0.2s; }
+.service-option.selected { border-color: var(--terra); background: #fef3ed; }
+.service-icon { font-size: 24px; }
+.service-info { flex: 1; }
+.service-name { font-weight: 600; font-size: 14px; color: var(--bark); }
+.service-desc { font-size: 12px; color: var(--bark-light); margin-top: 2px; }
+.service-price { font-weight: 700; color: var(--terra); font-size: 15px; }
+
+/* Multi-pet */
+.pet-select-option { background: white; border-radius: var(--radius-sm); padding: 16px; display: flex; align-items: center; gap: 12px; cursor: pointer; border: 2px solid var(--sand-light); transition: all 0.2s; }
+.pet-select-option.selected { border-color: var(--terra); background: #fef3ed; }
+.pet-select-note { font-size: 12px; color: var(--bark-light); margin-top: 8px; font-style: italic; }
+.multi-pet-info { background: #fff8e1; border-radius: var(--radius-sm); padding: 12px 16px; font-size: 13px; color: #7b6b2d; margin-top: 12px; display: none; }
+.multi-pet-info.visible { display: block; }
+
+/* Booking summary */
+.booking-summary { background: white; border-radius: var(--radius); padding: 20px; box-shadow: 0 2px 16px var(--shadow); }
+.summary-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; border-bottom: 1px solid var(--sand-light); }
+.summary-row:last-of-type { border-bottom: none; }
+.summary-total { font-weight: 700; font-size: 16px; color: var(--bark); padding-top: 12px; border-top: 1.5px solid var(--sand); margin-top: 8px; display: flex; justify-content: space-between; }

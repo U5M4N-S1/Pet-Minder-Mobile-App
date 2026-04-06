@@ -1,0 +1,16 @@
+/* Booking cards */
+.booking-list { display: flex; flex-direction: column; gap: 12px; }
+.booking-card { background: white; border-radius: var(--radius); padding: 18px; box-shadow: 0 2px 16px var(--shadow); display: flex; gap: 14px; align-items: center; cursor: pointer; transition: transform 0.2s; }
+.booking-card:hover { transform: translateY(-2px); }
+.booking-date-block { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 48px; flex-shrink: 0; }
+.booking-date-day { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 700; color: var(--bark); line-height: 1; }
+.booking-date-month { font-size: 11px; color: var(--bark-light); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+.booking-date-sep { width: 1px; align-self: stretch; background: var(--sand); margin: 0 4px; flex-shrink: 0; }
+.booking-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--sand-light); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+.booking-info { flex: 1; min-width: 0; }
+.booking-minder { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 600; color: var(--bark); }
+.booking-detail { font-size: 12px; color: var(--bark-light); margin-top: 3px; }
+.booking-status { padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+.status-confirmed { background: #e8f5e9; color: #2e7d32; }
+.status-pending { background: #fff8e1; color: #f57f17; }
+.status-completed { background: var(--sand-light); color: var(--bark-light); }

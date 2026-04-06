@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PawPal – Pet Minder</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Caveat:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles/shared.css">
+<link rel="stylesheet" href="/styles/messages.css">
+</head>
+<body>
+<!-- NAV -->
+<nav class="app-nav" id="app-nav">
+  <div class="nav-logo" onclick="window.location.href='home.html'"><span>🐾</span> <span class="logo-paw">Paw</span><span class="logo-pal">Pal</span></div>
+  <div class="nav-links">
+    <button class="nav-link" id="nav-home" onclick="window.location.href='home.html'">🏠 Home</button>
+    <button class="nav-link" id="nav-search" onclick="window.location.href='search.html'">🔍 Find Minders</button>
+    <button class="nav-link" id="nav-bookings" onclick="window.location.href='bookings.html'">📅 Bookings</button>
+    <button class="nav-link active" id="nav-messages" onclick="window.location.href='messages.html'">💬 Messages</button>
+    <button class="nav-link" id="nav-profile" onclick="window.location.href='profile.html'">👤 Profile</button>
+  </div>
+</nav>
+<!-- Mobile logo header -->
+<div class="mobile-header" id="mobile-header">
+  <span class="mobile-header-paw">🐾</span><span class="logo-paw">Paw</span><span class="logo-pal">Pal</span>
+</div>
+<!-- MESSAGES WhatsApp style -->
+<div class="screen active" id="screen-messages">
+  <div class="messages-container" id="messages-container">
+    <div class="messages-sidebar"><div class="messages-sidebar-header"><h2>Messages</h2></div>
+      <div class="chat-list">
+        <div class="chat-item" onclick="openChatInline(this,'sarah')"><div class="chat-avatar">🧑‍🦱<div class="chat-online"></div></div><div class="chat-info"><div class="chat-name">Sarah K.</div><div class="chat-preview">Sounds good! I'll bring a treat for Buddy 🐕</div></div><div class="chat-meta"><div class="chat-time">10:32</div><div class="chat-unread">2</div></div></div>
+        <div class="chat-item" onclick="openChatInline(this,'emma')"><div class="chat-avatar">🧔</div><div class="chat-info"><div class="chat-name">Emma T.</div><div class="chat-preview">Your booking is confirmed for Wednesday!</div></div><div class="chat-meta"><div class="chat-time">Yesterday</div></div></div>
+        <div class="chat-item" onclick="openChatInline(this,'james')"><div class="chat-avatar">👩‍🦰</div><div class="chat-info"><div class="chat-name">James M.</div><div class="chat-preview">Luna was an absolute angel today 🐈</div></div><div class="chat-meta"><div class="chat-time">Mon</div></div></div>
+      </div>
+    </div>
+    <div class="messages-main" id="messages-main">
+      <div class="messages-empty" id="chat-empty-state"><div class="messages-empty-icon">💬</div><div class="messages-empty-text">Select a chat to start messaging</div><div class="messages-empty-sub">Choose from your conversations on the left</div></div>
+      <div id="chat-active-area" style="display:none;flex-direction:column;flex:1">
+        <div class="chat-header-bar"><button class="chat-back-btn" onclick="closeMobileChat()">←</button><div class="chat-avatar" style="width:38px;height:38px;font-size:18px" id="chat-active-avatar">🧑‍🦱</div><div><div style="font-weight:600;font-size:15px" id="chat-active-name">Sarah K.</div><div style="font-size:12px;color:#4caf50" id="chat-active-status">● Online</div></div></div>
+        <div class="chat-messages" id="chat-active-messages"></div>
+        <div class="chat-input-bar"><input type="text" class="chat-input" placeholder="Type a message..." id="chat-input-field"><button class="send-btn" onclick="sendMessage()">➤</button></div>
+      </div>
+    </div>
+  </div>
+  <nav class="bottom-nav"><button class="bottom-nav-item" onclick="window.location.href='home.html'"><span>🏠</span><span>Home</span></button><button class="bottom-nav-item" onclick="window.location.href='search.html'"><span>🔍</span><span>Search</span></button><button class="bottom-nav-item" onclick="window.location.href='bookings.html'"><span>📅</span><span>Bookings</span></button><button class="bottom-nav-item active" onclick="window.location.href='messages.html'"><span>💬</span><span>Messages</span></button><button class="bottom-nav-item" onclick="window.location.href='profile.html'"><span>👤</span><span>Profile</span></button></nav>
+</div>
+<script src="/js/app.js"></script>
+<script>
+document.getElementById('nav-messages').classList.add('active');
+document.querySelector('.bottom-nav .bottom-nav-item:nth-child(4)').classList.add('active');
+document.getElementById('messages-container').classList.remove('chat-open');
+document.getElementById('chat-empty-state').style.display = 'flex';
+document.getElementById('chat-active-area').style.display = 'none';
+document.querySelectorAll('.chat-item').forEach(c => c.classList.remove('active-chat'));
+activeChat = null;
+const urlParams = new URLSearchParams(window.location.search);
+const chat = urlParams.get('chat');
+if (chat) {
+  const items = document.querySelectorAll('.chat-item');
+  const map = { sarah: 0, emma: 1, james: 2 };
+  if (map[chat] !== undefined && items[map[chat]]) {
+    openChatInline(items[map[chat]], chat);
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PawPal – Pet Minder</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Caveat:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles/shared.css">
+<link rel="stylesheet" href="/styles/home.css">
+</head>
+<body>
+<!-- NAV -->
+<nav class="app-nav" id="app-nav">
+  <div class="nav-logo" onclick="window.location.href='home.html'"><span>🐾</span> <span class="logo-paw">Paw</span><span class="logo-pal">Pal</span></div>
+  <div class="nav-links">
+    <button class="nav-link active" id="nav-home" onclick="window.location.href='home.html'">🏠 Home</button>
+    <button class="nav-link" id="nav-search" onclick="window.location.href='search.html'">🔍 Find Minders</button>
+    <button class="nav-link" id="nav-bookings" onclick="window.location.href='bookings.html'">📅 Bookings</button>
+    <button class="nav-link" id="nav-messages" onclick="window.location.href='messages.html'">💬 Messages</button>
+    <button class="nav-link" id="nav-profile" onclick="window.location.href='profile.html'">👤 Profile</button>
+  </div>  
+</nav>
+<!-- Mobile logo header -->
+<div class="mobile-header" id="mobile-header">
+  <span class="mobile-header-paw">🐾</span><span class="logo-paw">Paw</span><span class="logo-pal">Pal</span>
+</div>
+<!-- HOME -->
+<div class="screen active" id="screen-home">
+  <div class="page-content">
+    <div class="home-hero">
+      <p class="home-sub">Your furry friends are waiting 🐾</p>
+      <h2 class="home-greeting">Welcome back, <span>Usman</span> 👋</h2>
+      <div style="height:16px"></div>
+      <div class="home-search"><input type="text" placeholder="Search minders near you..."><button class="search-btn" onclick="window.location.href='search.html'">Search</button></div>
+    </div>
+    <div class="section-pad">
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-icon">📅</div><div class="stat-value">2</div><div class="stat-label">Upcoming</div></div>
+        <div class="stat-card"><div class="stat-icon">🐾</div><div class="stat-value" id="home-pet-count">2</div><div class="stat-label">My Pets</div></div>
+        <div class="stat-card"><div class="stat-icon">⭐</div><div class="stat-value">4.9</div><div class="stat-label">Avg Score</div></div>
+      </div>
+    </div>
+    <div class="section-pad" style="margin-top:24px">
+      <h2 class="section-title" style="text-align:center">Top Minders Near You</h2>
+      <div class="card-row">
+        <div class="minder-card">
+          <div class="minder-avatar">👩‍🦰</div>
+          <div class="minder-name">Sarah K.</div>
+          <div class="minder-loc">📍 Shoreditch, 0.8mi</div>
+          <div class="minder-stars">★★★★★ <span style="color:var(--bark-light);font-size:11px">(48)</span></div>
+          <div class="minder-rate">£15/hr</div>
+          <span class="minder-tag">🐕 Dogs</span>
+          <button class="btn-book-now" onclick="window.location.href='minder-profile.html'">Book Now</button>
+          <button class="btn-msg-minder" style="margin-top:6px;width:100%" onclick="window.location.href='messages.html?chat=sarah'">💬 Message</button>
+        </div>
+        <div class="minder-card">
+          <div class="minder-avatar">🧑‍🦱</div>
+          <div class="minder-name">James M.</div>
+          <div class="minder-loc">📍 Hackney, 1.2mi</div>
+          <div class="minder-stars">★★★★☆ <span style="color:var(--bark-light);font-size:11px">(32)</span></div>
+          <div class="minder-rate">£12/hr</div>
+          <span class="minder-tag">🐈 Cats</span>
+          <button class="btn-book-now" onclick="window.location.href='minder-profile.html'">Book Now</button>
+          <button class="btn-msg-minder" style="margin-top:6px;width:100%" onclick="window.location.href='messages.html?chat=james'">💬 Message</button>
+        </div>
+        <div class="minder-card">
+          <div class="minder-avatar">👩‍🦳</div>
+          <div class="minder-name">Emma T.</div>
+          <div class="minder-loc">📍 Bethnal Green, 1.5mi</div>
+          <div class="minder-stars">★★★★★ <span style="color:var(--bark-light);font-size:11px">(61)</span></div>
+          <div class="minder-rate">£18/hr</div>
+          <span class="minder-tag">🐕 🐈 All pets</span>
+          <button class="btn-book-now" onclick="window.location.href='minder-profile.html'">Book Now</button>
+          <button class="btn-msg-minder" style="margin-top:6px;width:100%" onclick="window.location.href='messages.html?chat=emma'">💬 Message</button>
+        </div>
+      </div>
+    </div>
+    <div class="section-pad" style="margin-top:28px">
+      <h2 class="section-title">My Pets</h2>
+      <div class="pets-grid" id="home-pets-grid">
+        <div class="pet-card" onclick="openPetModal('buddy')"><div class="pet-emoji">🐕</div><div class="pet-name">Buddy</div><div class="pet-breed">Golden Retriever · 3yrs</div></div>
+        <div class="pet-card" onclick="openPetModal('luna')"><div class="pet-emoji">🐈</div><div class="pet-name">Luna</div><div class="pet-breed">British Shorthair · 2yrs</div></div>
+        <div class="pet-add-card" onclick="openPetModal('new')"><div class="add-icon">＋</div>Add a Pet</div>
+      </div>
+    </div>
+    <div class="section-pad" style="margin-top:28px;padding-bottom:32px">
+      <h2 class="section-title">Upcoming Bookings</h2>
+      <div class="booking-list">
+        <div class="booking-card" onclick="window.location.href='bookings.html'">
+          <div class="booking-date-block"><div class="booking-date-day">07</div><div class="booking-date-month">Apr</div></div>
+          <div class="booking-date-sep"></div>
+          <div class="booking-avatar">🧑‍🦱</div>
+          <div class="booking-info"><div class="booking-minder">Sarah K.</div><div class="booking-detail">🐕 Buddy · Dog Walk · 10:00</div></div>
+          <span class="booking-status status-confirmed">Confirmed</span>
+        </div>
+        <div class="booking-card" onclick="window.location.href='bookings.html'">
+          <div class="booking-date-block"><div class="booking-date-day">09</div><div class="booking-date-month">Apr</div></div>
+          <div class="booking-date-sep"></div>
+          <div class="booking-avatar">🧔</div>
+          <div class="booking-info"><div class="booking-minder">Emma T.</div><div class="booking-detail">🐈 Luna · Home Visit · 14:00</div></div>
+          <span class="booking-status status-pending">Pending</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <nav class="bottom-nav">
+    <button class="bottom-nav-item active" onclick="window.location.href='home.html'"><span>🏠</span><span>Home</span></button>
+    <button class="bottom-nav-item" onclick="window.location.href='search.html'"><span>🔍</span><span>Search</span></button>
+    <button class="bottom-nav-item" onclick="window.location.href='bookings.html'"><span>📅</span><span>Bookings</span></button>
+    <button class="bottom-nav-item" onclick="window.location.href='messages.html'"><span>💬</span><span>Messages</span></button>
+    <button class="bottom-nav-item" onclick="window.location.href='profile.html'"><span>👤</span><span>Profile</span></button>
+  </nav>
+</div>
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+<!-- CONFIRM MODAL -->
+<div class="confirm-modal-overlay" id="confirm-modal" onclick="if(event.target===this)closeConfirmModal()">
+  <div class="confirm-modal">
+    <div class="confirm-modal-icon" id="confirm-modal-icon">⚠️</div>
+    <h3 id="confirm-modal-title">Are you sure?</h3>
+    <p id="confirm-modal-message">This action cannot be undone.</p>
+    <div class="confirm-modal-actions">
+      <button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:12px" onclick="closeConfirmModal()">Cancel</button>
+      <button class="btn-primary" style="flex:1;padding:12px" id="confirm-modal-btn" onclick="">Confirm</button>
+    </div>
+  </div>
+</div>
+<!-- PET MODAL -->
+<div class="pet-modal-overlay" id="pet-modal" onclick="if(event.target===this)closePetModal()">
+  <div class="pet-modal">
+    <h3 id="pet-modal-title">Edit Pet</h3>
+    <div class="field-group"><label>Pet Name</label><input type="text" id="pet-name-input" placeholder="e.g. Buddy"></div>
+    <div class="field-group"><label>Pet Type</label>
+      <select id="pet-type-input"><option>Dog</option><option>Cat</option><option>Rabbit</option><option>Bird</option><option>Other</option></select>
+    </div>
+    <div class="field-group"><label>Breed</label><input type="text" id="pet-breed-input" placeholder="e.g. Golden Retriever"></div>
+    <div class="field-group"><label>Age</label><input type="text" id="pet-age-input" placeholder="e.g. 3 years"></div>
+    <div class="field-group"><label>Medical Notes</label><textarea id="pet-medical-input" placeholder="Allergies, medications, health conditions..."></textarea></div>
+    <div class="field-group"><label>Special Care Instructions</label><textarea id="pet-care-input" placeholder="Feeding schedule, walking routes, behavioural notes..."></textarea></div>
+    <input type="hidden" id="pet-edit-id" value="">
+    <div class="pet-modal-actions">
+      <button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="closePetModal()">Cancel</button>
+      <button class="btn-primary" style="flex:2;padding:14px" id="pet-save-btn" onclick="savePet()">Save Pet</button>
+    </div>
+    <div id="pet-delete-row" style="text-align:center;margin-top:14px;display:none">
+      <button style="background:none;border:none;color:#e53935;font-size:14px;cursor:pointer;font-family:'DM Sans',sans-serif" onclick="confirmRemovePet()">Remove this pet</button>
+    </div>
+  </div>
+</div>
+<!-- EDIT PROFILE MODAL -->
+<div class="pet-modal-overlay" id="edit-profile-modal" onclick="if(event.target===this)closeEditProfileModal()">
+  <div class="pet-modal">
+    <h3>Edit Profile</h3>
+    <div class="field-group"><label>First Name</label><input type="text" id="edit-first-name" placeholder="First name"></div>
+    <div class="field-group"><label>Last Name</label><input type="text" id="edit-last-name" placeholder="Last name"></div>
+    <div class="field-group"><label>Email</label><input type="email" id="edit-email" placeholder="Email address"></div>
+    <div class="field-group"><label>Phone</label><input type="tel" id="edit-phone" placeholder="Phone number"></div>
+    <div class="field-group"><label>Location</label><input type="text" id="edit-location" placeholder="e.g. Shoreditch, London"></div>
+    <div class="field-group"><label>Bio</label><textarea id="edit-bio" placeholder="Tell us about yourself..." style="width:100%;padding:12px 14px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);resize:vertical;min-height:70px;outline:none"></textarea></div>
+    <div class="pet-modal-actions">
+      <button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="closeEditProfileModal()">Cancel</button>
+      <button class="btn-primary" style="flex:2;padding:14px" onclick="saveProfile()">Save Changes</button>
+    </div>
+  </div>
+</div>
+<script src="/js/app.js"></script>
+<script>
+document.getElementById('nav-home').classList.add('active');
+document.querySelector('.bottom-nav .bottom-nav-item:nth-child(1)').classList.add('active');
+refreshPetsUI();
+</script>
+</body>
+</html>

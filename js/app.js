@@ -1,7 +1,4 @@
-// Track which screen is showing
-let currentScreen = 'landing';
-let previousScreen = null;
-const appScreens = ['home', 'search', 'bookings', 'messages', 'profile'];
+// removed for multi-page
 let isAdmin = false;
 let selectedRole = 'owner';
 let reviewStars = 0;
@@ -69,40 +66,7 @@ const petData = {
 const petEmojis = { Dog: '🐕', Cat: '🐈', Rabbit: '🐇', Bird: '🐦', Other: '🐾' };
 
 
-// Switch to a screen by id
-function show(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById('screen-' + id).classList.add('active');
-
-  const nav = document.getElementById('app-nav');
-  const mh = document.getElementById('mobile-header');
-  const isApp = appScreens.includes(id);
-
-  if (nav) nav.classList.toggle('hidden', !isApp);
-  if (mh) mh.style.display = isApp ? '' : 'none';
-
-  // Reset messages view
-  if (id === 'messages') {
-    document.getElementById('messages-container').classList.remove('chat-open');
-    document.getElementById('chat-empty-state').style.display = 'flex';
-    document.getElementById('chat-active-area').style.display = 'none';
-    document.querySelectorAll('.chat-item').forEach(c => c.classList.remove('active-chat'));
-    activeChat = null;
-  }
-
-  // Fix bookings tab: ensure upcoming is highlighted by default
-  if (id === 'bookings') {
-    const upTab = document.getElementById('bookings-tab-upcoming');
-    const pastTab = document.getElementById('bookings-tab-past');
-    if (upTab && !upTab.classList.contains('active') && pastTab && !pastTab.classList.contains('active')) {
-      upTab.classList.add('active');
-    }
-    // If neither is active, force upcoming
-    if (upTab && pastTab && !upTab.classList.contains('active') && !pastTab.classList.contains('active')) {
-      switchBookingTab(upTab, 'upcoming');
-    }
-  }
-}
+// show function removed for multi-page
 
 
 // ===== AUTH =====
@@ -114,7 +78,7 @@ function handleLogin() {
   // Admin login
   if (email === 'admin@pawpal.com' && pwd === 'admin123') {
     isAdmin = true;
-    show('admin');
+    window.location.href = 'admin.html';
     currentScreen = 'admin';
     const nav = document.getElementById('app-nav');
     if (nav) nav.classList.add('hidden');
@@ -145,8 +109,8 @@ function handleRegister() {
 }
 
 function goToAuth() {
-  show('auth');
-  currentScreen = 'auth';
+  window.location.href = 'auth.html';
+
 }
 
 function switchAuthTab(tab) {
@@ -176,7 +140,7 @@ function handleCertUpload() {
 // ===== NAVIGATION =====
 
 function goToHome() {
-  show('home');
+  window.location.href = 'home.html';
   currentScreen = 'home';
   setNavActive('home');
   refreshPetsUI();

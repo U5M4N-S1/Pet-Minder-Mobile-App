@@ -1,0 +1,32 @@
+/* Minder profile page */
+.minder-profile-header { background: var(--bark); padding: 24px; text-align: center; position: relative; }
+.minder-profile-header .back-btn { position: absolute; top: 16px; left: 16px; background: rgba(255,255,255,0.15); border: none; color: white; width: 36px; height: 36px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.minder-avatar { width: 80px; height: 80px; border-radius: 50%; background: var(--sand-light); display: flex; align-items: center; justify-content: center; font-size: 40px; margin: 0 auto 16px; border: 3px solid var(--terra-light); }
+.minder-info { color: white; }
+.minder-name { font-family: 'Playfair Display', serif; font-size: 24px; margin-bottom: 4px; }
+.minder-rating { font-size: 16px; color: #f5a623; margin-bottom: 4px; }
+.minder-location { font-size: 14px; opacity: 0.9; margin-bottom: 12px; }
+.minder-bio { font-size: 14px; line-height: 1.5; opacity: 0.9; }
+
+.minder-details { padding: 24px; }
+.detail-section { margin-bottom: 24px; }
+.detail-section h3 { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--bark); margin-bottom: 16px; }
+.services-list { display: flex; flex-direction: column; gap: 8px; }
+.service-item { background: white; border-radius: var(--radius-sm); padding: 12px 16px; box-shadow: 0 1px 8px var(--shadow); font-size: 14px; color: var(--bark); }
+.rates-list { display: flex; flex-direction: column; gap: 8px; }
+.rate-item { display: flex; justify-content: space-between; background: white; border-radius: var(--radius-sm); padding: 12px 16px; box-shadow: 0 1px 8px var(--shadow); font-size: 14px; color: var(--bark); }
+.availability-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.day-item { aspect-ratio: 1; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; background: var(--sand-light); color: var(--bark-light); }
+.day-item.available { background: #e8f5e9; color: #2e7d32; }
+.reviews-list { display: flex; flex-direction: column; gap: 12px; }
+.review-item { background: white; border-radius: var(--radius); padding: 16px; box-shadow: 0 2px 12px var(--shadow); }
+.review-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.review-name { font-weight: 600; font-size: 14px; color: var(--bark); }
+.review-rating { color: #f5a623; font-size: 13px; }
+.review-text { font-size: 13px; color: var(--bark-light); line-height: 1.6; }
+
+.minder-actions { padding: 24px; display: flex; gap: 12px; }
+.message-btn { flex: 1; background: white; color: var(--bark); border: 1.5px solid var(--sand); padding: 14px; border-radius: 50px; font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.message-btn:hover { border-color: var(--terra); color: var(--terra); }
+.book-btn { flex: 1; background: var(--terra); color: white; border: none; padding: 14px; border-radius: 50px; font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.book-btn:hover { background: var(--terra-light); }

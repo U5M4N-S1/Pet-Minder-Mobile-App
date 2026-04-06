@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PawPal – Pet Minder</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Caveat:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles/shared.css">
+<link rel="stylesheet" href="/styles/booking.css">
+</head>
+<body>
+<!-- NAV -->
+<nav class="app-nav" id="app-nav">
+  <div class="nav-logo" onclick="window.location.href='home.html'"><span>🐾</span> <span class="logo-paw">Paw</span><span class="logo-pal">Pal</span></div>
+  <div class="nav-links">
+    <button class="nav-link" id="nav-home" onclick="window.location.href='home.html'">🏠 Home</button>
+    <button class="nav-link" id="nav-search" onclick="window.location.href='search.html'">🔍 Find Minders</button>
+    <button class="nav-link" id="nav-bookings" onclick="window.location.href='bookings.html'">📅 Bookings</button>
+    <button class="nav-link" id="nav-messages" onclick="window.location.href='messages.html'">💬 Messages</button>
+    <button class="nav-link" id="nav-profile" onclick="window.location.href='profile.html'">👤 Profile</button>
+  </div>
+</nav>
+<!-- Mobile logo header -->
+<div class="mobile-header" id="mobile-header">
+  <span class="mobile-header-paw">🐾</span><span class="logo-paw">Paw</span><span class="logo-pal">Pal</span>
+</div>
+<!-- BOOKING -->
+<div class="screen active" id="screen-booking">
+  <div class="booking-header">
+    <button class="back-btn" onclick="history.back()">← Back</button>
+    <h1>Book with Sarah K.</h1>
+  </div>
+  <div class="booking-form">
+    <div class="form-section">
+      <h3>Select Service</h3>
+      <div class="service-options">
+        <label class="service-option"><input type="radio" name="service" value="walk" checked><span>🐕 Dog Walking (30 min) - $15</span></label>
+        <label class="service-option"><input type="radio" name="service" value="overnight"><span>🏠 Overnight Stay - $45</span></label>
+        <label class="service-option"><input type="radio" name="service" value="cat"><span>🐈 Cat Care - $20</span></label>
+      </div>
+    </div>
+    <div class="form-section">
+      <h3>Select Date & Time</h3>
+      <input type="date" id="booking-date" class="form-input">
+      <input type="time" id="booking-time" class="form-input">
+    </div>
+    <div class="form-section">
+      <h3>Select Pet</h3>
+      <select id="booking-pet" class="form-input">
+        <option value="">Choose a pet...</option>
+        <option value="buddy">Buddy (Dog)</option>
+        <option value="luna">Luna (Cat)</option>
+      </select>
+    </div>
+    <div class="form-section">
+      <h3>Special Instructions</h3>
+      <textarea id="booking-notes" class="form-input" placeholder="Any special care instructions..."></textarea>
+    </div>
+  </div>
+  <div class="booking-summary">
+    <h3>Booking Summary</h3>
+    <div class="summary-item"><span>Service:</span><span id="summary-service">Dog Walking (30 min)</span></div>
+    <div class="summary-item"><span>Date:</span><span id="summary-date">--</span></div>
+    <div class="summary-item"><span>Time:</span><span id="summary-time">--</span></div>
+    <div class="summary-item"><span>Pet:</span><span id="summary-pet">--</span></div>
+    <div class="summary-item total"><span>Total:</span><span id="summary-total">$15</span></div>
+  </div>
+  <div class="booking-actions">
+    <button class="cancel-btn" onclick="history.back()">Cancel</button>
+    <button class="confirm-btn" onclick="confirmBooking()">Confirm Booking</button>
+  </div>
+  <nav class="bottom-nav"><button class="bottom-nav-item" onclick="window.location.href='home.html'"><span>🏠</span><span>Home</span></button><button class="bottom-nav-item" onclick="window.location.href='search.html'"><span>🔍</span><span>Search</span></button><button class="bottom-nav-item" onclick="window.location.href='bookings.html'"><span>📅</span><span>Bookings</span></button><button class="bottom-nav-item" onclick="window.location.href='messages.html'"><span>💬</span><span>Messages</span></button><button class="bottom-nav-item" onclick="window.location.href='profile.html'"><span>👤</span><span>Profile</span></button></nav>
+</div>
+<script src="/js/app.js"></script>
+<script>
+document.getElementById('booking-date').addEventListener('change', updateSummary);
+document.getElementById('booking-time').addEventListener('change', updateSummary);
+document.getElementById('booking-pet').addEventListener('change', updateSummary);
+document.querySelectorAll('input[name="service"]').forEach(r => r.addEventListener('change', updateSummary));
+function updateSummary() {
+  const service = document.querySelector('input[name="service"]:checked').nextElementSibling.textContent;
+  const date = document.getElementById('booking-date').value;
+  const time = document.getElementById('booking-time').value;
+  const pet = document.getElementById('booking-pet').options[document.getElementById('booking-pet').selectedIndex].text;
+  document.getElementById('summary-service').textContent = service;
+  document.getElementById('summary-date').textContent = date || '--';
+  document.getElementById('summary-time').textContent = time || '--';
+  document.getElementById('summary-pet').textContent = pet || '--';
+  const price = service.includes('$15') ? '$15' : service.includes('$45') ? '$45' : '$20';
+  document.getElementById('summary-total').textContent = price;
+}
+</script>
+</body>
+</html>

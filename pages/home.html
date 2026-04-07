@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PawPal – Home</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Caveat:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<link rel="stylesheet" href="../css/home.css">
+<link rel="stylesheet" href="../css/minder.css">
+<link rel="stylesheet" href="../css/responsive.css">
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="app-nav" id="app-nav">
+  <div class="nav-logo" onclick="window.location.href='home.html'"><span>🐾</span> <span class="logo-paw">Paw</span><span class="logo-pal">Pal</span></div>
+  <div class="nav-links">
+    <button class="nav-link active" id="nav-home" onclick="window.location.href='home.html'">🏠 Home</button>
+    <button class="nav-link" id="nav-search" onclick="window.location.href='search.html'">🔍 Find Minders</button>
+    <button class="nav-link" id="nav-bookings" onclick="window.location.href='bookings.html'">📅 Bookings</button>
+    <button class="nav-link" id="nav-messages" onclick="window.location.href='messages.html'">💬 Messages</button>
+    <button class="nav-link" id="nav-profile" onclick="window.location.href='profile.html'">👤 Profile</button>
+  </div>
+</nav>
+<div class="mobile-header" id="mobile-header"><span class="mobile-header-paw">🐾</span><span class="logo-paw">Paw</span><span class="logo-pal">Pal</span></div>
+
+<!-- HOME -->
+<div class="screen active" id="screen-home">
+  <div class="page-content">
+    <div class="home-hero">
+      <p class="home-sub">Your furry friends are waiting 🐾</p>
+      <h2 class="home-greeting">Welcome back, <span id="home-user-name">Usman</span> 👋</h2>
+      <div style="height:16px"></div>
+      <div class="home-search"><input type="text" placeholder="Search minders near you..."><button class="search-btn" onclick="window.location.href='search.html'">Search</button></div>
+    </div>
+    <div class="section-pad">
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-icon">📅</div><div class="stat-value">2</div><div class="stat-label">Upcoming</div></div>
+        <div class="stat-card"><div class="stat-icon">🐾</div><div class="stat-value" id="home-pet-count">2</div><div class="stat-label">My Pets</div></div>
+        <div class="stat-card"><div class="stat-icon">⭐</div><div class="stat-value">4.9</div><div class="stat-label">Avg Score</div></div>
+      </div>
+    </div>
+    <div class="section-pad" style="margin-top:24px">
+      <h2 class="section-title" style="text-align:center">Top Minders Near You</h2>
+      <div class="card-row">
+        <div class="minder-card" onclick="openMinderProfile('sarah')" style="cursor:pointer">
+          <div class="minder-avatar">👩‍🦰</div><div class="minder-name">Sarah K.</div><div class="minder-loc">📍 Shoreditch, 0.8mi</div><div class="minder-stars">★★★★★ <span style="color:var(--bark-light);font-size:11px">(48)</span></div><div class="minder-rate">£15/hr</div><span class="minder-tag">🐕 Dogs</span>
+          <button class="btn-book-now" onclick="event.stopPropagation();openBooking()">Book Now</button>
+          <button class="btn-msg-minder" style="margin-top:6px;width:100%" onclick="event.stopPropagation();messageMinder('sarah')">💬 Message</button>
+        </div>
+        <div class="minder-card" onclick="openMinderProfile('james')" style="cursor:pointer">
+          <div class="minder-avatar">🧑‍🦱</div><div class="minder-name">James M.</div><div class="minder-loc">📍 Hackney, 1.2mi</div><div class="minder-stars">★★★★☆ <span style="color:var(--bark-light);font-size:11px">(32)</span></div><div class="minder-rate">£12/hr</div><span class="minder-tag">🐈 Cats</span>
+          <button class="btn-book-now" onclick="event.stopPropagation();openBooking()">Book Now</button>
+          <button class="btn-msg-minder" style="margin-top:6px;width:100%" onclick="event.stopPropagation();messageMinder('james')">💬 Message</button>
+        </div>
+        <div class="minder-card" onclick="openMinderProfile('emma')" style="cursor:pointer">
+          <div class="minder-avatar">👩‍🦳</div><div class="minder-name">Emma T.</div><div class="minder-loc">📍 Bethnal Green, 1.5mi</div><div class="minder-stars">★★★★★ <span style="color:var(--bark-light);font-size:11px">(61)</span></div><div class="minder-rate">£18/hr</div><span class="minder-tag">🐕 🐈 All pets</span>
+          <button class="btn-book-now" onclick="event.stopPropagation();openBooking()">Book Now</button>
+          <button class="btn-msg-minder" style="margin-top:6px;width:100%" onclick="event.stopPropagation();messageMinder('emma')">💬 Message</button>
+        </div>
+      </div>
+    </div>
+    <div class="section-pad" style="margin-top:28px">
+      <h2 class="section-title">My Pets</h2>
+      <div class="pets-grid" id="home-pets-grid"></div>
+    </div>
+    <div class="section-pad" style="margin-top:28px;padding-bottom:32px">
+      <h2 class="section-title">Upcoming Bookings</h2>
+      <div class="booking-list">
+        <div class="booking-card" onclick="window.location.href='bookings.html'"><div class="booking-date-block"><div class="booking-date-day">07</div><div class="booking-date-month">Apr</div></div><div class="booking-date-sep"></div><div class="booking-avatar">🧑‍🦱</div><div class="booking-info"><div class="booking-minder">Sarah K.</div><div class="booking-detail">🐕 Buddy · Dog Walk · 10:00</div></div><span class="booking-status status-confirmed">Confirmed</span></div>
+        <div class="booking-card" onclick="window.location.href='bookings.html'"><div class="booking-date-block"><div class="booking-date-day">09</div><div class="booking-date-month">Apr</div></div><div class="booking-date-sep"></div><div class="booking-avatar">🧔</div><div class="booking-info"><div class="booking-minder">Emma T.</div><div class="booking-detail">🐈 Luna · Home Visit · 14:00</div></div><span class="booking-status status-pending">Pending</span></div>
+      </div>
+    </div>
+  </div>
+  <nav class="bottom-nav"><button class="bottom-nav-item active" onclick="window.location.href='home.html'"><span>🏠</span><span>Home</span></button><button class="bottom-nav-item" onclick="window.location.href='search.html'"><span>🔍</span><span>Search</span></button><button class="bottom-nav-item" onclick="window.location.href='bookings.html'"><span>📅</span><span>Bookings</span></button><button class="bottom-nav-item" onclick="window.location.href='messages.html'"><span>💬</span><span>Messages</span></button><button class="bottom-nav-item" onclick="window.location.href='profile.html'"><span>👤</span><span>Profile</span></button></nav>
+</div>
+
+<!-- MINDER PROFILE (NO Book Now - view only) -->
+<div class="screen" id="screen-minder-profile">
+  <div class="page-content">
+    <div class="profile-hero"><button class="back-btn" onclick="goBack()">←</button><div class="profile-big-avatar" id="mp-avatar">🧑‍🦱</div><div class="profile-name-lg" id="mp-name">Sarah K.</div><div class="profile-loc-sm" id="mp-loc">📍 Shoreditch, London · 0.8mi away</div><div class="profile-stars-lg" id="mp-stars">★★★★★ <span style="font-size:13px;opacity:0.8">(48 reviews)</span></div></div>
+    <div class="profile-tabs"><button class="profile-tab active" onclick="switchProfileTab(this,'tab-about')">About</button><button class="profile-tab" onclick="switchProfileTab(this,'tab-availability')">Availability</button><button class="profile-tab" onclick="switchProfileTab(this,'tab-reviews')">Reviews</button></div>
+    <div id="tab-about" class="profile-section"><div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow);margin-bottom:16px"><p style="font-size:14px;line-height:1.7;color:var(--bark-light)" id="mp-bio">Hi! I'm Sarah, a passionate animal lover with 5 years of pet care experience. I specialise in dog walking and home visits. Your pet will be treated like royalty! 🐾</p></div><div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)" id="mp-details"><div class="info-row"><span class="info-label">Experience</span><span class="info-value">5 years</span></div><div class="info-row"><span class="info-label">Pets accepted</span><span class="info-value">Dogs, Cats</span></div><div class="info-row"><span class="info-label">Certifications</span><span class="info-value">Pet First Aid ✅</span></div><div class="info-row"><span class="info-label">Dog Walking</span><span class="info-value">£15/hr</span></div><div class="info-row"><span class="info-label">Home Visit</span><span class="info-value">£12/visit</span></div></div></div>
+    <div id="tab-availability" class="profile-section hidden"><div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)"><p style="font-size:13px;color:var(--bark-light);margin-bottom:12px">Available days this week</p><div class="avail-grid"><div class="avail-day available"><div>M</div><div>✓</div></div><div class="avail-day busy"><div>T</div><div>–</div></div><div class="avail-day available"><div>W</div><div>✓</div></div><div class="avail-day available"><div>T</div><div>✓</div></div><div class="avail-day busy"><div>F</div><div>–</div></div><div class="avail-day available"><div>S</div><div>✓</div></div><div class="avail-day available"><div>S</div><div>✓</div></div></div><div style="margin-top:16px"><div class="info-row"><span class="info-label">Morning (8–12)</span><span class="info-value">✅ Available</span></div><div class="info-row"><span class="info-label">Afternoon (12–5)</span><span class="info-value">✅ Available</span></div><div class="info-row"><span class="info-label">Evening (5–8)</span><span class="info-value">❌ Unavailable</span></div></div></div></div>
+    <div id="tab-reviews" class="profile-section hidden">
+      <div style="display:flex;flex-direction:column;gap:12px" id="minder-reviews-list">
+        <div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><strong style="font-size:14px">Tom H.</strong><span style="color:#f5a623">★★★★★</span></div><p style="font-size:13px;color:var(--bark-light);line-height:1.6">"Sarah was brilliant with Buster!"</p><p style="font-size:11px;color:var(--bark-light);margin-top:8px">2 days ago</p></div>
+        <div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><strong style="font-size:14px">Priya L.</strong><span style="color:#f5a623">★★★★★</span></div><p style="font-size:13px;color:var(--bark-light);line-height:1.6">"Really caring and professional."</p><p style="font-size:11px;color:var(--bark-light);margin-top:8px">1 week ago</p></div>
+        <div id="user-reviews-container"></div>
+        <div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)">
+          <p style="font-family:'Playfair Display',serif;font-size:15px;font-weight:600;color:var(--bark);margin-bottom:12px">Leave a Review</p>
+          <div class="star-rating-input" id="review-stars"><span class="star-btn" onclick="setReviewStars(1)">★</span><span class="star-btn" onclick="setReviewStars(2)">★</span><span class="star-btn" onclick="setReviewStars(3)">★</span><span class="star-btn" onclick="setReviewStars(4)">★</span><span class="star-btn" onclick="setReviewStars(5)">★</span></div>
+          <textarea id="review-text-input" placeholder="Write your review..." style="width:100%;padding:12px 14px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);resize:vertical;min-height:70px;outline:none;margin-top:10px"></textarea>
+          <button class="btn-primary" style="width:100%;margin-top:10px;padding:12px" onclick="submitReview()">Submit Review</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BOOKING -->
+<div class="screen" id="screen-booking">
+  <div class="app-nav" style="position:sticky;top:0;z-index:100;display:flex!important"><button class="back-btn" style="position:static;background:var(--sand-light);color:var(--bark)" onclick="goBack()">←</button><span style="font-family:'Playfair Display',serif;font-size:18px">Book Sarah K.</span><div></div></div>
+  <div class="page-content" style="padding-bottom:120px">
+    <div class="book-section"><h3>Select a Service</h3><div class="service-list"><div class="service-option selected" onclick="selectService(this)"><span class="service-icon">🚶</span><div class="service-info"><div class="service-name">Dog Walking</div><div class="service-desc">1 hour walk with GPS tracking</div></div><span class="service-price">£15</span></div><div class="service-option" onclick="selectService(this)"><span class="service-icon">🏠</span><div class="service-info"><div class="service-name">Home Visit</div><div class="service-desc">30 min check-in at your home</div></div><span class="service-price">£12</span></div><div class="service-option" onclick="selectService(this)"><span class="service-icon">🛁</span><div class="service-info"><div class="service-name">Grooming</div><div class="service-desc">Full wash, dry & brush</div></div><span class="service-price">£35</span></div></div></div>
+    <div class="book-section" style="padding-top:0"><h3>Choose a Date</h3><div class="date-grid"><div class="date-chip selected" onclick="selectDate(this)"><div class="day-name">MON</div><div class="day-num">7</div></div><div class="date-chip" onclick="selectDate(this)"><div class="day-name">TUE</div><div class="day-num">8</div></div><div class="date-chip" onclick="selectDate(this)"><div class="day-name">WED</div><div class="day-num">9</div></div><div class="date-chip" onclick="selectDate(this)"><div class="day-name">THU</div><div class="day-num">10</div></div><div class="date-chip" onclick="selectDate(this)"><div class="day-name">FRI</div><div class="day-num">11</div></div><div class="date-chip" onclick="selectDate(this)"><div class="day-name">SAT</div><div class="day-num">12</div></div></div></div>
+    <div class="book-section" style="padding-top:0"><h3>Choose a Time</h3><div class="time-grid"><div class="time-chip selected" onclick="selectTime(this)">08:00</div><div class="time-chip" onclick="selectTime(this)">09:00</div><div class="time-chip" onclick="selectTime(this)">10:00</div><div class="time-chip unavailable">11:00</div><div class="time-chip" onclick="selectTime(this)">12:00</div><div class="time-chip" onclick="selectTime(this)">13:00</div><div class="time-chip unavailable">14:00</div><div class="time-chip" onclick="selectTime(this)">15:00</div><div class="time-chip" onclick="selectTime(this)">16:00</div></div></div>
+    <div class="book-section" style="padding-top:0"><h3>Select Pet(s)</h3><p class="pet-select-note">You can select multiple pets for a single booking</p><div class="service-list" style="margin-top:10px"><div class="pet-select-option selected" onclick="togglePetSelect(this,'buddy')"><span class="service-icon">🐕</span><div class="service-info"><div class="service-name">Buddy</div><div class="service-desc">Golden Retriever</div></div><span style="font-size:18px" class="pet-check">✓</span></div><div class="pet-select-option" onclick="togglePetSelect(this,'luna')"><span class="service-icon">🐈</span><div class="service-info"><div class="service-name">Luna</div><div class="service-desc">British Shorthair</div></div><span style="font-size:18px;opacity:0.3" class="pet-check">✓</span></div></div><div class="multi-pet-info" id="multi-pet-info">⚠️ <strong>Multiple pets selected:</strong> Additional £5 per extra pet.</div></div>
+    <div class="book-section" style="padding-top:0"><h3>Booking Summary</h3><div class="booking-summary"><div class="summary-row"><span>Service</span><span>Dog Walking</span></div><div class="summary-row"><span>Date & Time</span><span>Mon 7 Apr, 08:00</span></div><div class="summary-row"><span>Duration</span><span>1 hour</span></div><div class="summary-row"><span>Pet(s)</span><span id="summary-pets">🐕 Buddy</span></div><div class="summary-row"><span>Minder</span><span>Sarah K.</span></div><div class="summary-total"><span>Total</span><span style="color:var(--terra)" id="summary-total">£15.00</span></div></div></div>
+  </div>
+  <div style="position:fixed;bottom:0;left:0;right:0;padding:16px 24px;background:var(--warm-white);border-top:1px solid var(--sand-light);display:flex;gap:10px;z-index:50"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1" onclick="goBack()">Back</button><button class="btn-primary" style="flex:2;padding:16px" id="confirm-pay-btn" onclick="confirmBooking()">Confirm & Pay £15</button></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- CONFIRM MODAL -->
+<div class="confirm-modal-overlay" id="confirm-modal" onclick="if(event.target===this)closeConfirmModal()"><div class="confirm-modal"><div class="confirm-modal-icon" id="confirm-modal-icon">⚠️</div><h3 id="confirm-modal-title">Are you sure?</h3><p id="confirm-modal-message">This action cannot be undone.</p><div class="confirm-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:12px" onclick="closeConfirmModal()">Cancel</button><button class="btn-primary" style="flex:1;padding:12px" id="confirm-modal-btn">Confirm</button></div></div></div>
+
+<!-- PET MODAL -->
+<div class="pet-modal-overlay" id="pet-modal" onclick="if(event.target===this)closePetModal()"><div class="pet-modal"><h3 id="pet-modal-title">Edit Pet</h3><div class="field-group"><label>Pet Name</label><input type="text" id="pet-name-input" placeholder="e.g. Buddy"></div><div class="field-group"><label>Pet Type</label><select id="pet-type-input"><option>Dog</option><option>Cat</option><option>Rabbit</option><option>Bird</option><option>Other</option></select></div><div class="field-group"><label>Breed</label><input type="text" id="pet-breed-input" placeholder="e.g. Golden Retriever"></div><div class="field-group"><label>Age</label><input type="text" id="pet-age-input" placeholder="e.g. 3 years"></div><div class="field-group"><label>Medical Notes</label><textarea id="pet-medical-input" placeholder="Allergies, medications, health conditions..."></textarea></div><div class="field-group"><label>Special Care Instructions</label><textarea id="pet-care-input" placeholder="Feeding schedule, walking routes, behavioural notes..."></textarea></div><input type="hidden" id="pet-edit-id" value=""><div class="pet-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="closePetModal()">Cancel</button><button class="btn-primary" style="flex:2;padding:14px" id="pet-save-btn" onclick="savePet()">Save Pet</button></div><div id="pet-delete-row" style="text-align:center;margin-top:14px;display:none"><button style="background:none;border:none;color:#e53935;font-size:14px;cursor:pointer;font-family:'DM Sans',sans-serif" onclick="confirmRemovePet()">Remove this pet</button></div></div></div>
+
+<script src="../app.js"></script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PawPal – My Bookings</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Caveat:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<link rel="stylesheet" href="../css/auth.css">
+<link rel="stylesheet" href="../css/bookings.css">
+<link rel="stylesheet" href="../css/responsive.css">
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="app-nav" id="app-nav">
+  <div class="nav-logo" onclick="window.location.href='home.html'"><span>🐾</span> <span class="logo-paw">Paw</span><span class="logo-pal">Pal</span></div>
+  <div class="nav-links">
+    <button class="nav-link" id="nav-home" onclick="window.location.href='home.html'">🏠 Home</button>
+    <button class="nav-link" id="nav-search" onclick="window.location.href='search.html'">🔍 Find Minders</button>
+    <button class="nav-link active" id="nav-bookings" onclick="window.location.href='bookings.html'">📅 Bookings</button>
+    <button class="nav-link" id="nav-messages" onclick="window.location.href='messages.html'">💬 Messages</button>
+    <button class="nav-link" id="nav-profile" onclick="window.location.href='profile.html'">👤 Profile</button>
+  </div>
+</nav>
+<div class="mobile-header" id="mobile-header"><span class="mobile-header-paw">🐾</span><span class="logo-paw">Paw</span><span class="logo-pal">Pal</span></div>
+
+<!-- BOOKINGS -->
+<div class="screen active" id="screen-bookings">
+  <div class="page-content">
+    <div style="padding:24px 24px 0"><h1 style="font-family:'Playfair Display',serif;font-size:26px;color:var(--bark);margin-bottom:16px">My Bookings</h1><div class="auth-tabs" style="max-width:300px"><button class="auth-tab active" id="bookings-tab-upcoming" onclick="switchBookingTab(this,'upcoming')">Upcoming</button><button class="auth-tab" id="bookings-tab-past" onclick="switchBookingTab(this,'past')">Past</button></div></div>
+    <div style="padding:20px 24px" id="bookings-upcoming"><div class="booking-list"><div class="booking-card"><div class="booking-date-block"><div class="booking-date-day">07</div><div class="booking-date-month">Apr</div></div><div class="booking-date-sep"></div><div class="booking-avatar">🧑‍🦱</div><div class="booking-info"><div class="booking-minder">Sarah K.</div><div class="booking-detail">🐕 Buddy · Dog Walk · 08:00</div><div class="booking-detail" style="margin-top:4px;color:var(--terra)">£15.00</div></div><span class="booking-status status-confirmed">Confirmed</span></div><div class="booking-card"><div class="booking-date-block"><div class="booking-date-day">09</div><div class="booking-date-month">Apr</div></div><div class="booking-date-sep"></div><div class="booking-avatar">🧔</div><div class="booking-info"><div class="booking-minder">Emma T.</div><div class="booking-detail">🐈 Luna · Home Visit · 14:00</div><div class="booking-detail" style="margin-top:4px;color:var(--terra)">£12.00</div></div><span class="booking-status status-pending">Pending</span></div></div></div>
+    <div style="padding:0 24px 20px" id="bookings-gps-live"><div class="gps-card"><h4>📍 Live Tracking</h4><div class="gps-map-placeholder"><div class="gps-dot" style="top:40%;left:55%"></div><span style="position:absolute;bottom:10px;right:10px;font-size:11px;background:white;padding:4px 8px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.1)">🗺 Victoria Park area</span></div><div class="gps-info"><div class="gps-stat"><div class="gps-stat-val">0.8mi</div><div class="gps-stat-label">Distance</div></div><div class="gps-stat"><div class="gps-stat-val">23min</div><div class="gps-stat-label">Duration</div></div><div class="gps-stat"><div class="gps-stat-val">Active</div><div class="gps-stat-label">Status</div></div></div></div></div>
+    <div style="padding:20px 24px;display:none" id="bookings-past"><div class="booking-list"><div class="booking-card"><div class="booking-date-block"><div class="booking-date-day">28</div><div class="booking-date-month">Mar</div></div><div class="booking-date-sep"></div><div class="booking-avatar">🧑‍🦱</div><div class="booking-info"><div class="booking-minder">Sarah K.</div><div class="booking-detail">🐕 Buddy · Dog Walk · 10:00</div></div><span class="booking-status status-completed">Done</span></div><div class="booking-card"><div class="booking-date-block"><div class="booking-date-day">20</div><div class="booking-date-month">Mar</div></div><div class="booking-date-sep"></div><div class="booking-avatar">👩‍🦰</div><div class="booking-info"><div class="booking-minder">James M.</div><div class="booking-detail">🐈 Luna · Home Visit · 15:00</div></div><span class="booking-status status-completed">Done</span></div></div></div>
+    <div style="padding:0 24px 20px;display:none" id="bookings-gps"><div class="gps-card"><h4>🗺 Completed Walk Routes</h4><div class="gps-route-card" onclick="showToast('Route map opening...')"><div class="gps-route-icon">🗺️</div><div class="gps-route-info"><div class="gps-route-date">28 Mar – Buddy with Sarah K.</div><div class="gps-route-detail">1.2mi · 45min · Victoria Park loop</div></div><span style="color:var(--bark-light);font-size:16px">›</span></div><div class="gps-route-card" onclick="showToast('Route map opening...')"><div class="gps-route-icon">🗺️</div><div class="gps-route-info"><div class="gps-route-date">22 Mar – Buddy with Sarah K.</div><div class="gps-route-detail">0.9mi · 38min · Canal towpath</div></div><span style="color:var(--bark-light);font-size:16px">›</span></div></div></div>
+  </div>
+  <nav class="bottom-nav"><button class="bottom-nav-item" onclick="window.location.href='home.html'"><span>🏠</span><span>Home</span></button><button class="bottom-nav-item" onclick="window.location.href='search.html'"><span>🔍</span><span>Search</span></button><button class="bottom-nav-item active" onclick="window.location.href='bookings.html'"><span>📅</span><span>Bookings</span></button><button class="bottom-nav-item" onclick="window.location.href='messages.html'"><span>💬</span><span>Messages</span></button><button class="bottom-nav-item" onclick="window.location.href='profile.html'"><span>👤</span><span>Profile</span></button></nav>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../app.js"></script>
+</body>
+</html>

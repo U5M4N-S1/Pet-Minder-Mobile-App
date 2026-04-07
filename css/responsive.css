@@ -1,0 +1,87 @@
+/* ===== RESPONSIVE ===== */
+
+/* Desktop */
+@media (min-width: 768px) {
+  .bottom-nav { display: none !important; }
+  .app-nav { display: flex !important; }
+  .page-content { padding-bottom: 24px; }
+  .home-hero { padding: 40px 48px 56px; }
+  .section-pad { padding: 32px 48px 0; }
+  .minders-list { padding: 24px 48px; }
+  .search-filters { padding: 20px 48px; }
+  .book-section { padding: 32px 48px; }
+  .profile-menu { padding: 20px 48px; }
+  .minders-list { display: grid; grid-template-columns: repeat(2, 1fr); }
+  .booking-list { max-width: 640px; margin: 0 auto; }
+  .pets-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+  .chat-back-btn { display: none !important; }
+  .admin-panel { padding: 24px 48px; }
+}
+
+/* Mobile */
+@media (max-width: 767px) {
+  .bottom-nav { display: flex !important; }
+  .app-nav { display: none !important; }
+  .mobile-header { display: flex !important; }
+  .page-content { padding-bottom: 80px; }
+  .messages-sidebar { width: 100%; border-right: none; }
+  .messages-main { display: none; }
+  .messages-container.chat-open .messages-sidebar { display: none; }
+  .messages-container.chat-open .messages-main { display: flex; }
+  .chat-back-btn { display: flex !important; }
+  .search-filters { padding: 14px 16px; gap: 8px; }
+  .search-bar-row { flex-wrap: nowrap; }
+  .minders-list { padding: 14px 16px; }
+  .section-pad { padding: 18px 16px 0; }
+  .section-title { font-size: 18px; }
+  .booking-card { padding: 12px; gap: 10px; }
+  .booking-date-day { font-size: 20px; }
+  .booking-date-month { font-size: 10px; }
+  .booking-date-block { min-width: 40px; }
+  .booking-avatar { width: 38px; height: 38px; font-size: 18px; }
+  .booking-detail { font-size: 11px; }
+  .booking-minder { font-size: 13px; }
+  .booking-status { padding: 4px 8px; font-size: 10px; }
+  .stats-row { max-width: 100%; }
+  .stat-value { font-size: 18px; }
+  .stat-label { font-size: 10px; }
+  .stat-card { padding: 12px 8px; }
+  .msg-bubble { max-width: 85%; font-size: 13px; padding: 10px 14px; }
+  .chat-name { font-size: 14px; }
+  .chat-preview { font-size: 12px; }
+  .home-greeting { font-size: 22px; }
+  .home-sub { font-size: 13px; }
+  .minder-list-card { padding: 14px; gap: 10px; }
+  .minder-list-avatar { width: 48px; height: 48px; font-size: 24px; }
+  .minder-list-name { font-size: 14px; }
+  .minder-list-loc { font-size: 11px; margin-bottom: 6px; }
+  .minder-list-rate { font-size: 14px; margin-top: 6px; }
+  .book-section { padding: 16px; }
+  .book-section h3 { font-size: 16px; margin-bottom: 12px; }
+
+  /* Filter modal mobile fixes */
+  .filter-modal { padding: 20px 16px; max-height: 85vh; }
+  .filter-opt { padding: 7px 10px; font-size: 11px; }
+  .filter-section-title { font-size: 12px; margin-bottom: 8px; }
+  .filter-range input { padding: 8px 10px; font-size: 13px; }
+  .filter-actions { flex-direction: row; }
+  .btn-filter-clear, .btn-filter-apply { padding: 12px; font-size: 13px; }
+
+  /* Admin mobile */
+  .admin-user-card { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .admin-user-actions { width: 100%; }
+  .admin-btn { flex: 1; text-align: center; padding: 8px 6px; font-size: 11px; }
+  .dispute-actions { flex-direction: column; }
+  .dispute-actions .admin-btn { width: 100%; text-align: center; padding: 10px; }
+}
+
+/* Large desktop */
+@media (min-width: 1024px) {
+  .home-hero { padding: 48px 64px 64px; }
+  .section-pad { padding: 40px 64px 0; }
+  .minders-list { padding: 32px 64px; grid-template-columns: repeat(3, 1fr); }
+  .search-filters { padding: 24px 64px; }
+  .book-section { padding: 40px 64px; }
+  .profile-menu { padding: 24px 64px; }
+  .admin-panel { padding: 24px 64px; }
+}

@@ -1,0 +1,20 @@
+/* Profile/settings page */
+.profile-screen-hero { background: linear-gradient(135deg, var(--bark) 0%, var(--bark-light) 100%); padding: 32px 24px 40px; text-align: center; }
+.profile-screen-avatar { width: 88px; height: 88px; border-radius: 50%; background: var(--sand-light); display: flex; align-items: center; justify-content: center; font-size: 44px; margin: 0 auto 14px; border: 3px solid var(--terra-light); }
+.profile-screen-name { font-family: 'Playfair Display', serif; font-size: 24px; color: white; }
+.profile-screen-role { font-size: 13px; color: var(--sand); margin-top: 4px; }
+.profile-menu { padding: 16px 24px; }
+.menu-section-title { font-size: 11px; font-weight: 600; color: var(--bark-light); text-transform: uppercase; letter-spacing: 1px; margin: 16px 0 8px; }
+.menu-item { display: flex; align-items: center; gap: 14px; padding: 16px; background: white; border-radius: var(--radius-sm); margin-bottom: 6px; cursor: pointer; transition: background 0.2s; box-shadow: 0 1px 8px var(--shadow); }
+.menu-item:hover { background: var(--sand-light); }
+.menu-icon { font-size: 20px; }
+.menu-label { flex: 1; font-size: 15px; color: var(--bark); font-weight: 500; }
+.menu-arrow { color: var(--bark-light); font-size: 18px; }
+
+/* Review minder list cards (in profile reviews) */
+.review-minder-card { display: flex; align-items: center; gap: 14px; background: white; border-radius: var(--radius); padding: 18px; box-shadow: 0 2px 12px var(--shadow); margin-bottom: 12px; cursor: pointer; transition: transform 0.2s; }
+.review-minder-card:hover { transform: translateY(-2px); box-shadow: 0 4px 20px var(--shadow); }
+.review-minder-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--sand-light); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+.review-minder-info { flex: 1; }
+.review-minder-name { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 600; color: var(--bark); }
+.review-minder-booking { font-size: 12px; color: var(--bark-light); margin-top: 2px; }

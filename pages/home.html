@@ -46,17 +46,17 @@
       <div class="card-row">
         <div class="minder-card" onclick="openMinderProfile('sarah')" style="cursor:pointer">
           <div class="minder-avatar">👩‍🦰</div><div class="minder-name">Sarah K.</div><div class="minder-loc">📍 Shoreditch, 0.8mi</div><div class="minder-stars">★★★★★ <span style="color:var(--bark-light);font-size:11px">(48)</span></div><div class="minder-rate">£15/hr</div><span class="minder-tag">🐕 Dogs</span>
-          <button class="btn-book-now" onclick="event.stopPropagation();openBooking()">Book Now</button>
+          <button class="btn-book-now" onclick="event.stopPropagation();window.location.href='active-booking.html?minder=sarah'">Book Now</button>
           <button class="btn-msg-minder" style="margin-top:6px;width:100%" onclick="event.stopPropagation();messageMinder('sarah')">💬 Message</button>
         </div>
         <div class="minder-card" onclick="openMinderProfile('james')" style="cursor:pointer">
           <div class="minder-avatar">🧑‍🦱</div><div class="minder-name">James M.</div><div class="minder-loc">📍 Hackney, 1.2mi</div><div class="minder-stars">★★★★☆ <span style="color:var(--bark-light);font-size:11px">(32)</span></div><div class="minder-rate">£12/hr</div><span class="minder-tag">🐈 Cats</span>
-          <button class="btn-book-now" onclick="event.stopPropagation();openBooking()">Book Now</button>
+          <button class="btn-book-now" onclick="event.stopPropagation();window.location.href='active-booking.html?minder=james'">Book Now</button>
           <button class="btn-msg-minder" style="margin-top:6px;width:100%" onclick="event.stopPropagation();messageMinder('james')">💬 Message</button>
         </div>
         <div class="minder-card" onclick="openMinderProfile('emma')" style="cursor:pointer">
           <div class="minder-avatar">👩‍🦳</div><div class="minder-name">Emma T.</div><div class="minder-loc">📍 Bethnal Green, 1.5mi</div><div class="minder-stars">★★★★★ <span style="color:var(--bark-light);font-size:11px">(61)</span></div><div class="minder-rate">£18/hr</div><span class="minder-tag">🐕 🐈 All pets</span>
-          <button class="btn-book-now" onclick="event.stopPropagation();openBooking()">Book Now</button>
+          <button class="btn-book-now" onclick="event.stopPropagation();window.location.href='active-booking.html?minder=emma'">Book Now</button>
           <button class="btn-msg-minder" style="margin-top:6px;width:100%" onclick="event.stopPropagation();messageMinder('emma')">💬 Message</button>
         </div>
       </div>
@@ -67,10 +67,7 @@
     </div>
     <div class="section-pad" style="margin-top:28px;padding-bottom:32px">
       <h2 class="section-title">Upcoming Bookings</h2>
-      <div class="booking-list">
-        <div class="booking-card" onclick="window.location.href='bookings.html'"><div class="booking-date-block"><div class="booking-date-day">07</div><div class="booking-date-month">Apr</div></div><div class="booking-date-sep"></div><div class="booking-avatar">🧑‍🦱</div><div class="booking-info"><div class="booking-minder">Sarah K.</div><div class="booking-detail">🐕 Buddy · Dog Walk · 10:00</div></div><span class="booking-status status-confirmed">Confirmed</span></div>
-        <div class="booking-card" onclick="window.location.href='bookings.html'"><div class="booking-date-block"><div class="booking-date-day">09</div><div class="booking-date-month">Apr</div></div><div class="booking-date-sep"></div><div class="booking-avatar">🧔</div><div class="booking-info"><div class="booking-minder">Emma T.</div><div class="booking-detail">🐈 Luna · Home Visit · 14:00</div></div><span class="booking-status status-pending">Pending</span></div>
-      </div>
+      <div class="booking-list" id="home-upcoming-list"></div>
     </div>
   </div>
   <nav class="bottom-nav"><button class="bottom-nav-item active" onclick="window.location.href='home.html'"><span>🏠</span><span>Home</span></button><button class="bottom-nav-item" onclick="window.location.href='search.html'"><span>🔍</span><span>Search</span></button><button class="bottom-nav-item" onclick="window.location.href='bookings.html'"><span>📅</span><span>Bookings</span></button><button class="bottom-nav-item" onclick="window.location.href='messages.html'"><span>💬</span><span>Messages</span></button><button class="bottom-nav-item" onclick="window.location.href='profile.html'"><span>👤</span><span>Profile</span></button></nav>
@@ -121,5 +118,6 @@
 <div class="pet-modal-overlay" id="pet-modal" onclick="if(event.target===this)closePetModal()"><div class="pet-modal"><h3 id="pet-modal-title">Edit Pet</h3><div class="field-group"><label>Pet Name</label><input type="text" id="pet-name-input" placeholder="e.g. Buddy"></div><div class="field-group"><label>Pet Type</label><select id="pet-type-input"><option>Dog</option><option>Cat</option><option>Rabbit</option><option>Bird</option><option>Other</option></select></div><div class="field-group"><label>Breed</label><input type="text" id="pet-breed-input" placeholder="e.g. Golden Retriever"></div><div class="field-group"><label>Age</label><input type="text" id="pet-age-input" placeholder="e.g. 3 years"></div><div class="field-group"><label>Medical Notes</label><textarea id="pet-medical-input" placeholder="Allergies, medications, health conditions..."></textarea></div><div class="field-group"><label>Special Care Instructions</label><textarea id="pet-care-input" placeholder="Feeding schedule, walking routes, behavioural notes..."></textarea></div><input type="hidden" id="pet-edit-id" value=""><div class="pet-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="closePetModal()">Cancel</button><button class="btn-primary" style="flex:2;padding:14px" id="pet-save-btn" onclick="savePet()">Save Pet</button></div><div id="pet-delete-row" style="text-align:center;margin-top:14px;display:none"><button style="background:none;border:none;color:#e53935;font-size:14px;cursor:pointer;font-family:'DM Sans',sans-serif" onclick="confirmRemovePet()">Remove this pet</button></div></div></div>
 
 <script src="../app.js"></script>
+<script>renderBookingCards('home-upcoming-list', getUpcomingBookings());</script>
 </body>
 </html>

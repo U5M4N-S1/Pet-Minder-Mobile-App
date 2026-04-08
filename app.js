@@ -16,7 +16,8 @@ let userProfile = { firstName: 'Usman', lastName: 'Khan', email: 'usman@email.co
 const minderData = {
   sarah: { name: 'Sarah K.', avatar: '🧑‍🦱', stars: '★★★★★', reviews: 48, loc: '📍 Shoreditch, London · 0.8mi away', bio: "Hi! I'm Sarah, a passionate animal lover with 5 years of pet care experience. I specialise in dog walking and home visits. Your pet will be treated like royalty! 🐾" },
   james: { name: 'James M.', avatar: '👩‍🦰', stars: '★★★★☆', reviews: 32, loc: '📍 Hackney, London · 1.2mi away', bio: "Hello! I'm James. I love cats and have been caring for pets for 3 years. I offer home visits and cat sitting services." },
-  emma: { name: 'Emma T.', avatar: '🧔', stars: '★★★★★', reviews: 61, loc: '📍 Bethnal Green, London · 1.5mi away', bio: "I'm Emma, an experienced pet carer who loves all animals. I offer walking, grooming and home visits for dogs and cats." }
+  emma:  { name: 'Emma T.',  avatar: '🧔',    stars: '★★★★★', reviews: 61, loc: '📍 Bethnal Green, London · 1.5mi away', bio: "I'm Emma, an experienced pet carer who loves all animals. I offer walking, grooming and home visits for dogs and cats." },
+  priya: { name: 'Priya S.', avatar: '👨‍🦳', stars: '★★★★☆', reviews: 19, loc: '📍 Stepney, London · 1.8mi away', bio: "Hi, I'm Priya! I specialise in dog training and walking. I have a certificate in animal behaviour and love working with all breeds." }
 };
 
 // Previously booked minders (for review system)
@@ -25,6 +26,74 @@ const bookedMinders = [
   { id: 'emma', name: 'Emma T.', avatar: '🧔', lastBooking: '9 Apr – Home Visit' },
   { id: 'james', name: 'James M.', avatar: '👩‍🦰', lastBooking: '20 Mar – Home Visit' }
 ];
+
+// Booking data (seed / default)
+const upcomingBookings = [
+  { minder: 'sarah', minderName: 'Sarah K.', avatar: '🧑‍🦱', day: '07', month: 'Apr', petEmoji: '🐕', petDetail: 'Buddy · Dog Walk · 08:00', price: '£15.00', status: 'confirmed' },
+  { minder: 'emma',  minderName: 'Emma T.',  avatar: '🧔',    day: '09', month: 'Apr', petEmoji: '🐈', petDetail: 'Luna · Home Visit · 14:00', price: '£12.00', status: 'pending' }
+];
+const pastBookings = [
+  { minder: 'sarah', minderName: 'Sarah K.', avatar: '🧑‍🦱', day: '28', month: 'Mar', petEmoji: '🐕', petDetail: 'Buddy · Dog Walk · 10:00', status: 'completed' },
+  { minder: 'james', minderName: 'James M.', avatar: '👩‍🦰', day: '20', month: 'Mar', petEmoji: '🐈', petDetail: 'Luna · Home Visit · 15:00', status: 'completed' }
+];
+const statusLabels = { confirmed: 'Confirmed', pending: 'Pending', completed: 'Done' };
+
+function getUpcomingBookings() {
+  const stored = JSON.parse(localStorage.getItem('pawpal_bookings') || '[]');
+  return [...upcomingBookings, ...stored];
+}
+
+function renderBookingCards(containerId, bookings) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = bookings.map(b => `
+    <div class="booking-card" onclick="window.location.href='active-booking.html?minder=${b.minder}'" style="cursor:pointer">
+      <div class="booking-date-block"><div class="booking-date-day">${b.day}</div><div class="booking-date-month">${b.month}</div></div>
+      <div class="booking-date-sep"></div>
+      <div class="booking-avatar">${b.avatar}</div>
+      <div class="booking-info">
+        <div class="booking-minder">${b.minderName}</div>
+        <div class="booking-detail">${b.petEmoji} ${b.petDetail}</div>
+        ${b.price ? `<div class="booking-detail" style="margin-top:4px;color:var(--terra)">${b.price}</div>` : ''}
+      </div>
+      <span class="booking-status status-${b.status}">${statusLabels[b.status]}</span>
+    </div>`).join('');
+}
+
+// Active booking page
+function initActiveBookingPage() {
+  const params = new URLSearchParams(window.location.search);
+  const minderId = params.get('minder') || 'sarah';
+  const m = minderData[minderId] || { name: 'Your Minder', avatar: '🧑‍🦱' };
+  window._activeMinder = { ...m, id: minderId };
+  const header = document.getElementById('booking-minder-name');
+  if (header) header.textContent = 'Book ' + m.name;
+  const summaryMinder = document.getElementById('summary-minder');
+  if (summaryMinder) summaryMinder.textContent = m.name;
+  generateDateChips();
+  updateBookingSummary();
+}
+
+function generateDateChips() {
+  const container = document.querySelector('.date-grid');
+  if (!container) return;
+  const dayNames = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const today = new Date();
+  container.innerHTML = '';
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    const chip = document.createElement('div');
+    chip.className = 'date-chip' + (i === 0 ? ' selected' : '');
+    chip.dataset.day = String(d.getDate()).padStart(2, '0');
+    chip.dataset.month = monthNames[d.getMonth()];
+    chip.dataset.dayName = dayNames[d.getDay()];
+    chip.innerHTML = `<div class="day-name">${dayNames[d.getDay()]}</div><div class="day-num">${d.getDate()}</div>`;
+    chip.onclick = function() { selectDate(this); };
+    container.appendChild(chip);
+  }
+}
 
 // All users for report search
 const allUsers = [
@@ -265,9 +334,9 @@ function switchBookingTab(btn, tab) {
 }
 
 // ===== BOOKING FLOW =====
-function selectService(el) { el.closest('.service-list').querySelectorAll('.service-option').forEach(o => o.classList.remove('selected')); el.classList.add('selected'); }
-function selectDate(el) { document.querySelectorAll('.date-chip').forEach(d => d.classList.remove('selected')); el.classList.add('selected'); }
-function selectTime(el) { if (el.classList.contains('unavailable')) return; document.querySelectorAll('.time-chip').forEach(t => t.classList.remove('selected')); el.classList.add('selected'); }
+function selectService(el) { el.closest('.service-list').querySelectorAll('.service-option').forEach(o => o.classList.remove('selected')); el.classList.add('selected'); updateBookingSummary(); }
+function selectDate(el) { document.querySelectorAll('.date-chip').forEach(d => d.classList.remove('selected')); el.classList.add('selected'); updateBookingSummary(); }
+function selectTime(el) { if (el.classList.contains('unavailable')) return; document.querySelectorAll('.time-chip').forEach(t => t.classList.remove('selected')); el.classList.add('selected'); updateBookingSummary(); }
 function toggleChip(el) { el.classList.toggle('active'); }
 function toggleFilterModal() { document.getElementById('filter-modal').classList.toggle('open'); }
 
@@ -400,14 +469,67 @@ function togglePetSelect(el, petId) {
   updateBookingSummary();
 }
 function updateBookingSummary() {
-  const names = { buddy: '🐕 Buddy', luna: '🐈 Luna' };
-  document.getElementById('summary-pets').textContent = selectedPets.map(p => names[p] || p).join(' & ');
-  const total = 15 + (selectedPets.length > 1 ? 5 * (selectedPets.length - 1) : 0);
-  document.getElementById('summary-total').textContent = '£' + total.toFixed(2);
-  document.getElementById('confirm-pay-btn').textContent = 'Confirm & Pay £' + total;
-  document.getElementById('multi-pet-info').classList.toggle('visible', selectedPets.length > 1);
+  const petNames = { buddy: '🐕 Buddy', luna: '🐈 Luna' };
+  const petsEl = document.getElementById('summary-pets');
+  if (petsEl) petsEl.textContent = selectedPets.map(p => petNames[p] || p).join(' & ');
+
+  const serviceEl = document.querySelector('.service-option.selected .service-name');
+  const serviceSummaryEl = document.getElementById('summary-service');
+  const serviceName = serviceEl ? serviceEl.textContent : 'Dog Walking';
+  if (serviceSummaryEl) serviceSummaryEl.textContent = serviceName;
+
+  const dateEl = document.querySelector('.date-chip.selected');
+  const timeEl = document.querySelector('.time-chip.selected');
+  const dateTimeEl = document.getElementById('summary-datetime');
+  if (dateTimeEl && dateEl && timeEl) {
+    const dayName = dateEl.dataset.dayName || '';
+    const day = dateEl.dataset.day || dateEl.querySelector('.day-num').textContent;
+    const month = dateEl.dataset.month || 'Apr';
+    dateTimeEl.textContent = (dayName ? dayName + ' ' : '') + day + ' ' + month + ', ' + timeEl.textContent;
+  }
+
+  const servicePriceEl = document.querySelector('.service-option.selected .service-price');
+  const basePrice = servicePriceEl ? parseInt(servicePriceEl.textContent.replace('£', '')) : 15;
+  const total = basePrice + (selectedPets.length > 1 ? 5 * (selectedPets.length - 1) : 0);
+
+  const totalEl = document.getElementById('summary-total');
+  if (totalEl) totalEl.textContent = '£' + total.toFixed(2);
+  const payBtn = document.getElementById('confirm-pay-btn');
+  if (payBtn) payBtn.textContent = 'Confirm & Pay £' + total;
+  const multiPetInfo = document.getElementById('multi-pet-info');
+  if (multiPetInfo) multiPetInfo.classList.toggle('visible', selectedPets.length > 1);
 }
-function confirmBooking() { showToast('✅ Booking sent to Sarah!'); setTimeout(() => switchTab('bookings'), 1200); }
+function confirmBooking() {
+  const m = window._activeMinder || { name: 'your minder', avatar: '🧑‍🦱', id: 'sarah' };
+  const serviceEl = document.querySelector('.service-option.selected .service-name');
+  const serviceName = serviceEl ? serviceEl.textContent : 'Dog Walk';
+  const dateEl = document.querySelector('.date-chip.selected');
+  const timeEl = document.querySelector('.time-chip.selected');
+  const day = dateEl ? (dateEl.dataset.day || dateEl.querySelector('.day-num').textContent) : '??';
+  const month = dateEl ? (dateEl.dataset.month || 'Apr') : 'Apr';
+  const time = timeEl ? timeEl.textContent : '08:00';
+  const petEmojisMap = { buddy: '🐕', luna: '🐈' };
+  const petNamesMap = { buddy: 'Buddy', luna: 'Luna' };
+  const firstPet = selectedPets[0] || 'buddy';
+  const totalEl = document.getElementById('summary-total');
+  const price = totalEl ? totalEl.textContent : '£15.00';
+  const newBooking = {
+    minder: m.id || 'sarah',
+    minderName: m.name,
+    avatar: m.avatar,
+    day: String(day).padStart(2, '0'),
+    month,
+    petEmoji: petEmojisMap[firstPet] || '🐾',
+    petDetail: (petNamesMap[firstPet] || 'Pet') + ' · ' + serviceName + ' · ' + time,
+    price,
+    status: 'pending'
+  };
+  const stored = JSON.parse(localStorage.getItem('pawpal_bookings') || '[]');
+  stored.push(newBooking);
+  localStorage.setItem('pawpal_bookings', JSON.stringify(stored));
+  showToast('✅ Booking sent to ' + m.name + '!');
+  setTimeout(() => window.location.href = 'bookings.html', 1200);
+}
 
 // ===== REVIEWS (on minder profile) =====
 function setReviewStars(n) {

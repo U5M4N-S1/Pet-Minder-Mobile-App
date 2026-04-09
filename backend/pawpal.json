@@ -1,0 +1,132 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "firstName": "abdul",
+      "lastName": "sami",
+      "email": "gg",
+      "passwordHash": "$2b$12$rUR5pi1WJhomZS/K.T3mLuCfhJFNrJoRIbMWLHNwz2TsXAQ02dXpa",
+      "role": "owner",
+      "location": "London",
+      "createdAt": "2026-04-09T14:28:52.490Z"
+    },
+    {
+      "id": 2,
+      "firstName": "Hello",
+      "lastName": "add",
+      "email": "add@gmail.com",
+      "passwordHash": "$2b$12$kr4fGEDLk65W9zfxJtqWnOaLEIJLx1F3pM6nyFhisEDCvBJV2fFQK",
+      "role": "owner",
+      "location": "London",
+      "createdAt": "2026-04-09T18:13:28.222Z"
+    },
+    {
+      "id": 3,
+      "firstName": "ff",
+      "lastName": "ff",
+      "email": "ff@hh.com",
+      "passwordHash": "$2b$12$pQdaAK3GflgnB9FXIE6LvuLPntiIClilv144Wi94kltwFwi8SYD2i",
+      "role": "minder",
+      "location": "London",
+      "createdAt": "2026-04-09T18:16:04.464Z"
+    },
+    {
+      "id": 4,
+      "firstName": "Uzzy",
+      "lastName": "ss",
+      "email": "ss@gmail.com",
+      "passwordHash": "$2b$12$L0PQeQKwMc79gbVvTxd0kOekMTxjOhqFf8DI9aTBj7T/HvX3eRyEC",
+      "role": "owner",
+      "location": "London",
+      "createdAt": "2026-04-09T18:41:33.847Z"
+    },
+    {
+      "id": 5,
+      "firstName": "rr",
+      "lastName": "r",
+      "email": "r@gmail.com",
+      "passwordHash": "$2b$12$gwIYXhCAaqKt9Hib.w/hlOl5eyF3n4UDipNWWk592qJch86KyUEK.",
+      "role": "owner",
+      "location": "London",
+      "createdAt": "2026-04-09T18:50:17.535Z"
+    },
+    {
+      "id": 6,
+      "firstName": "22",
+      "lastName": "22",
+      "email": "22@gmail.com",
+      "passwordHash": "$2b$12$BFyXHTk8mgd14LQQ33pwLu4oyac8Bm7/34N8cRg4XeN18RDjP2NZC",
+      "role": "owner",
+      "location": "London",
+      "createdAt": "2026-04-09T18:52:28.581Z"
+    },
+    {
+      "id": 1000,
+      "firstName": "Alex",
+      "lastName": "Demo",
+      "email": "demo@pawpal.com",
+      "passwordHash": "$2b$12$H9VyWvXE1QvCb33uI9lTj.odiWMrl7Bw5VywghbkA.pow5MiJCZmq",
+      "role": "owner",
+      "location": "Shoreditch, London",
+      "createdAt": "2026-04-09T19:08:00.162Z"
+    }
+  ],
+  "bookings": [
+    {
+      "id": 1001,
+      "ownerId": 1000,
+      "minderKey": "sarah",
+      "minderName": "Sarah K.",
+      "minderAvatar": "🧑‍🦱",
+      "service": "Dog Walking",
+      "bookingDate": "2026-04-14",
+      "bookingTime": "08:00",
+      "petNames": "Buddy",
+      "price": "£15.00",
+      "status": "confirmed",
+      "createdAt": "2026-04-09T19:08:00.163Z"
+    },
+    {
+      "id": 1002,
+      "ownerId": 1000,
+      "minderKey": "emma",
+      "minderName": "Emma T.",
+      "minderAvatar": "🧔",
+      "service": "Home Visit",
+      "bookingDate": "2026-04-16",
+      "bookingTime": "14:00",
+      "petNames": "Luna",
+      "price": "£12.00",
+      "status": "pending",
+      "createdAt": "2026-04-09T19:08:00.163Z"
+    },
+    {
+      "id": 1003,
+      "ownerId": 1000,
+      "minderKey": "sarah",
+      "minderName": "Sarah K.",
+      "minderAvatar": "🧑‍🦱",
+      "service": "Dog Walking",
+      "bookingDate": "2026-03-28",
+      "bookingTime": "10:00",
+      "petNames": "Buddy",
+      "price": "£15.00",
+      "status": "completed",
+      "createdAt": "2026-04-09T19:08:00.163Z"
+    },
+    {
+      "id": 1004,
+      "ownerId": 1000,
+      "minderKey": "james",
+      "minderName": "James M.",
+      "minderAvatar": "👩‍🦰",
+      "service": "Home Visit",
+      "bookingDate": "2026-03-20",
+      "bookingTime": "15:00",
+      "petNames": "Luna",
+      "price": "£12.00",
+      "status": "completed",
+      "createdAt": "2026-04-09T19:08:00.163Z"
+    }
+  ]
+}

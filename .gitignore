@@ -137,3 +137,9 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Database files
+backend/*.db
+backend/*.db-shm
+backend/*.db-wal
+backend/pawpal.json

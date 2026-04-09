@@ -9,8 +9,50 @@ let currentEditPetId = null;
 let currentReviewMinder = null;
 let reportSelectedUser = null;
 
-// User profile
-let userProfile = { firstName: 'Usman', lastName: 'Khan', email: 'usman@email.com', phone: '', location: 'Shoreditch, London', bio: '' };
+// User profile — populated from the session cache or API on page load
+let userProfile = { firstName: '', lastName: '', email: '', phone: '', location: '', bio: '' };
+
+// ===== API =====
+const api = {
+  _base: '/api',
+  getToken()  { return localStorage.getItem('pawpal_token'); },
+  setToken(t) { localStorage.setItem('pawpal_token', t); },
+  clearSession() {
+    localStorage.removeItem('pawpal_token');
+    localStorage.removeItem('pawpal_user');
+  },
+
+  async _req(method, path, body) {
+    const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    const token = this.getToken();
+    if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+    if (body)  opts.body = JSON.stringify(body);
+    const res  = await fetch(this._base + path, opts);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  },
+
+  login(email, password)   { return this._req('POST', '/auth/login',  { email, password }); },
+  signup(data)              { return this._req('POST', '/auth/signup', data); },
+  getMe()                   { return this._req('GET',  '/auth/me'); },
+  getBookings()             { return this._req('GET',  '/bookings'); },
+  createBooking(data)       { return this._req('POST', '/bookings', data); },
+};
+
+// Hydrate userProfile from localStorage immediately (sync) so pages render
+// the correct name before the async /me call completes.
+(function initUserFromCache() {
+  try {
+    const raw = localStorage.getItem('pawpal_user');
+    if (!raw) return;
+    const u = JSON.parse(raw);
+    userProfile.firstName = u.firstName || '';
+    userProfile.lastName  = u.lastName  || '';
+    userProfile.email     = u.email     || '';
+    userProfile.location  = u.location  || '';
+  } catch { /* malformed cache — ignore */ }
+}());
 
 // Minder data for profiles
 const minderData = {
@@ -182,11 +224,23 @@ function toggleAdminLogin() {
   s.style.display = s.style.display === 'none' ? 'block' : 'none';
 }
 
-function handleLogin() {
+async function handleLogin() {
   const email = document.getElementById('login-email').value.trim();
-  const pwd = document.getElementById('login-password').value.trim();
-  isAdmin = false;
-  goToHome();
+  const pwd   = document.getElementById('login-password').value;
+  if (!email || !pwd) { showToast('❌ Please enter your email and password'); return; }
+  try {
+    const { token, user } = await api.login(email, pwd);
+    api.setToken(token);
+    localStorage.setItem('pawpal_user', JSON.stringify(user));
+    userProfile.firstName = user.firstName;
+    userProfile.lastName  = user.lastName;
+    userProfile.email     = user.email;
+    userProfile.location  = user.location || '';
+    isAdmin = user.role === 'admin';
+    if (isAdmin) { window.location.href = 'admin.html'; } else { goToHome(); }
+  } catch (err) {
+    showToast('❌ ' + err.message);
+  }
 }
 
 function handleAdminLogin() {
@@ -200,14 +254,32 @@ function handleAdminLogin() {
   }
 }
 
-function handleRegister() {
-  const pwd = document.getElementById('reg-password').value;
-  const confirm = document.getElementById('reg-confirm-password').value;
-  if (pwd !== confirm) { showToast('❌ Passwords do not match'); document.getElementById('reg-confirm-password').style.borderColor = 'var(--terra)'; return; }
+async function handleRegister() {
+  const firstName = document.getElementById('reg-first-name').value.trim();
+  const lastName  = document.getElementById('reg-last-name').value.trim();
+  const email     = document.getElementById('reg-email').value.trim();
+  const pwd       = document.getElementById('reg-password').value;
+  const confirm   = document.getElementById('reg-confirm-password').value;
+
+  if (!firstName || !lastName || !email) { showToast('❌ Please fill in all fields'); return; }
+  if (pwd !== confirm) {
+    showToast('❌ Passwords do not match');
+    document.getElementById('reg-confirm-password').style.borderColor = 'var(--terra)';
+    return;
+  }
   document.getElementById('reg-confirm-password').style.borderColor = 'var(--sand)';
-  userProfile.firstName = document.getElementById('reg-first-name').value.trim() || 'Usman';
-  userProfile.lastName = document.getElementById('reg-last-name').value.trim() || 'Khan';
-  goToHome();
+
+  try {
+    const { token, user } = await api.signup({ firstName, lastName, email, password: pwd, role: selectedRole });
+    api.setToken(token);
+    localStorage.setItem('pawpal_user', JSON.stringify(user));
+    userProfile.firstName = user.firstName;
+    userProfile.lastName  = user.lastName;
+    userProfile.email     = user.email;
+    goToHome();
+  } catch (err) {
+    showToast('❌ ' + err.message);
+  }
 }
 
 function goToAuth() { window.location.href = 'auth.html'; }
@@ -499,36 +571,42 @@ function updateBookingSummary() {
   const multiPetInfo = document.getElementById('multi-pet-info');
   if (multiPetInfo) multiPetInfo.classList.toggle('visible', selectedPets.length > 1);
 }
-function confirmBooking() {
-  const m = window._activeMinder || { name: 'your minder', avatar: '🧑‍🦱', id: 'sarah' };
-  const serviceEl = document.querySelector('.service-option.selected .service-name');
+async function confirmBooking() {
+  const m           = window._activeMinder || { name: 'your minder', avatar: '🧑‍🦱', id: 'sarah' };
+  const serviceEl   = document.querySelector('.service-option.selected .service-name');
   const serviceName = serviceEl ? serviceEl.textContent : 'Dog Walk';
-  const dateEl = document.querySelector('.date-chip.selected');
-  const timeEl = document.querySelector('.time-chip.selected');
-  const day = dateEl ? (dateEl.dataset.day || dateEl.querySelector('.day-num').textContent) : '??';
+  const dateEl      = document.querySelector('.date-chip.selected');
+  const timeEl      = document.querySelector('.time-chip.selected');
+  const time        = timeEl ? timeEl.textContent.trim() : '08:00';
+
+  // Build an ISO date string (YYYY-MM-DD) from the chip's data attributes
+  const day   = dateEl ? (dateEl.dataset.day   || String(new Date().getDate()).padStart(2,'0')) : String(new Date().getDate()).padStart(2,'0');
   const month = dateEl ? (dateEl.dataset.month || 'Apr') : 'Apr';
-  const time = timeEl ? timeEl.textContent : '08:00';
-  const petEmojisMap = { buddy: '🐕', luna: '🐈' };
+  const monthNums = { Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12 };
+  const bookingDate = new Date().getFullYear() + '-' +
+                      String(monthNums[month] || 4).padStart(2,'0') + '-' + day;
+
   const petNamesMap = { buddy: 'Buddy', luna: 'Luna' };
-  const firstPet = selectedPets[0] || 'buddy';
+  const petNames = selectedPets.map(p => petNamesMap[p] || p).join(' & ');
   const totalEl = document.getElementById('summary-total');
-  const price = totalEl ? totalEl.textContent : '£15.00';
-  const newBooking = {
-    minder: m.id || 'sarah',
-    minderName: m.name,
-    avatar: m.avatar,
-    day: String(day).padStart(2, '0'),
-    month,
-    petEmoji: petEmojisMap[firstPet] || '🐾',
-    petDetail: (petNamesMap[firstPet] || 'Pet') + ' · ' + serviceName + ' · ' + time,
-    price,
-    status: 'pending'
-  };
-  const stored = JSON.parse(localStorage.getItem('pawpal_bookings') || '[]');
-  stored.push(newBooking);
-  localStorage.setItem('pawpal_bookings', JSON.stringify(stored));
-  showToast('✅ Booking sent to ' + m.name + '!');
-  setTimeout(() => window.location.href = 'bookings.html', 1200);
+  const price   = totalEl ? totalEl.textContent : '£15.00';
+
+  try {
+    await api.createBooking({
+      minderKey:    m.id,
+      minderName:   m.name,
+      minderAvatar: m.avatar,
+      service:      serviceName,
+      bookingDate,
+      bookingTime:  time,
+      petNames,
+      price
+    });
+    showToast('✅ Booking sent to ' + m.name + '!');
+    setTimeout(() => window.location.href = 'bookings.html', 1200);
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Booking failed — are you logged in?'));
+  }
 }
 
 // ===== REVIEWS (on minder profile) =====
@@ -694,6 +772,7 @@ function confirmLogout() {
 }
 function logout() {
   isAdmin = false;
+  api.clearSession();
   window.location.href = '../index.html';
 }
 
@@ -779,3 +858,37 @@ function showToast(msg) {
 // Initial render
 refreshPetsUI();
 if (document.getElementById('admin-users')) renderAdminPanels();
+
+// ===== AUTH GUARD =====
+// Pages that require a valid session. auth.html and index.html are excluded.
+const PROTECTED = ['home.html','search.html','bookings.html','messages.html','profile.html','admin.html','active-booking.html'];
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const page = window.location.pathname.split('/').pop() || 'index.html';
+  if (!PROTECTED.includes(page)) return;
+
+  if (!api.getToken()) {
+    window.location.href = 'auth.html';
+    return;
+  }
+
+  // Refresh user profile from the server in the background.
+  // If the token is expired the server returns 401 → redirect to login.
+  try {
+    const user = await api.getMe();
+    userProfile.firstName = user.firstName;
+    userProfile.lastName  = user.lastName;
+    userProfile.email     = user.email;
+    userProfile.location  = user.location || '';
+    localStorage.setItem('pawpal_user', JSON.stringify(user));
+
+    // Update any name placeholders already in the DOM
+    const nameEl = document.getElementById('home-user-name');
+    if (nameEl) nameEl.textContent = user.firstName;
+    const profileNameEl = document.getElementById('profile-name');
+    if (profileNameEl) profileNameEl.textContent = user.firstName;
+  } catch {
+    api.clearSession();
+    window.location.href = 'auth.html';
+  }
+});

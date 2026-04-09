@@ -118,6 +118,15 @@
 <div class="pet-modal-overlay" id="pet-modal" onclick="if(event.target===this)closePetModal()"><div class="pet-modal"><h3 id="pet-modal-title">Edit Pet</h3><div class="field-group"><label>Pet Name</label><input type="text" id="pet-name-input" placeholder="e.g. Buddy"></div><div class="field-group"><label>Pet Type</label><select id="pet-type-input"><option>Dog</option><option>Cat</option><option>Rabbit</option><option>Bird</option><option>Other</option></select></div><div class="field-group"><label>Breed</label><input type="text" id="pet-breed-input" placeholder="e.g. Golden Retriever"></div><div class="field-group"><label>Age</label><input type="text" id="pet-age-input" placeholder="e.g. 3 years"></div><div class="field-group"><label>Medical Notes</label><textarea id="pet-medical-input" placeholder="Allergies, medications, health conditions..."></textarea></div><div class="field-group"><label>Special Care Instructions</label><textarea id="pet-care-input" placeholder="Feeding schedule, walking routes, behavioural notes..."></textarea></div><input type="hidden" id="pet-edit-id" value=""><div class="pet-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="closePetModal()">Cancel</button><button class="btn-primary" style="flex:2;padding:14px" id="pet-save-btn" onclick="savePet()">Save Pet</button></div><div id="pet-delete-row" style="text-align:center;margin-top:14px;display:none"><button style="background:none;border:none;color:#e53935;font-size:14px;cursor:pointer;font-family:'DM Sans',sans-serif" onclick="confirmRemovePet()">Remove this pet</button></div></div></div>
 
 <script src="../app.js"></script>
-<script>renderBookingCards('home-upcoming-list', getUpcomingBookings());</script>
+<script>
+(async () => {
+  try {
+    const bookings = await api.getBookings();
+    renderBookingCards('home-upcoming-list', bookings.filter(b => b.status !== 'completed'));
+  } catch {
+    renderBookingCards('home-upcoming-list', upcomingBookings);
+  }
+})();
+</script>
 </body>
 </html>

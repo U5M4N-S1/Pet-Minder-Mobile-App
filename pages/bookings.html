@@ -41,8 +41,16 @@
 
 <script src="../app.js"></script>
 <script>
-  renderBookingCards('bookings-upcoming-list', getUpcomingBookings());
-  renderBookingCards('bookings-past-list', pastBookings);
+(async () => {
+  try {
+    const bookings = await api.getBookings();
+    renderBookingCards('bookings-upcoming-list', bookings.filter(b => b.status !== 'completed'));
+    renderBookingCards('bookings-past-list',     bookings.filter(b => b.status === 'completed'));
+  } catch {
+    renderBookingCards('bookings-upcoming-list', upcomingBookings);
+    renderBookingCards('bookings-past-list',     pastBookings);
+  }
+})();
 </script>
 </body>
 </html>

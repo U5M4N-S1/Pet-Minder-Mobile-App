@@ -1,0 +1,38 @@
+/* Landing page logo with floating animation */
+.landing-logo-block {
+  display: flex;
+  align-items: baseline;
+  animation: float 3s ease-in-out infinite;
+}
+.landing-logo-paw {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(48px, 12vw, 64px);
+  font-weight: 800;
+  color: var(--cream);
+  letter-spacing: -1px;
+}
+.landing-logo-pal {
+  font-family: 'Caveat', cursive;
+  font-size: clamp(56px, 14vw, 74px);
+  font-weight: 700;
+  color: var(--orange);
+  margin-left: 2px;
+}
+
+@keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+
+/* Landing page */
+#screen-landing { background: var(--bark); position: relative; overflow: hidden; }
+.landing-blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.25; pointer-events: none; }
+.blob1 { width: 500px; height: 500px; background: var(--terra); top: -100px; right: -150px; }
+.blob2 { width: 400px; height: 400px; background: var(--moss); bottom: -100px; left: -100px; }
+.landing-inner { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 60px 32px 40px; text-align: center; gap: 28px; }
+
+.landing-title { font-family: 'Playfair Display', serif; font-size: clamp(42px, 10vw, 72px); color: var(--cream); line-height: 1.1; letter-spacing: -1px; }
+.landing-title span { color: var(--terra-light); font-style: italic; }
+.landing-sub { font-size: 17px; color: var(--sand); max-width: 340px; line-height: 1.6; font-weight: 300; }
+.landing-cta { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 300px; }
+.landing-trust { display: flex; gap: 24px; margin-top: 8px; }
+.trust-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.trust-num { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; color: var(--terra-light); }
+.trust-label { font-size: 11px; color: var(--sand); text-transform: uppercase; letter-spacing: 1px; }

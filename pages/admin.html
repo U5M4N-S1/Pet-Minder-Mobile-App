@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PawPal – Admin Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Caveat:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<link rel="stylesheet" href="../css/admin.css">
+<link rel="stylesheet" href="../css/responsive.css">
+</head>
+<body>
+
+<!-- ADMIN -->
+<div class="screen active" id="screen-admin">
+  <div class="page-content">
+    <div class="admin-hero"><div style="display:flex;align-items:center;justify-content:space-between"><div><h1 style="font-family:'Playfair Display',serif;font-size:24px;color:white">Admin Dashboard</h1><p style="font-size:13px;color:var(--sand);margin-top:4px">🔒 PawPal Administration</p></div><button class="btn-outline" style="padding:8px 16px;font-size:13px" onclick="confirmLogout()">Log Out</button></div></div>
+    <div class="admin-tabs"><button class="admin-tab active" onclick="switchAdminTab(this,'admin-users')">👥 Users</button><button class="admin-tab" onclick="switchAdminTab(this,'admin-disputes')">⚠️ Disputes</button></div>
+    <div id="admin-users" class="admin-panel" style="display:block"></div>
+    <div id="admin-disputes" class="admin-panel" style="display:none"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- CONFIRM MODAL -->
+<div class="confirm-modal-overlay" id="confirm-modal" onclick="if(event.target===this)closeConfirmModal()"><div class="confirm-modal"><div class="confirm-modal-icon" id="confirm-modal-icon">⚠️</div><h3 id="confirm-modal-title">Are you sure?</h3><p id="confirm-modal-message">This action cannot be undone.</p><div class="confirm-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:12px" onclick="closeConfirmModal()">Cancel</button><button class="btn-primary" style="flex:1;padding:12px" id="confirm-modal-btn">Confirm</button></div></div></div>
+
+<!-- ADMIN EDIT USER MODAL -->
+<div class="pet-modal-overlay" id="admin-edit-modal" onclick="if(event.target===this)closeAdminEditModal()"><div class="pet-modal"><h3 id="admin-edit-title">Edit User</h3><div class="field-group"><label>Name</label><input type="text" id="admin-edit-name"></div><div class="field-group"><label>Email</label><input type="email" id="admin-edit-email"></div><div class="field-group"><label>Role</label><select id="admin-edit-role"><option>Pet Owner</option><option>Pet Minder</option></select></div><div class="field-group"><label>Status</label><select id="admin-edit-status"><option>Active</option><option>Suspended</option><option>Banned</option></select></div><div class="pet-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="closeAdminEditModal()">Cancel</button><button class="btn-primary" style="flex:2;padding:14px" onclick="saveAdminEdit()">Save Changes</button></div></div></div>
+
+<script src="../app.js"></script>
+</body>
+</html>

@@ -36,7 +36,7 @@
     </div>
     <div class="section-pad">
       <div class="stats-row">
-        <div class="stat-card"><div class="stat-icon">📅</div><div class="stat-value">2</div><div class="stat-label">Upcoming</div></div>
+        <div class="stat-card"><div class="stat-icon">📅</div><div class="stat-value" id="home-upcoming-count">0</div><div class="stat-label">Upcoming</div></div>
         <div class="stat-card"><div class="stat-icon">🐾</div><div class="stat-value" id="home-pet-count">2</div><div class="stat-label">My Pets</div></div>
         <div class="stat-card"><div class="stat-icon">⭐</div><div class="stat-value">4.9</div><div class="stat-label">Avg Score</div></div>
       </div>
@@ -120,12 +120,16 @@
 <script src="../app.js"></script>
 <script>
 (async () => {
+  let upcoming;
   try {
     const bookings = await api.getBookings();
-    renderBookingCards('home-upcoming-list', bookings.filter(b => b.status !== 'completed'));
+    upcoming = bookings.filter(b => b.status !== 'completed');
   } catch {
-    renderBookingCards('home-upcoming-list', upcomingBookings);
+    upcoming = upcomingBookings;
   }
+  renderBookingCards('home-upcoming-list', upcoming);
+  const countEl = document.getElementById('home-upcoming-count');
+  if (countEl) countEl.textContent = upcoming.length;
 })();
 </script>
 </body>

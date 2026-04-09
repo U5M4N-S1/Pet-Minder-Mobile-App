@@ -82,7 +82,48 @@ router.post('/login', async (req, res) => {
 router.get('/me', requireAuth, (req, res) => {
   const user = db.get('users').find({ id: req.user.userId }).value();
   if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json({ id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email, role: user.role, location: user.location });
+  res.json({
+    id: user.id,
+    firstName: user.firstName,
+    lastName:  user.lastName,
+    email:     user.email,
+    role:      user.role,
+    location:  user.location,
+    phone:     user.phone || '',
+    bio:       user.bio   || ''
+  });
+});
+
+// PATCH /api/auth/me — update profile fields (name, contact, bio, location)
+router.patch('/me', requireAuth, (req, res) => {
+  const user = db.get('users').find({ id: req.user.userId });
+  if (!user.value()) return res.status(404).json({ error: 'User not found' });
+
+  const { firstName, lastName, email, phone, location, bio } = req.body;
+  const updates = {};
+  if (typeof firstName === 'string' && firstName.trim()) updates.firstName = firstName.trim();
+  if (typeof lastName  === 'string') updates.lastName  = lastName.trim();
+  if (typeof phone     === 'string') updates.phone     = phone.trim();
+  if (typeof location  === 'string') updates.location  = location.trim();
+  if (typeof bio       === 'string') updates.bio       = bio.trim();
+
+  // Email changes need a uniqueness check
+  if (typeof email === 'string' && email.trim()) {
+    const normalised = email.toLowerCase().trim();
+    if (normalised !== user.value().email) {
+      const clash = db.get('users').find({ email: normalised }).value();
+      if (clash) return res.status(409).json({ error: 'That email is already in use' });
+      updates.email = normalised;
+    }
+  }
+
+  user.assign(updates).write();
+  const u = user.value();
+  res.json({
+    id: u.id, firstName: u.firstName, lastName: u.lastName,
+    email: u.email, role: u.role, location: u.location,
+    phone: u.phone || '', bio: u.bio || ''
+  });
 });
 
 module.exports = router;

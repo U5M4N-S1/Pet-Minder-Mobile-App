@@ -12,15 +12,56 @@ let reportSelectedUser = null;
 // User profile — populated from the session cache or API on page load
 let userProfile = { firstName: '', lastName: '', email: '', phone: '', location: '', bio: '' };
 
+// ===== LOCAL STORE =====
+// Thin wrapper around localStorage. The current session is stored under a
+// single `pawpal_user` key; everything that must be ISOLATED PER ACCOUNT
+// (currently just pets) is namespaced as `pawpal_pets_<userId>` so one
+// account can never see another account's data.
+//
+// Accounts themselves live on the backend in `backend/pawpal.json` via
+// lowdb — localStorage is purely a session + client-side cache.
+const store = {
+  USER_KEY:  'pawpal_user',
+  TOKEN_KEY: 'pawpal_token',
+  _petsKey(userId) { return 'pawpal_pets_' + userId; },
+
+  getUser() {
+    try { return JSON.parse(localStorage.getItem(this.USER_KEY)) || null; }
+    catch { return null; }
+  },
+  setUser(user) {
+    localStorage.setItem(this.USER_KEY, JSON.stringify(user));
+  },
+  clearSession() {
+    localStorage.removeItem(this.USER_KEY);
+    localStorage.removeItem(this.TOKEN_KEY);
+    // Per-user pet keys are left in place on purpose so a user's pets come
+    // back if they log out and log back in on the same device.
+  },
+  currentUserId() {
+    const u = this.getUser();
+    return u && u.id != null ? u.id : null;
+  },
+
+  getPets() {
+    const id = this.currentUserId();
+    if (id == null) return null;
+    try { return JSON.parse(localStorage.getItem(this._petsKey(id))) || null; }
+    catch { return null; }
+  },
+  setPets(pets) {
+    const id = this.currentUserId();
+    if (id == null) return; // no logged-in user → nothing to persist
+    localStorage.setItem(this._petsKey(id), JSON.stringify(pets));
+  },
+};
+
 // ===== API =====
 const api = {
   _base: '/api',
-  getToken()  { return localStorage.getItem('pawpal_token'); },
-  setToken(t) { localStorage.setItem('pawpal_token', t); },
-  clearSession() {
-    localStorage.removeItem('pawpal_token');
-    localStorage.removeItem('pawpal_user');
-  },
+  getToken()  { return localStorage.getItem(store.TOKEN_KEY); },
+  setToken(t) { localStorage.setItem(store.TOKEN_KEY, t); },
+  clearSession() { store.clearSession(); },
 
   async _req(method, path, body) {
     const opts = { method, headers: { 'Content-Type': 'application/json' } };
@@ -28,30 +69,40 @@ const api = {
     if (token) opts.headers['Authorization'] = 'Bearer ' + token;
     if (body)  opts.body = JSON.stringify(body);
     const res  = await fetch(this._base + path, opts);
+    // 204 No Content (e.g. DELETE /pets/:id) has an empty body — don't
+    // try to parse it as JSON.
+    if (res.status === 204) {
+      if (!res.ok) throw new Error('Request failed');
+      return null;
+    }
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Request failed');
     return data;
   },
 
-  login(email, password)   { return this._req('POST', '/auth/login',  { email, password }); },
-  signup(data)              { return this._req('POST', '/auth/signup', data); },
-  getMe()                   { return this._req('GET',  '/auth/me'); },
-  getBookings()             { return this._req('GET',  '/bookings'); },
-  createBooking(data)       { return this._req('POST', '/bookings', data); },
+  login(email, password)   { return this._req('POST',   '/auth/login',  { email, password }); },
+  signup(data)              { return this._req('POST',   '/auth/signup', data); },
+  getMe()                   { return this._req('GET',    '/auth/me'); },
+  updateMe(data)            { return this._req('PATCH',  '/auth/me', data); },
+  getBookings()             { return this._req('GET',    '/bookings'); },
+  createBooking(data)       { return this._req('POST',   '/bookings', data); },
+  getPets()                 { return this._req('GET',    '/pets'); },
+  createPet(data)           { return this._req('POST',   '/pets', data); },
+  updatePet(id, data)       { return this._req('PATCH',  '/pets/' + id, data); },
+  deletePet(id)             { return this._req('DELETE', '/pets/' + id); },
 };
 
 // Hydrate userProfile from localStorage immediately (sync) so pages render
 // the correct name before the async /me call completes.
 (function initUserFromCache() {
-  try {
-    const raw = localStorage.getItem('pawpal_user');
-    if (!raw) return;
-    const u = JSON.parse(raw);
-    userProfile.firstName = u.firstName || '';
-    userProfile.lastName  = u.lastName  || '';
-    userProfile.email     = u.email     || '';
-    userProfile.location  = u.location  || '';
-  } catch { /* malformed cache — ignore */ }
+  const u = store.getUser();
+  if (!u) return;
+  userProfile.firstName = u.firstName || '';
+  userProfile.lastName  = u.lastName  || '';
+  userProfile.email     = u.email     || '';
+  userProfile.phone     = u.phone     || '';
+  userProfile.location  = u.location  || '';
+  userProfile.bio       = u.bio       || '';
 }());
 
 // Minder data for profiles
@@ -69,21 +120,13 @@ const bookedMinders = [
   { id: 'james', name: 'James M.', avatar: '👩‍🦰', lastBooking: '20 Mar – Home Visit' }
 ];
 
-// Booking data (seed / default)
-const upcomingBookings = [
-  { minder: 'sarah', minderName: 'Sarah K.', avatar: '🧑‍🦱', day: '07', month: 'Apr', petEmoji: '🐕', petDetail: 'Buddy · Dog Walk · 08:00', price: '£15.00', status: 'confirmed' },
-  { minder: 'emma',  minderName: 'Emma T.',  avatar: '🧔',    day: '09', month: 'Apr', petEmoji: '🐈', petDetail: 'Luna · Home Visit · 14:00', price: '£12.00', status: 'pending' }
-];
-const pastBookings = [
-  { minder: 'sarah', minderName: 'Sarah K.', avatar: '🧑‍🦱', day: '28', month: 'Mar', petEmoji: '🐕', petDetail: 'Buddy · Dog Walk · 10:00', status: 'completed' },
-  { minder: 'james', minderName: 'James M.', avatar: '👩‍🦰', day: '20', month: 'Mar', petEmoji: '🐈', petDetail: 'Luna · Home Visit · 15:00', status: 'completed' }
-];
+// Booking lists are always fetched from `GET /api/bookings` (filtered by
+// ownerId on the server). These empty arrays exist purely as a fallback
+// shape for when the fetch fails — never populated with mock data, so a
+// fresh account can't accidentally see another user's bookings.
+const upcomingBookings = [];
+const pastBookings = [];
 const statusLabels = { confirmed: 'Confirmed', pending: 'Pending', completed: 'Done' };
-
-function getUpcomingBookings() {
-  const stored = JSON.parse(localStorage.getItem('pawpal_bookings') || '[]');
-  return [...upcomingBookings, ...stored];
-}
 
 function renderBookingCards(containerId, bookings) {
   const el = document.getElementById(containerId);
@@ -113,7 +156,36 @@ function initActiveBookingPage() {
   const summaryMinder = document.getElementById('summary-minder');
   if (summaryMinder) summaryMinder.textContent = m.name;
   generateDateChips();
+  renderBookingPetPicker();
   updateBookingSummary();
+}
+
+// Render the pet picker on the active-booking page from the logged-in
+// user's own petData. Falls back to a helpful empty state if the user
+// has no pets yet.
+function renderBookingPetPicker() {
+  const list = document.getElementById('booking-pet-list');
+  if (!list) return;
+  const ids = Object.keys(petData);
+  if (ids.length === 0) {
+    list.innerHTML = '<div style="padding:16px;background:var(--sand-light);border-radius:var(--radius-sm);font-size:13px;color:var(--bark-light);text-align:center">You haven\'t added any pets yet. Add one from your profile to book.</div>';
+    selectedPets = [];
+    return;
+  }
+  list.innerHTML = '';
+  selectedPets = [ids[0]];
+  ids.forEach((id, i) => {
+    const p = petData[id];
+    const row = document.createElement('div');
+    row.className = 'pet-select-option' + (i === 0 ? ' selected' : '');
+    row.onclick = function() { togglePetSelect(this, id); };
+    const opacity = i === 0 ? '1' : '0.3';
+    row.innerHTML =
+      '<span class="service-icon">' + (p.emoji || '🐾') + '</span>' +
+      '<div class="service-info"><div class="service-name">' + p.name + '</div><div class="service-desc">' + (p.breed || p.type || '') + '</div></div>' +
+      '<span style="font-size:18px;opacity:' + opacity + '" class="pet-check">✓</span>';
+    list.appendChild(row);
+  });
 }
 
 function generateDateChips() {
@@ -180,13 +252,17 @@ const chatData = {
 };
 
 let activeChat = null;
-let selectedPets = ['buddy'];
+let selectedPets = [];
 
-// Pet data
-const petData = {
-  buddy: { name: 'Buddy', type: 'Dog', breed: 'Golden Retriever', age: '3 years', medical: 'Up to date on vaccinations. No known allergies.', care: 'Loves chicken treats. Walks twice daily.', emoji: '🐕' },
-  luna: { name: 'Luna', type: 'Cat', breed: 'British Shorthair', age: '2 years', medical: 'Flea treatment monthly.', care: 'Indoor cat. Feeds at 8am and 6pm.', emoji: '🐈' }
-};
+// Pet data — per-user, hydrated from the current user's namespaced
+// localStorage key. New accounts start with an empty object; no cross-account
+// leakage is possible because `store.getPets()` reads from
+// `pawpal_pets_<currentUserId>`.
+let petData = {};
+(function initPetsFromCache() {
+  const saved = store.getPets();
+  if (saved && typeof saved === 'object') petData = saved;
+}());
 const petEmojis = { Dog: '🐕', Cat: '🐈', Rabbit: '🐇', Bird: '🐦', Other: '🐾' };
 
 // ===== SCREEN SWITCHING =====
@@ -231,11 +307,21 @@ async function handleLogin() {
   try {
     const { token, user } = await api.login(email, pwd);
     api.setToken(token);
-    localStorage.setItem('pawpal_user', JSON.stringify(user));
-    userProfile.firstName = user.firstName;
-    userProfile.lastName  = user.lastName;
-    userProfile.email     = user.email;
-    userProfile.location  = user.location || '';
+    // store.setUser MUST run before any store.getPets/setPets call, because
+    // the pets key is namespaced by the current user's id.
+    store.setUser(user);
+    Object.assign(userProfile, {
+      firstName: user.firstName || '',
+      lastName:  user.lastName  || '',
+      email:     user.email     || '',
+      phone:     user.phone     || '',
+      location:  user.location  || '',
+      bio:       user.bio       || ''
+    });
+    // Pets are now fetched from the backend by the auth guard on the next
+    // page load (so they follow the user across devices). We still reset
+    // the in-memory object here in case any pre-redirect render fires.
+    petData = {};
     isAdmin = user.role === 'admin';
     if (isAdmin) { window.location.href = 'admin.html'; } else { goToHome(); }
   } catch (err) {
@@ -272,10 +358,18 @@ async function handleRegister() {
   try {
     const { token, user } = await api.signup({ firstName, lastName, email, password: pwd, role: selectedRole });
     api.setToken(token);
-    localStorage.setItem('pawpal_user', JSON.stringify(user));
-    userProfile.firstName = user.firstName;
-    userProfile.lastName  = user.lastName;
-    userProfile.email     = user.email;
+    store.setUser(user);
+    Object.assign(userProfile, {
+      firstName: user.firstName || '',
+      lastName:  user.lastName  || '',
+      email:     user.email     || '',
+      phone:     '',
+      location:  user.location  || '',
+      bio:       ''
+    });
+    // Brand-new accounts always start with an empty pet list.
+    petData = {};
+    store.setPets(petData);
     goToHome();
   } catch (err) {
     showToast('❌ ' + err.message);
@@ -438,32 +532,42 @@ function openPetModal(petId) {
 }
 function closePetModal() { document.getElementById('pet-modal').classList.remove('open'); currentEditPetId = null; }
 
-function savePet() {
-  const petId = document.getElementById('pet-edit-id').value;
-  const name = document.getElementById('pet-name-input').value.trim();
-  const type = document.getElementById('pet-type-input').value;
-  const breed = document.getElementById('pet-breed-input').value.trim();
-  const age = document.getElementById('pet-age-input').value.trim();
+async function savePet() {
+  const petId   = document.getElementById('pet-edit-id').value;
+  const name    = document.getElementById('pet-name-input').value.trim();
+  const type    = document.getElementById('pet-type-input').value;
+  const breed   = document.getElementById('pet-breed-input').value.trim();
+  const age     = document.getElementById('pet-age-input').value.trim();
   const medical = document.getElementById('pet-medical-input').value.trim();
-  const care = document.getElementById('pet-care-input').value.trim();
+  const care    = document.getElementById('pet-care-input').value.trim();
   if (!name) { showToast('❌ Please enter a pet name'); return; }
+  const body = { name, type, breed, age, medical, care, emoji: petEmojis[type] || '🐾' };
 
   if (petId === 'new') {
-    const newId = name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
-    petData[newId] = { name, type, breed, age, medical, care, emoji: petEmojis[type] || '🐾' };
-    closePetModal();
-    showToast('✅ ' + name + ' added successfully!');
-    refreshPetsUI();
-    refreshRegPets();
-  } else {
-    showConfirmModal('💾', 'Save Changes?', 'Save changes to ' + name + '?', function() {
-      petData[petId].name = name; petData[petId].type = type; petData[petId].breed = breed;
-      petData[petId].age = age; petData[petId].medical = medical; petData[petId].care = care;
-      petData[petId].emoji = petEmojis[type] || '🐾';
+    try {
+      const pet = await api.createPet(body);
+      petData[pet.id] = pet;
+      store.setPets(petData); // offline cache
       closePetModal();
-      showToast('✅ ' + name + ' updated!');
+      showToast('✅ ' + name + ' added successfully!');
       refreshPetsUI();
       refreshRegPets();
+    } catch (err) {
+      showToast('❌ ' + (err.message || 'Failed to save pet'));
+    }
+  } else {
+    showConfirmModal('💾', 'Save Changes?', 'Save changes to ' + name + '?', async function() {
+      try {
+        const pet = await api.updatePet(petId, body);
+        petData[pet.id] = pet;
+        store.setPets(petData);
+        closePetModal();
+        showToast('✅ ' + name + ' updated!');
+        refreshPetsUI();
+        refreshRegPets();
+      } catch (err) {
+        showToast('❌ ' + (err.message || 'Failed to update pet'));
+      }
     });
   }
 }
@@ -471,13 +575,19 @@ function savePet() {
 function confirmRemovePet() {
   const petId = document.getElementById('pet-edit-id').value;
   const pet = petData[petId]; if (!pet) return;
-  showConfirmModal('🗑', 'Remove ' + pet.name + '?', 'Are you sure? This cannot be undone.', function() {
+  showConfirmModal('🗑', 'Remove ' + pet.name + '?', 'Are you sure? This cannot be undone.', async function() {
     const petName = pet.name;
-    delete petData[petId];
-    closePetModal();
-    showToast('🗑 ' + petName + ' removed');
-    refreshPetsUI();
-    refreshRegPets();
+    try {
+      await api.deletePet(petId);
+      delete petData[petId];
+      store.setPets(petData);
+      closePetModal();
+      showToast('🗑 ' + petName + ' removed');
+      refreshPetsUI();
+      refreshRegPets();
+    } catch (err) {
+      showToast('❌ ' + (err.message || 'Failed to remove pet'));
+    }
   });
 }
 
@@ -510,11 +620,14 @@ function refreshPetsUI() {
   // Pet count
   const countEl = document.getElementById('home-pet-count');
   if (countEl) countEl.textContent = Object.keys(petData).length;
-  // Names
-  const profileName = document.getElementById('profile-display-name');
-  if (profileName) profileName.textContent = userProfile.firstName;
-  const homeName = document.getElementById('home-user-name');
-  if (homeName) homeName.textContent = userProfile.firstName;
+  // Names — only update once we have a cached value, otherwise leave the
+  // HTML placeholder in place so the page doesn't flash an empty string.
+  if (userProfile.firstName) {
+    const profileName = document.getElementById('profile-display-name');
+    if (profileName) profileName.textContent = userProfile.firstName;
+    const homeName = document.getElementById('home-user-name');
+    if (homeName) homeName.textContent = userProfile.firstName;
+  }
 }
 
 // Show pets on registration page
@@ -541,9 +654,12 @@ function togglePetSelect(el, petId) {
   updateBookingSummary();
 }
 function updateBookingSummary() {
-  const petNames = { buddy: '🐕 Buddy', luna: '🐈 Luna' };
   const petsEl = document.getElementById('summary-pets');
-  if (petsEl) petsEl.textContent = selectedPets.map(p => petNames[p] || p).join(' & ');
+  if (petsEl) {
+    petsEl.textContent = selectedPets
+      .map(id => petData[id] ? (petData[id].emoji || '🐾') + ' ' + petData[id].name : id)
+      .join(' & ') || '—';
+  }
 
   const serviceEl = document.querySelector('.service-option.selected .service-name');
   const serviceSummaryEl = document.getElementById('summary-service');
@@ -586,8 +702,8 @@ async function confirmBooking() {
   const bookingDate = new Date().getFullYear() + '-' +
                       String(monthNums[month] || 4).padStart(2,'0') + '-' + day;
 
-  const petNamesMap = { buddy: 'Buddy', luna: 'Luna' };
-  const petNames = selectedPets.map(p => petNamesMap[p] || p).join(' & ');
+  if (selectedPets.length === 0) { showToast('❌ Please add a pet before booking'); return; }
+  const petNames = selectedPets.map(id => (petData[id] && petData[id].name) || id).join(' & ');
   const totalEl = document.getElementById('summary-total');
   const price   = totalEl ? totalEl.textContent : '£15.00';
 
@@ -740,16 +856,31 @@ function closeEditProfileModal() { document.getElementById('edit-profile-modal')
 function saveProfile() {
   const fn = document.getElementById('edit-first-name').value.trim();
   if (!fn) { showToast('❌ First name is required'); return; }
-  showConfirmModal('💾', 'Save Profile Changes?', 'Update your profile information?', function() {
-    userProfile.firstName = fn;
-    userProfile.lastName = document.getElementById('edit-last-name').value.trim();
-    userProfile.email = document.getElementById('edit-email').value.trim();
-    userProfile.phone = document.getElementById('edit-phone').value.trim();
-    userProfile.location = document.getElementById('edit-location').value.trim();
-    userProfile.bio = document.getElementById('edit-bio').value.trim();
+  showConfirmModal('💾', 'Save Profile Changes?', 'Update your profile information?', async function() {
+    const updates = {
+      firstName: fn,
+      lastName:  document.getElementById('edit-last-name').value.trim(),
+      email:     document.getElementById('edit-email').value.trim(),
+      phone:     document.getElementById('edit-phone').value.trim(),
+      location:  document.getElementById('edit-location').value.trim(),
+      bio:       document.getElementById('edit-bio').value.trim(),
+    };
+    // Optimistic local update so the UI feels instant
+    Object.assign(userProfile, updates);
+    store.setUser(userProfile);
     closeEditProfileModal();
-    showToast('✅ Profile updated!');
     refreshPetsUI();
+
+    // Push to the backend so the change survives logout/login
+    try {
+      const saved = await api.updateMe(updates);
+      Object.assign(userProfile, saved);
+      store.setUser(userProfile);
+      refreshPetsUI();
+      showToast('✅ Profile updated!');
+    } catch (err) {
+      showToast('⚠️ Saved locally — ' + (err.message || 'server update failed'));
+    }
   });
 }
 
@@ -875,18 +1006,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Refresh user profile from the server in the background.
   // If the token is expired the server returns 401 → redirect to login.
   try {
-    const user = await api.getMe();
-    userProfile.firstName = user.firstName;
-    userProfile.lastName  = user.lastName;
-    userProfile.email     = user.email;
-    userProfile.location  = user.location || '';
-    localStorage.setItem('pawpal_user', JSON.stringify(user));
+    // Server is the source of truth for BOTH profile and pets.
+    // Fetch them in parallel, overwrite local cache, then re-render.
+    const [user, pets] = await Promise.all([api.getMe(), api.getPets()]);
 
-    // Update any name placeholders already in the DOM
-    const nameEl = document.getElementById('home-user-name');
-    if (nameEl) nameEl.textContent = user.firstName;
-    const profileNameEl = document.getElementById('profile-name');
-    if (profileNameEl) profileNameEl.textContent = user.firstName;
+    userProfile.firstName = user.firstName || '';
+    userProfile.lastName  = user.lastName  || '';
+    userProfile.email     = user.email     || '';
+    userProfile.phone     = user.phone     || '';
+    userProfile.location  = user.location  || '';
+    userProfile.bio       = user.bio       || '';
+    store.setUser(userProfile);
+
+    // Rebuild petData keyed by backend id, then mirror to localStorage so
+    // the next page load can render synchronously before the fetch returns.
+    petData = {};
+    pets.forEach(p => { petData[p.id] = p; });
+    store.setPets(petData);
+
+    refreshPetsUI();
+    // If we're on the active-booking page, re-render the picker with the
+    // freshly-fetched pets.
+    if (document.getElementById('booking-pet-list')) {
+      renderBookingPetPicker();
+      updateBookingSummary();
+    }
   } catch {
     api.clearSession();
     window.location.href = 'auth.html';

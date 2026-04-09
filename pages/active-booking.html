@@ -70,18 +70,7 @@
     <div class="book-section" style="padding-top:0">
       <h3>Select Pet(s)</h3>
       <p class="pet-select-note">You can select multiple pets for a single booking</p>
-      <div class="service-list" style="margin-top:10px">
-        <div class="pet-select-option selected" onclick="togglePetSelect(this,'buddy')">
-          <span class="service-icon">🐕</span>
-          <div class="service-info"><div class="service-name">Buddy</div><div class="service-desc">Golden Retriever</div></div>
-          <span style="font-size:18px" class="pet-check">✓</span>
-        </div>
-        <div class="pet-select-option" onclick="togglePetSelect(this,'luna')">
-          <span class="service-icon">🐈</span>
-          <div class="service-info"><div class="service-name">Luna</div><div class="service-desc">British Shorthair</div></div>
-          <span style="font-size:18px;opacity:0.3" class="pet-check">✓</span>
-        </div>
-      </div>
+      <div class="service-list" style="margin-top:10px" id="booking-pet-list"></div>
       <div class="multi-pet-info" id="multi-pet-info">⚠️ <strong>Multiple pets selected:</strong> Additional £5 per extra pet.</div>
     </div>
 

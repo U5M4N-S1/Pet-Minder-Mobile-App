@@ -288,7 +288,11 @@ const petEmojis = { Dog: '🐕', Cat: '🐈', Rabbit: '🐇', Bird: '🐦', Othe
 // ===== SCREEN SWITCHING =====
 function show(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById('screen-' + id).classList.add('active');
+  const screen = document.getElementById('screen-' + id);
+  screen.classList.add('active');
+  window.scrollTo(0, 0);
+  const pc = screen.querySelector('.page-content');
+  if (pc) pc.scrollTop = 0;
   const nav = document.getElementById('app-nav');
   const mh = document.getElementById('mobile-header');
   const isApp = appScreens.includes(id);
@@ -1402,6 +1406,12 @@ const PROTECTED = ['home.html','search.html','bookings.html','messages.html','pr
 
 document.addEventListener('DOMContentLoaded', async () => {
   const page = window.location.pathname.split('/').pop() || 'index.html';
+
+  // Set currentScreen based on the loaded page so that back-navigation
+  // from sub-screens (e.g. Reviews, Help Centre) returns to the correct parent.
+  const pageToScreen = { 'home.html':'home', 'search.html':'search', 'bookings.html':'bookings', 'messages.html':'messages', 'profile.html':'profile' };
+  if (pageToScreen[page]) currentScreen = pageToScreen[page];
+
   if (!PROTECTED.includes(page)) return;
 
   if (!api.getToken()) {

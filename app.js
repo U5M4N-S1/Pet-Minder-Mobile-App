@@ -14,7 +14,8 @@ let userProfile = {
   firstName: '', lastName: '', email: '', phone: '', location: '', bio: '',
   role: 'owner', profileImage: '',
   // Minder-specific (blank for owners)
-  serviceArea: '', petsCaredFor: '', services: '', rate: '', experience: ''
+  serviceArea: '', petsCaredFor: '', services: '', rate: '', experience: '',
+  priceMin: 0, priceMax: 50
 };
 
 // ===== LOCAL STORE =====
@@ -126,6 +127,8 @@ function hydrateUserProfile(u) {
   userProfile.services     = u.services     || '';
   userProfile.rate         = u.rate         || '';
   userProfile.experience   = u.experience   || '';
+  userProfile.priceMin     = u.priceMin != null ? u.priceMin : 0;
+  userProfile.priceMax     = u.priceMax != null ? u.priceMax : 50;
 }
 (function initUserFromCache() { hydrateUserProfile(store.getUser()); }());
 
@@ -519,7 +522,7 @@ async function loadMinders() {
         ? '<img src="' + m.profileImage + '" alt="' + m.name + '" class="avatar-img" style="width:100%;height:100%;object-fit:cover;border-radius:14px">'
         : '👤';
       const loc  = m.location ? '📍 ' + m.location : '';
-      const rate = m.rate ? m.rate : '';
+      const price = (m.priceMin != null && m.priceMax != null) ? '£' + m.priceMin + ' – £' + m.priceMax + '/hr' : (m.rate || '');
       const tags = [];
       if (m.services) m.services.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
       if (m.petsCaredFor) m.petsCaredFor.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
@@ -534,7 +537,7 @@ async function loadMinders() {
           '<div class="minder-list-name">' + m.name + '</div>' +
           (loc ? '<div class="minder-list-loc">' + loc + '</div>' : '') +
           (tags.length ? '<div class="minder-list-tags">' + tags.join('') + '</div>' : '') +
-          (rate ? '<div class="minder-list-rate">' + rate + '</div>' : '') +
+          (price ? '<div class="minder-list-rate">' + price + '</div>' : '') +
           '<div class="minder-btns">' +
             '<button class="btn-msg-minder" onclick="event.stopPropagation();showToast(\'Chat coming soon!\')">💬 Message</button>' +
             '<button class="btn-book-sm" onclick="event.stopPropagation();window.location.href=\'active-booking.html?minder=' + m.id + '\'">Book Now</button>' +
@@ -563,12 +566,13 @@ function openMinderProfile(minderId) {
     document.getElementById('mp-bio').textContent = minder.bio || '';
     // Update the detail section with real data
     const details = document.getElementById('mp-details');
-    if (details && (minder.experience || minder.petsCaredFor || minder.services || minder.rate)) {
+    if (details && (minder.experience || minder.petsCaredFor || minder.services || minder.rate || minder.priceMin != null)) {
       details.innerHTML = '';
       if (minder.experience)   details.innerHTML += '<div class="info-row"><span class="info-label">Experience</span><span class="info-value">' + minder.experience + '</span></div>';
       if (minder.petsCaredFor) details.innerHTML += '<div class="info-row"><span class="info-label">Pets accepted</span><span class="info-value">' + minder.petsCaredFor + '</span></div>';
       if (minder.services)     details.innerHTML += '<div class="info-row"><span class="info-label">Services</span><span class="info-value">' + minder.services + '</span></div>';
-      if (minder.rate)         details.innerHTML += '<div class="info-row"><span class="info-label">Rate</span><span class="info-value">' + minder.rate + '</span></div>';
+      const priceStr = (minder.priceMin != null && minder.priceMax != null) ? '£' + minder.priceMin + ' – £' + minder.priceMax + '/hr' : (minder.rate || '');
+      if (priceStr) details.innerHTML += '<div class="info-row"><span class="info-label">Rate</span><span class="info-value">' + priceStr + '</span></div>';
     }
     // Hide stars for real minders (no review system wired to them yet)
     const starsEl = document.getElementById('mp-stars');
@@ -1005,6 +1009,37 @@ function submitReport() {
 }
 
 // ===== EDIT PROFILE =====
+// ===== CHIP SELECTORS & PRICE HELPERS =====
+// Toggle chip active state on click
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('chip-btn')) {
+    e.target.classList.toggle('active');
+  }
+});
+// Read selected chips as comma-separated string
+function getSelectedChips(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return '';
+  return Array.from(el.querySelectorAll('.chip-btn.active')).map(b => b.getAttribute('data-value')).join(', ');
+}
+// Set selected chips from comma-separated string
+function setSelectedChips(containerId, csv) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const vals = csv.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  el.querySelectorAll('.chip-btn').forEach(b => {
+    b.classList.toggle('active', vals.includes(b.getAttribute('data-value').toLowerCase()));
+  });
+}
+// Clamp price input value to 0–50
+function clampPrice(input) {
+  if (!input) return 0;
+  let v = parseInt(input.value, 10);
+  if (isNaN(v) || v < 0) v = 0;
+  if (v > 50) v = 50;
+  return v;
+}
+
 function openEditProfileModal() {
   document.getElementById('edit-first-name').value = userProfile.firstName;
   document.getElementById('edit-last-name').value = userProfile.lastName;
@@ -1018,9 +1053,10 @@ function openEditProfileModal() {
     minderFields.style.display = userProfile.role === 'minder' ? 'block' : 'none';
     if (userProfile.role === 'minder') {
       document.getElementById('edit-service-area').value = userProfile.serviceArea || '';
-      document.getElementById('edit-pets-cared').value = userProfile.petsCaredFor || '';
-      document.getElementById('edit-services').value = userProfile.services || '';
-      document.getElementById('edit-rate').value = userProfile.rate || '';
+      setSelectedChips('edit-pet-type-chips', userProfile.petsCaredFor || '');
+      setSelectedChips('edit-service-type-chips', userProfile.services || '');
+      document.getElementById('edit-price-min').value = userProfile.priceMin != null ? userProfile.priceMin : 0;
+      document.getElementById('edit-price-max').value = userProfile.priceMax != null ? userProfile.priceMax : 50;
       document.getElementById('edit-experience').value = userProfile.experience || '';
     }
   }
@@ -1042,11 +1078,12 @@ function saveProfile() {
     };
     // Include minder-specific fields if user is a minder
     if (userProfile.role === 'minder') {
-      updates.serviceArea  = (document.getElementById('edit-service-area')  || {}).value || '';
-      updates.petsCaredFor = (document.getElementById('edit-pets-cared')    || {}).value || '';
-      updates.services     = (document.getElementById('edit-services')      || {}).value || '';
-      updates.rate         = (document.getElementById('edit-rate')          || {}).value || '';
-      updates.experience   = (document.getElementById('edit-experience')   || {}).value || '';
+      updates.serviceArea  = (document.getElementById('edit-service-area') || {}).value || '';
+      updates.petsCaredFor = getSelectedChips('edit-pet-type-chips');
+      updates.services     = getSelectedChips('edit-service-type-chips');
+      updates.priceMin     = clampPrice(document.getElementById('edit-price-min'));
+      updates.priceMax     = clampPrice(document.getElementById('edit-price-max'));
+      updates.experience   = (document.getElementById('edit-experience') || {}).value || '';
     }
     // Optimistic local update so the UI feels instant
     Object.assign(userProfile, updates);

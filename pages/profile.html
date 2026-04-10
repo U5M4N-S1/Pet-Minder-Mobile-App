@@ -86,10 +86,36 @@
 <!-- Minder-specific fields (hidden for pet owners) -->
 <div id="minder-fields" style="display:none">
   <div style="margin:16px 0 8px;font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px">Pet Minder Details</div>
+
   <div class="field-group"><label>Service Area</label><input type="text" id="edit-service-area" placeholder="e.g. Mile End, Shoreditch"></div>
-  <div class="field-group"><label>Pets Cared For</label><input type="text" id="edit-pets-cared" placeholder="e.g. Dogs, Cats, Rabbits"></div>
-  <div class="field-group"><label>Services Offered</label><input type="text" id="edit-services" placeholder="e.g. Walking, Home Visit, Grooming"></div>
-  <div class="field-group"><label>Rate</label><input type="text" id="edit-rate" placeholder="e.g. £15/hr"></div>
+
+  <div class="field-group"><label>Pet Type</label>
+    <div class="chip-group" id="edit-pet-type-chips">
+      <button type="button" class="chip-btn" data-value="Dogs">🐕 Dogs</button>
+      <button type="button" class="chip-btn" data-value="Cats">🐈 Cats</button>
+      <button type="button" class="chip-btn" data-value="Small Pets">🐇 Small Pets</button>
+      <button type="button" class="chip-btn" data-value="Birds">🐦 Birds</button>
+    </div>
+  </div>
+
+  <div class="field-group"><label>Service Type</label>
+    <div class="chip-group" id="edit-service-type-chips">
+      <button type="button" class="chip-btn" data-value="Walking">🚶 Walking</button>
+      <button type="button" class="chip-btn" data-value="Home Visit">🏠 Home Visit</button>
+      <button type="button" class="chip-btn" data-value="Grooming">🛁 Grooming</button>
+      <button type="button" class="chip-btn" data-value="Vet">🏥 Vet</button>
+      <button type="button" class="chip-btn" data-value="Training">🎓 Training</button>
+    </div>
+  </div>
+
+  <div class="field-group"><label>Price Range (£ per hour)</label>
+    <div class="price-range-row">
+      <div class="price-input-wrap"><span class="price-prefix">£</span><input type="number" id="edit-price-min" min="0" max="50" value="0" placeholder="0"></div>
+      <span class="price-sep">to</span>
+      <div class="price-input-wrap"><span class="price-prefix">£</span><input type="number" id="edit-price-max" min="0" max="50" value="50" placeholder="50"></div>
+    </div>
+  </div>
+
   <div class="field-group"><label>Experience</label><input type="text" id="edit-experience" placeholder="e.g. 3 years"></div>
 </div>
 <div class="pet-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="closeEditProfileModal()">Cancel</button><button class="btn-primary" style="flex:2;padding:14px" onclick="saveProfile()">Save Changes</button></div></div></div>

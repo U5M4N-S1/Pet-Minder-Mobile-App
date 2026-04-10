@@ -20,3 +20,19 @@
 .review-minder-info { flex: 1; }
 .review-minder-name { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 600; color: var(--bark); }
 .review-minder-booking { font-size: 12px; color: var(--bark-light); margin-top: 2px; }
+
+/* Chip / pill selectors for minder profile edit */
+.chip-group { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.chip-btn { padding: 8px 16px; border-radius: 50px; border: 1.5px solid var(--sand); background: white; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; color: var(--bark-light); cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+.chip-btn:hover { border-color: var(--terra-light); color: var(--bark); background: #fef3ed; }
+.chip-btn.active { border-color: var(--terra); background: var(--terra); color: white; }
+
+/* Price range row */
+.price-range-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.price-input-wrap { display: flex; align-items: center; border: 1.5px solid var(--sand); border-radius: var(--radius-sm); overflow: hidden; background: white; flex: 1; }
+.price-input-wrap:focus-within { border-color: var(--terra); }
+.price-prefix { padding: 0 0 0 12px; font-size: 14px; font-weight: 600; color: var(--bark-light); pointer-events: none; }
+.price-input-wrap input { border: none; outline: none; padding: 12px 10px; font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--bark); width: 100%; -moz-appearance: textfield; }
+.price-input-wrap input::-webkit-outer-spin-button,
+.price-input-wrap input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.price-sep { font-size: 13px; color: var(--bark-light); font-weight: 500; flex-shrink: 0; }

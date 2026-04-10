@@ -12,8 +12,10 @@ app.use(express.static(path.join(__dirname, '..')));
 
 // API routes
 const authRoutes = require('./routes/auth');
-app.use('/api/auth',     authRoutes);
-app.use('/api/minders',  authRoutes);  // GET /api/minders hits the /minders handler in auth.js
+app.use('/api/auth', authRoutes);
+// The /minders handler inside auth.js is router.get('/minders', ...),
+// so mount the router at /api so the full path is /api/minders (not /api/minders/minders).
+app.use('/api', authRoutes);
 app.use('/api/bookings', require('./routes/bookings'));
 app.use('/api/pets',     require('./routes/pets'));
 app.use('/api/admin',    require('./routes/admin'));

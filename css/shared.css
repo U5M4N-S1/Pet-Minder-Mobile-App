@@ -115,7 +115,7 @@ body {
 .confirm-modal-actions { display: flex; gap: 10px; }
 
 /* Toast */
-.toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--bark); color: white; padding: 12px 24px; border-radius: 50px; font-size: 14px; z-index: 300; opacity: 0; transition: all 0.3s; white-space: nowrap; }
+.toast { position: fixed; top: 25px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--bark); color: white; padding: 12px 24px; border-radius: 50px; font-size: 14px; z-index: 300; opacity: 0; transition: all 0.3s; white-space: nowrap; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* Back button */

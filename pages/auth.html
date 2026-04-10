@@ -14,7 +14,7 @@
 <!-- AUTH -->
 <div class="screen active" id="screen-auth">
   <button class="auth-back-btn" onclick="logout()">←</button>
-  <div class="auth-card">
+  <div class="auth-card" style="overflow:hidden">
     <div class="auth-logo"><span class="auth-logo-icon">🐾</span> <span class="auth-logo-paw">Paw</span><span class="auth-logo-pal">Pal</span></div>
     <div class="auth-tabs">
       <button class="auth-tab active" onclick="switchAuthTab('login')">Log In</button>
@@ -46,11 +46,14 @@
       <div class="field-group"><label>Password</label><input type="password" placeholder="Create password" id="reg-password"></div>
       <div class="field-group"><label>Confirm Password</label><input type="password" placeholder="Repeat password" id="reg-confirm-password"></div>
       <div class="field-group"><label>I am a...</label>
+        <!---- user can choose both roles -->
+        <!---- a pet owner can be a petminder -->
         <div class="role-selector">
           <div class="role-btn selected" onclick="selectRole(this,'owner')"><span>🐶🐱</span>Pet Owner</div>
           <div class="role-btn" onclick="selectRole(this,'minder')"><span>🧑‍🦰👩‍🦰</span>Pet Minder</div>
         </div>
       </div>
+      <!----remove-->
       <div id="reg-owner-extras">
         <div class="reg-extras-box">
           <p class="reg-extras-title">🐾 Register Your Pet</p>
@@ -59,6 +62,7 @@
           <div id="reg-pets-grid" class="reg-pets-grid"></div>
         </div>
       </div>
+      <!----remove and ask after account is created-->
       <div id="reg-minder-extras" style="display:none">
         <div class="reg-extras-box">
           <p class="reg-extras-title">📜 Upload Certifications</p>
@@ -67,7 +71,7 @@
           <div id="cert-file-names" style="margin-top:8px;font-size:12px;color:var(--moss)"></div>
         </div>
       </div>
-      <button class="btn-primary" style="margin-top:8px" onclick="handleRegister()">Create Account</button>
+      <button class="btn-primary" onclick="handleRegister()">Create Account</button>
     </div>
 
     <!-- FORGOT PASSWORD FLOW -->

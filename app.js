@@ -6,6 +6,8 @@ let selectedRole = 'owner';
 let reviewStars = 0;
 let profileReviewStars = 0;
 let currentEditPetId = null;
+let regPendingPets = []; // pets added during registration (before account exists)
+let regPetNextId = 1;    // local counter for pending pet IDs
 let currentReviewMinder = null;
 let reportSelectedUser = null;
 
@@ -464,15 +466,27 @@ async function handleRegister() {
     return;
   }
   document.getElementById('reg-confirm-password').style.borderColor = 'var(--sand)';
+  if (selectedRole === 'owner' && regPendingPets.length === 0) {
+    showToast('❌ Please add at least one pet before creating your account');
+    return;
+  }
 
   try {
     const { token, user } = await api.signup({ firstName, lastName, email, password: pwd, role: selectedRole });
     api.setToken(token);
     store.setUser(user);
     hydrateUserProfile(user);
-    // Brand-new accounts always start with an empty pet list.
+
+    // Now create any pets that were added during registration
     petData = {};
+    for (const pending of regPendingPets) {
+      try {
+        const pet = await api.createPet({ name: pending.name, type: pending.type, breed: pending.breed, age: pending.age, medical: pending.medical, care: pending.care, emoji: pending.emoji });
+        petData[pet.id] = pet;
+      } catch { /* pet creation failed — continue with account */ }
+    }
     store.setPets(petData);
+    regPendingPets = [];
     goToHome();
   } catch (err) {
     showToast('❌ ' + err.message);
@@ -611,35 +625,7 @@ async function loadMinders() {
       list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No pet minders have signed up yet.</div>';
       return;
     }
-    list.innerHTML = '';
-    loadedMinders.forEach(m => {
-      const avatar = m.profileImage
-        ? '<img src="' + m.profileImage + '" alt="' + m.name + '" class="avatar-img" style="width:100%;height:100%;object-fit:cover;border-radius:14px">'
-        : '👤';
-      const loc  = m.location ? '📍 ' + m.location : '';
-      const price = (m.priceMin != null && m.priceMax != null) ? '£' + m.priceMin + ' – £' + m.priceMax + '/hr' : (m.rate || '');
-      const tags = [];
-      if (m.services) m.services.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
-      if (m.petsCaredFor) m.petsCaredFor.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
-
-      const card = document.createElement('div');
-      card.className = 'minder-list-card';
-      card.style.cursor = 'pointer';
-      card.onclick = function() { openMinderProfile(m.id); };
-      card.innerHTML =
-        '<div class="minder-list-avatar">' + avatar + '</div>' +
-        '<div class="minder-list-info">' +
-          '<div class="minder-list-name">' + m.name + '</div>' +
-          (loc ? '<div class="minder-list-loc">' + loc + '</div>' : '') +
-          (tags.length ? '<div class="minder-list-tags">' + tags.join('') + '</div>' : '') +
-          (price ? '<div class="minder-list-rate">' + price + '</div>' : '') +
-          '<div class="minder-btns">' +
-            '<button class="btn-msg-minder" onclick="event.stopPropagation();showToast(\'Chat coming soon!\')">💬 Message</button>' +
-            '<button class="btn-book-sm" onclick="event.stopPropagation();window.location.href=\'active-booking.html?minder=' + m.id + '\'">Book Now</button>' +
-          '</div>' +
-        '</div>';
-      list.appendChild(card);
-    });
+    renderMinders(loadedMinders);
   } catch {
     list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">Could not load minders. Try refreshing.</div>';
   }
@@ -753,6 +739,125 @@ function selectTime(el) { if (el.classList.contains('unavailable')) return; docu
 function toggleChip(el) { el.classList.toggle('active'); }
 function toggleFilterModal() { document.getElementById('filter-modal').classList.toggle('open'); }
 
+// ===== SEARCH & FILTER SYSTEM =====
+// Saved filter state — only updated when user clicks Save or Clear All.
+let savedFilters = { petTypes: [], serviceTypes: [], priceMin: null, priceMax: null };
+
+// Helper: read the text label from a filter-opt, strip its emoji prefix, return lowercase.
+function filterOptLabel(el) { return el.textContent.replace(/^[^\w]*/u, '').trim().toLowerCase(); }
+
+// Location search bar — triggered by the Go button or Enter key
+function searchByLocation() {
+  runSearch();
+}
+
+// Central search: combines the location bar + saved modal filters and re-renders.
+function runSearch() {
+  const locInput = document.getElementById('search-location-input');
+  const query = locInput ? locInput.value.trim().toLowerCase() : '';
+
+  const filtered = loadedMinders.filter(m => {
+    // 1. Location search
+    if (query) {
+      const minderLoc = (m.location || '').toLowerCase();
+      if (!minderLoc.includes(query)) return false;
+    }
+
+    // 2. Pet type filter
+    if (savedFilters.petTypes.length > 0) {
+      if (!m.petsCaredFor) return false;
+      const minderPets = m.petsCaredFor.split(',').map(s => s.trim().toLowerCase());
+      if (!savedFilters.petTypes.some(p => minderPets.includes(p))) return false;
+    }
+
+    // 3. Service type filter
+    if (savedFilters.serviceTypes.length > 0) {
+      if (!m.services) return false;
+      const minderSvcs = m.services.split(',').map(s => s.trim().toLowerCase());
+      if (!savedFilters.serviceTypes.some(s => minderSvcs.includes(s))) return false;
+    }
+
+    // 4. Price range filter — minder's range must overlap with the user's range
+    if (savedFilters.priceMin !== null && m.priceMax != null && m.priceMax < savedFilters.priceMin) return false;
+    if (savedFilters.priceMax !== null && m.priceMin != null && m.priceMin > savedFilters.priceMax) return false;
+
+    return true;
+  });
+
+  renderMinders(filtered);
+  return filtered;
+}
+
+// Clear All — reset modal UI, clear saved filters, re-run search (location still applies)
+function clearAllFilters() {
+  document.querySelectorAll('#filter-modal .filter-opt').forEach(o => o.classList.remove('active'));
+  const minEl = document.getElementById('filter-price-min');
+  const maxEl = document.getElementById('filter-price-max');
+  if (minEl) minEl.value = '';
+  if (maxEl) maxEl.value = '';
+  savedFilters = { petTypes: [], serviceTypes: [], priceMin: null, priceMax: null };
+  runSearch();
+  toggleFilterModal();
+  showToast('✅ Filters cleared');
+}
+
+// Save — read modal UI into savedFilters, then re-run search
+function applyFilters() {
+  const petTypeEls = document.querySelectorAll('#filter-pet-type .filter-opt.active');
+  savedFilters.petTypes = Array.from(petTypeEls).map(filterOptLabel);
+
+  const serviceEls = document.querySelectorAll('#filter-service-type .filter-opt.active');
+  savedFilters.serviceTypes = Array.from(serviceEls).map(filterOptLabel);
+
+  const minEl = document.getElementById('filter-price-min');
+  const maxEl = document.getElementById('filter-price-max');
+  savedFilters.priceMin = minEl && minEl.value !== '' ? Number(minEl.value) : null;
+  savedFilters.priceMax = maxEl && maxEl.value !== '' ? Number(maxEl.value) : null;
+
+  const filtered = runSearch();
+  toggleFilterModal();
+  showToast('✅ Filters saved – ' + filtered.length + ' minder' + (filtered.length !== 1 ? 's' : '') + ' found');
+}
+
+// Render a given list of minders into the minders-list container
+function renderMinders(minders) {
+  const list = document.getElementById('minders-list');
+  if (!list) return;
+  if (minders.length === 0) {
+    list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No minders match your filters.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  minders.forEach(m => {
+    const avatar = m.profileImage
+      ? '<img src="' + m.profileImage + '" alt="' + m.name + '" class="avatar-img" style="width:100%;height:100%;object-fit:cover;border-radius:14px">'
+      : '👤';
+    const loc  = m.location ? '📍 ' + m.location : '';
+    const price = (m.priceMin != null && m.priceMax != null) ? '£' + m.priceMin + ' – £' + m.priceMax + '/hr' : (m.rate || '');
+    const tags = [];
+    if (m.services) m.services.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
+    if (m.petsCaredFor) m.petsCaredFor.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
+
+    const card = document.createElement('div');
+    card.className = 'minder-list-card';
+    card.style.cursor = 'pointer';
+    card.onclick = function() { openMinderProfile(m.id); };
+    card.innerHTML =
+      '<div class="minder-list-avatar">' + avatar + '</div>' +
+      '<div class="minder-list-info">' +
+        '<div class="minder-list-name">' + m.name + '</div>' +
+        (loc ? '<div class="minder-list-loc">' + loc + '</div>' : '') +
+        (tags.length ? '<div class="minder-list-tags">' + tags.join('') + '</div>' : '') +
+        (price ? '<div class="minder-list-rate">' + price + '</div>' : '') +
+        '<div class="minder-btns">' +
+          '<button class="btn-msg-minder" onclick="event.stopPropagation();showToast(\'Chat coming soon!\')">💬 Message</button>' +
+          '<button class="btn-book-sm" onclick="event.stopPropagation();window.location.href=\'active-booking.html?minder=' + m.id + '\'">Book Now</button>' +
+        '</div>' +
+      '</div>';
+    list.appendChild(card);
+  });
+}
+
 // ===== PET MANAGEMENT =====
 function openPetModal(petId) {
   const modal = document.getElementById('pet-modal');
@@ -766,7 +871,8 @@ function openPetModal(petId) {
     ['pet-name-input','pet-breed-input','pet-age-input','pet-medical-input','pet-care-input'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('pet-type-input').value = 'Dog';
   } else {
-    const pet = petData[petId]; if (!pet) { showToast('Pet not found'); return; }
+    const pet = petData[petId] || regPendingPets.find(p => p.id === petId);
+    if (!pet) { showToast('Pet not found'); return; }
     title.textContent = 'Edit ' + pet.name; del.style.display = 'block'; saveBtn.textContent = 'Save Changes';
     document.getElementById('pet-name-input').value = pet.name;
     document.getElementById('pet-type-input').value = pet.type;
@@ -790,50 +896,82 @@ async function savePet() {
   if (!name) { showToast('❌ Please enter a pet name'); return; }
   const body = { name, type, breed, age, medical, care, emoji: petEmojis[type] || '🐾' };
 
+  // On the auth page the registration form exists — pets must be staged locally
+  // because the user has no account yet (token may be stale from a prior session).
+  const isRegistering = !!document.getElementById('form-register');
+
   if (petId === 'new') {
-    try {
-      const pet = await api.createPet(body);
-      petData[pet.id] = pet;
-      store.setPets(petData); // offline cache
+    if (isRegistering) {
+      const localId = 'reg_' + (regPetNextId++);
+      body.id = localId;
+      regPendingPets.push(body);
       closePetModal();
       showToast('✅ ' + name + ' added successfully!');
-      refreshPetsUI();
       refreshRegPets();
-    } catch (err) {
-      showToast('❌ ' + (err.message || 'Failed to save pet'));
-    }
-  } else {
-    showConfirmModal('💾', 'Save Changes?', 'Save changes to ' + name + '?', async function() {
+    } else {
       try {
-        const pet = await api.updatePet(petId, body);
+        const pet = await api.createPet(body);
         petData[pet.id] = pet;
         store.setPets(petData);
         closePetModal();
-        showToast('✅ ' + name + ' updated!');
+        showToast('✅ ' + name + ' added successfully!');
         refreshPetsUI();
         refreshRegPets();
       } catch (err) {
-        showToast('❌ ' + (err.message || 'Failed to update pet'));
+        showToast('❌ ' + (err.message || 'Failed to save pet'));
       }
-    });
+    }
+  } else {
+    // Editing a pending registration pet
+    if (isRegistering) {
+      const idx = regPendingPets.findIndex(p => p.id === petId);
+      if (idx !== -1) { Object.assign(regPendingPets[idx], body); }
+      closePetModal();
+      showToast('✅ ' + name + ' updated!');
+      refreshRegPets();
+    } else {
+      showConfirmModal('💾', 'Save Changes?', 'Save changes to ' + name + '?', async function() {
+        try {
+          const pet = await api.updatePet(petId, body);
+          petData[pet.id] = pet;
+          store.setPets(petData);
+          closePetModal();
+          showToast('✅ ' + name + ' updated!');
+          refreshPetsUI();
+          refreshRegPets();
+        } catch (err) {
+          showToast('❌ ' + (err.message || 'Failed to update pet'));
+        }
+      });
+    }
   }
 }
 
 function confirmRemovePet() {
   const petId = document.getElementById('pet-edit-id').value;
-  const pet = petData[petId]; if (!pet) return;
+  // Check pending registration pets first, then saved pets
+  const regIdx = regPendingPets.findIndex(p => p.id === petId);
+  const pet = regIdx !== -1 ? regPendingPets[regIdx] : petData[petId];
+  if (!pet) return;
   showConfirmModal('🗑', 'Remove ' + pet.name + '?', 'Are you sure? This cannot be undone.', async function() {
     const petName = pet.name;
-    try {
-      await api.deletePet(petId);
-      delete petData[petId];
-      store.setPets(petData);
+    if (regIdx !== -1) {
+      regPendingPets.splice(regIdx, 1);
       closePetModal();
       showToast('🗑 ' + petName + ' removed');
-      refreshPetsUI();
       refreshRegPets();
-    } catch (err) {
-      showToast('❌ ' + (err.message || 'Failed to remove pet'));
+    } else {
+      try {
+        await api.deletePet(petId);
+        delete petData[petId];
+        store.setPets(petData);
+        closePetModal();
+        showToast('🗑 ' + petName + ' removed');
+        refreshPetsUI();
+        refreshRegPets();
+      } catch (err) {
+        showToast('❌ ' + (err.message || 'Failed to remove pet'));
+      }
     }
   });
 }
@@ -888,15 +1026,18 @@ function refreshPetsUI() {
   }
 }
 
-// Show pets on registration page
+// Show pets on registration page — uses regPendingPets (local) before signup,
+// and petData (server-backed) after.
 function refreshRegPets() {
   const grid = document.getElementById('reg-pets-grid');
   if (!grid) return;
   grid.innerHTML = '';
-  Object.keys(petData).forEach(id => {
-    const p = petData[id];
+  // During registration show pending pets; after login show saved pets
+  const isRegistering = !!document.getElementById('form-register');
+  const pets = isRegistering ? regPendingPets : Object.values(petData);
+  pets.forEach(p => {
     const card = document.createElement('div'); card.className = 'reg-pet-card';
-    card.onclick = () => openPetModal(id);
+    card.onclick = () => openPetModal(p.id);
     card.innerHTML = '<span>' + (p.emoji||'🐾') + '</span><span>' + p.name + '</span><span style="color:var(--bark-light);font-size:11px">' + p.breed + '</span>';
     grid.appendChild(card);
   });

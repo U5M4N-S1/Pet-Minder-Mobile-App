@@ -1,8 +1,8 @@
 /* Login/Register screen */
-#screen-auth { background: var(--cream); align-items: center; justify-content: center; padding: 32px 24px; position: relative; }
-.auth-back-btn { position: absolute; top: 20px; left: 20px; background: white; border: 1.5px solid var(--sand); color: var(--bark); width: 40px; height: 40px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px var(--shadow); transition: all 0.2s; }
+#screen-auth { background: var(--cream); align-items: center; padding: 32px 24px; position: relative; overflow-y: auto; }
+.auth-back-btn { position: fixed; top: 20px; left: 20px; background: white; border: 1.5px solid var(--sand); color: var(--bark); width: 40px; height: 40px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px var(--shadow); transition: all 0.2s; z-index: 10; }
 .auth-back-btn:hover { background: var(--sand-light); }
-.auth-card { background: var(--warm-white); border-radius: var(--radius); padding: 40px 36px; width: 100%; max-width: 420px; box-shadow: 0 4px 40px var(--shadow); max-height: 90vh; overflow-y: auto; }
+.auth-card { background: var(--warm-white); border-radius: var(--radius); padding: 40px 36px; width: 100%; max-width: 420px; box-shadow: 0 4px 40px var(--shadow); margin: auto; }
 .auth-logo { font-size: 24px; color: var(--bark); margin-bottom: 28px; display: flex; align-items: baseline; gap: 0; }
 .auth-logo-icon { margin-right: 8px; }
 .auth-logo-paw { font-family: 'Playfair Display', serif; font-weight: 800; }

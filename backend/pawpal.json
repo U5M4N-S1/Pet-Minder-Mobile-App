@@ -79,7 +79,7 @@
       "firstName": "A",
       "lastName": "B",
       "email": "carer@gmail.com",
-      "passwordHash": "$2b$12$bOTu0mm9zV7hukrG3.vVUu8cqiaZAd/IUehm8hO0cyhAA2.TWN6US",
+      "passwordHash": "$2b$12$zPijstKnVcwv0jeJ3ua9heeMVwwoN8DF4yW1JTu6awNO.Rp0gKTje",
       "role": "minder",
       "location": "London",
       "createdAt": "2026-04-10T10:13:24.930Z",
@@ -95,6 +95,36 @@
       "priceMax": 50,
       "resetCode": null,
       "resetCodeExpires": null
+    },
+    {
+      "id": 1005,
+      "firstName": "r",
+      "lastName": "rr",
+      "email": "rrrrr@gmail.com",
+      "passwordHash": "$2b$12$0NKMAjSPab2FvT.mqieUAOgPPlVMKTK484x0GuQbhR4eQLRe/OKTq",
+      "role": "owner",
+      "location": "London",
+      "createdAt": "2026-04-10T19:06:29.277Z"
+    },
+    {
+      "id": 1006,
+      "firstName": "rr",
+      "lastName": "rr",
+      "email": "rrrrrrrr@gmail.com",
+      "passwordHash": "$2b$12$dlMhIlUdcxjb2/MTi6Ty7.Z1L/qikFw1aKjqhLKsovqdorvzIFH0W",
+      "role": "owner",
+      "location": "London",
+      "createdAt": "2026-04-10T19:35:06.693Z"
+    },
+    {
+      "id": 1007,
+      "firstName": "rrrrr",
+      "lastName": "rrrrrrr",
+      "email": "rrrrrrrrrrrr@gmail.com",
+      "passwordHash": "$2b$12$4kBofCL3VZPso/Th0bet1OYMzvKK0jqsn6nkOHrCDUnZbQEMWDqjG",
+      "role": "owner",
+      "location": "London",
+      "createdAt": "2026-04-10T19:41:48.071Z"
     }
   ],
   "bookings": [
@@ -275,6 +305,66 @@
       "care": "",
       "emoji": "🐇",
       "createdAt": "2026-04-10T10:14:59.483Z"
+    },
+    {
+      "id": 4,
+      "ownerId": 1004,
+      "name": "yy",
+      "type": "Other",
+      "breed": "yy",
+      "age": "yy",
+      "medical": "yyy",
+      "care": "yy",
+      "emoji": "🐾",
+      "createdAt": "2026-04-10T19:25:43.841Z"
+    },
+    {
+      "id": 5,
+      "ownerId": 1006,
+      "name": "g",
+      "type": "Dog",
+      "breed": "gg",
+      "age": "gg",
+      "medical": "gg",
+      "care": "g",
+      "emoji": "🐕",
+      "createdAt": "2026-04-10T19:35:06.699Z"
+    },
+    {
+      "id": 6,
+      "ownerId": 1006,
+      "name": "ff",
+      "type": "Dog",
+      "breed": "fff",
+      "age": "ff",
+      "medical": "ff",
+      "care": "ff",
+      "emoji": "🐕",
+      "createdAt": "2026-04-10T19:39:11.462Z"
+    },
+    {
+      "id": 7,
+      "ownerId": 1006,
+      "name": "ff",
+      "type": "Dog",
+      "breed": "ff",
+      "age": "ff",
+      "medical": "ff",
+      "care": "ff",
+      "emoji": "🐕",
+      "createdAt": "2026-04-10T19:39:39.402Z"
+    },
+    {
+      "id": 8,
+      "ownerId": 1007,
+      "name": "rr",
+      "type": "Dog",
+      "breed": "rr",
+      "age": "rr",
+      "medical": "rrr",
+      "care": "rr",
+      "emoji": "🐕",
+      "createdAt": "2026-04-10T19:41:48.077Z"
     }
   ],
   "disputes": []

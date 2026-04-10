@@ -484,6 +484,7 @@ function switchAuthTab(tab) {
   document.getElementById('form-register').classList.toggle('hidden', tab === 'login');
 }
 
+// user can be both
 function selectRole(el, role) {
   document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('selected'));
   el.classList.add('selected');
@@ -996,6 +997,13 @@ function submitReview() {
   document.getElementById('review-text-input').value = '';
   setReviewStars(0);
   showToast('✅ Review submitted!');
+}
+
+// ===== BECOME MINDER =====
+function openBecomeMinder(){
+  //ask for any qualifications 
+    // if yes ask for pictures (something like auth.html lines 62-69)
+    // if no dont ask for pictures (can still provide basic services like feeding or walking)
 }
 
 // ===== REVIEWS (from profile section) =====

@@ -159,13 +159,16 @@ const bookedMinders = [
 // fresh account can't accidentally see another user's bookings.
 const upcomingBookings = [];
 const pastBookings = [];
-const statusLabels = { confirmed: 'Confirmed', pending: 'Pending', completed: 'Done', declined: 'Declined' };
+const statusLabels = { confirmed: 'Confirmed', pending: 'Pending', completed: 'Done', declined: 'Declined', cancelled: 'Cancelled' };
+
+// All loaded bookings — stored so the detail view can look them up by id
+let allBookingsCache = [];
 
 function renderBookingCards(containerId, bookings) {
   const el = document.getElementById(containerId);
   if (!el) return;
   el.innerHTML = bookings.map(b => `
-    <div class="booking-card" onclick="window.location.href='active-booking.html?minder=${b.minder}'" style="cursor:pointer">
+    <div class="booking-card" onclick="openBookingDetail(${b.id})" style="cursor:pointer">
       <div class="booking-date-block"><div class="booking-date-day">${b.day}</div><div class="booking-date-month">${b.month}</div></div>
       <div class="booking-date-sep"></div>
       <div class="booking-avatar">${b.avatar}</div>
@@ -176,6 +179,56 @@ function renderBookingCards(containerId, bookings) {
       </div>
       <span class="booking-status status-${b.status}">${statusLabels[b.status]}</span>
     </div>`).join('');
+}
+
+function openBookingDetail(bookingId) {
+  const b = allBookingsCache.find(x => x.id === bookingId);
+  if (!b) return;
+  const el = document.getElementById('booking-detail-content');
+  if (!el) return;
+  const canCancel = b.status === 'pending' || b.status === 'confirmed';
+  el.innerHTML =
+    '<div style="background:white;border-radius:var(--radius);padding:20px;box-shadow:0 2px 12px var(--shadow)">' +
+      '<div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">' +
+        '<div class="booking-avatar" style="width:56px;height:56px;font-size:28px;flex-shrink:0">' + (b.avatar || '👤') + '</div>' +
+        '<div><div style="font-family:\'Playfair Display\',serif;font-size:18px;font-weight:600;color:var(--bark)">' + b.minderName + '</div>' +
+        '<span class="booking-status status-' + b.status + '" style="margin-top:4px;display:inline-block">' + (statusLabels[b.status] || b.status) + '</span></div>' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:10px">' +
+        '<div class="info-row" style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--sand-light)"><span style="color:var(--bark-light);font-size:13px">Date</span><span style="font-weight:600;font-size:14px;color:var(--bark)">' + b.day + ' ' + b.month + '</span></div>' +
+        '<div class="info-row" style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--sand-light)"><span style="color:var(--bark-light);font-size:13px">Time</span><span style="font-weight:600;font-size:14px;color:var(--bark)">' + (b.bookingTime || '') + '</span></div>' +
+        '<div class="info-row" style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--sand-light)"><span style="color:var(--bark-light);font-size:13px">Service</span><span style="font-weight:600;font-size:14px;color:var(--bark)">' + (b.service || '') + '</span></div>' +
+        '<div class="info-row" style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--sand-light)"><span style="color:var(--bark-light);font-size:13px">Pet(s)</span><span style="font-weight:600;font-size:14px;color:var(--bark)">' + b.petEmoji + ' ' + (b.petDetail ? b.petDetail.split('·')[0].trim() : '') + '</span></div>' +
+        (b.price ? '<div class="info-row" style="display:flex;justify-content:space-between;padding:10px 0"><span style="color:var(--bark-light);font-size:13px">Price</span><span style="font-weight:700;font-size:16px;color:var(--terra)">' + b.price + '</span></div>' : '') +
+      '</div>' +
+    '</div>' +
+    (canCancel ? '<button class="btn-primary" style="width:100%;margin-top:20px;padding:14px;background:#e53935" onclick="cancelBooking(' + b.id + ')">Cancel Booking</button>' : '');
+  document.getElementById('bookings-detail-section').style.display = 'block';
+  document.getElementById('bookings-main-section').style.display = 'none';
+}
+
+function closeBookingDetail() {
+  document.getElementById('bookings-detail-section').style.display = 'none';
+  document.getElementById('bookings-main-section').style.display = 'block';
+}
+
+function cancelBooking(bookingId) {
+  showConfirmModal('🗑', 'Cancel Booking?', 'Are you sure you want to cancel this booking? This cannot be undone.', async function() {
+    try {
+      await api.updateBooking(bookingId, { status: 'cancelled' });
+      showToast('✅ Booking cancelled');
+      closeBookingDetail();
+      // Refresh bookings list
+      try {
+        const bookings = await api.getBookings();
+        allBookingsCache = bookings;
+        renderBookingCards('bookings-upcoming-list', bookings.filter(b => b.status !== 'completed' && b.status !== 'cancelled'));
+        renderBookingCards('bookings-past-list', bookings.filter(b => b.status === 'completed' || b.status === 'cancelled'));
+      } catch { /* silent */ }
+    } catch (err) {
+      showToast('❌ ' + (err.message || 'Failed to cancel booking'));
+    }
+  });
 }
 
 // ===== BOOKING REQUESTS (minder view) =====
@@ -224,13 +277,13 @@ async function respondToBooking(bookingId, status, btnEl) {
 
 // ===== NOTIFICATIONS (minder booking request count) =====
 let notifCount = 0;
+let notifRequests = []; // cached for rendering the list
 
 async function loadNotificationCount() {
   if (userProfile.role !== 'minder') return;
   try {
-    const requests = await api.getBookingRequests();
-    notifCount = requests.filter(b => b.status === 'pending').length;
-    // Update badge on profile page notifications row
+    notifRequests = await api.getBookingRequests();
+    notifCount = notifRequests.filter(b => b.status === 'pending').length;
     const badge = document.getElementById('notif-badge');
     if (badge) {
       badge.textContent = notifCount;
@@ -240,11 +293,36 @@ async function loadNotificationCount() {
 }
 
 function openNotifications() {
-  if (userProfile.role === 'minder' && notifCount > 0) {
-    window.location.href = 'bookings.html?tab=requests';
-  } else {
+  if (userProfile.role !== 'minder') {
     showToast('No new notifications');
+    return;
   }
+  previousScreen = currentScreen;
+  // Render notification list
+  const list = document.getElementById('notif-list');
+  if (list) {
+    if (notifRequests.length === 0) {
+      list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No notifications yet.</div>';
+    } else {
+      const pending = notifRequests.filter(b => b.status === 'pending');
+      const rest    = notifRequests.filter(b => b.status !== 'pending');
+      const all     = pending.concat(rest); // pending first
+      list.innerHTML = all.map(b => {
+        const isPending = b.status === 'pending';
+        return '<div class="menu-item" style="' + (isPending ? 'border-left:3px solid var(--terra);' : 'opacity:0.7;') + '" onclick="window.location.href=\'bookings.html?tab=requests\'">' +
+          '<span class="menu-icon">' + (isPending ? '🔔' : (b.status === 'confirmed' ? '✅' : '❌')) + '</span>' +
+          '<span class="menu-label" style="display:flex;flex-direction:column;gap:2px">' +
+            '<span style="font-weight:600;font-size:14px">' + (b.ownerName || 'Pet Owner') + '</span>' +
+            '<span style="font-size:12px;color:var(--bark-light)">' + b.service + ' · ' + b.day + ' ' + b.month + ' · ' + b.price + '</span>' +
+            '<span style="font-size:11px;color:' + (isPending ? 'var(--terra)' : 'var(--bark-light)') + ';font-weight:' + (isPending ? '600' : '400') + '">' + (statusLabels[b.status] || b.status) + '</span>' +
+          '</span>' +
+          '<span class="menu-arrow">›</span>' +
+        '</div>';
+      }).join('');
+    }
+  }
+  show('notifications');
+  currentScreen = 'notifications';
 }
 
 // Active booking page

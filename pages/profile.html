@@ -74,6 +74,11 @@
   <div style="background:white;border-radius:var(--radius);padding:20px;box-shadow:0 2px 12px var(--shadow)"><p style="font-size:14px;font-weight:600;color:var(--bark);margin-bottom:10px">🚨 Report a User</p><div class="field-group" style="margin-bottom:12px;position:relative"><label>Search User</label><input type="text" id="report-search-input" placeholder="Type a name..." oninput="searchReportUsers()" autocomplete="off"><div id="report-search-results" class="report-search-results"></div></div><div id="report-selected-user" style="display:none;background:var(--sand-light);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px"><div style="display:flex;align-items:center;justify-content:space-between"><span id="report-selected-name" style="font-weight:600;font-size:14px;color:var(--bark)"></span><button style="background:none;border:none;color:#e53935;font-size:12px;cursor:pointer" onclick="clearReportSelection()">✕ Remove</button></div></div><div class="field-group" style="margin-bottom:14px"><label>Reason for Report</label><textarea id="report-reason" placeholder="Explain why this user should be reported..." style="width:100%;padding:12px 14px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);resize:vertical;min-height:100px;outline:none"></textarea></div><button class="btn-primary" style="width:100%;padding:14px;background:#e53935" onclick="submitReport()">Submit Report</button></div></div></div>
 </div>
 
+<!-- NOTIFICATIONS -->
+<div class="screen" id="screen-notifications">
+  <div class="page-content"><div class="profile-sub-header"><button class="back-btn" style="position:static;background:var(--sand-light);color:var(--bark);margin-bottom:16px" onclick="goBack()">←</button><h1 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--bark);margin-bottom:6px">Notifications</h1><p style="font-size:13px;color:var(--bark-light);margin-bottom:20px">Your latest booking request updates</p></div><div style="padding:0 24px 24px"><div id="notif-list"></div></div></div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- CONFIRM MODAL -->

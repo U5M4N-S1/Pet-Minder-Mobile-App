@@ -85,25 +85,27 @@ router.get('/requests', requireAuth, (req, res) => {
   res.json(enriched);
 });
 
-// PATCH /api/bookings/:id — accept or decline a booking (minder only)
+// PATCH /api/bookings/:id — accept/decline (minder) or cancel (owner)
 router.patch('/:id', requireAuth, (req, res) => {
   const id  = Number(req.params.id);
   const row = db.get('bookings').find({ id });
   const booking = row.value();
   if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
-  // Only the assigned minder may update the booking
-  if (Number(booking.minderKey) !== req.user.userId) {
-    return res.status(403).json({ error: 'Only the assigned minder can update this booking' });
-  }
-
   const { status } = req.body;
-  if (!['confirmed', 'declined'].includes(status)) {
-    return res.status(400).json({ error: 'Status must be "confirmed" or "declined"' });
+  const isMinder = Number(booking.minderKey) === req.user.userId;
+  const isOwner  = booking.ownerId === req.user.userId;
+
+  if (isMinder && ['confirmed', 'declined'].includes(status)) {
+    row.assign({ status }).write();
+    return res.json(toDTO(row.value()));
+  }
+  if (isOwner && status === 'cancelled') {
+    row.assign({ status }).write();
+    return res.json(toDTO(row.value()));
   }
 
-  row.assign({ status }).write();
-  res.json(toDTO(row.value()));
+  return res.status(403).json({ error: 'You do not have permission to update this booking' });
 });
 
 module.exports = router;

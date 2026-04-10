@@ -165,6 +165,16 @@
       "role": "owner",
       "location": "London",
       "createdAt": "2026-04-10T20:30:02.860Z"
+    },
+    {
+      "id": 1012,
+      "firstName": "443",
+      "lastName": "33",
+      "email": "333@gma.com",
+      "passwordHash": "$2b$12$aEUnXBg8ZjddsnTQwSLBAuNCk3hOP4ffyd1EYZPUHhIVh.9ctvY5K",
+      "role": "owner",
+      "location": "London",
+      "createdAt": "2026-04-10T20:38:50.246Z"
     }
   ],
   "bookings": [
@@ -333,7 +343,7 @@
       "bookingTime": "12:00",
       "petNames": "kk",
       "price": "£15.00",
-      "status": "pending",
+      "status": "declined",
       "createdAt": "2026-04-10T20:30:09.420Z"
     },
     {
@@ -347,8 +357,36 @@
       "bookingTime": "08:00",
       "petNames": "kk",
       "price": "£15.00",
-      "status": "pending",
+      "status": "declined",
       "createdAt": "2026-04-10T20:30:16.109Z"
+    },
+    {
+      "id": 1014,
+      "ownerId": 1012,
+      "minderKey": "1004",
+      "minderName": "Your Minder",
+      "minderAvatar": "🧑‍🦱",
+      "service": "Home Visit",
+      "bookingDate": "2026-04-10",
+      "bookingTime": "15:00",
+      "petNames": "3",
+      "price": "£12.00",
+      "status": "cancelled",
+      "createdAt": "2026-04-10T20:38:59.950Z"
+    },
+    {
+      "id": 1015,
+      "ownerId": 1012,
+      "minderKey": "1004",
+      "minderName": "Your Minder",
+      "minderAvatar": "🧑‍🦱",
+      "service": "Dog Walking",
+      "bookingDate": "2026-04-10",
+      "bookingTime": "09:00",
+      "petNames": "3",
+      "price": "£15.00",
+      "status": "confirmed",
+      "createdAt": "2026-04-10T20:39:18.793Z"
     }
   ],
   "pets": [
@@ -507,6 +545,18 @@
       "care": "",
       "emoji": "🐕",
       "createdAt": "2026-04-10T20:30:02.863Z"
+    },
+    {
+      "id": 14,
+      "ownerId": 1012,
+      "name": "3",
+      "type": "Dog",
+      "breed": "3",
+      "age": "3",
+      "medical": "",
+      "care": "",
+      "emoji": "🐕",
+      "createdAt": "2026-04-10T20:38:50.254Z"
     }
   ],
   "disputes": []

@@ -17,5 +17,6 @@
 .gps-route-date { font-size: 13px; font-weight: 600; color: var(--bark); }
 .gps-route-detail { font-size: 11px; color: var(--bark-light); margin-top: 2px; }
 
-/* Declined booking status */
+/* Declined/cancelled booking status */
 .status-declined { background: #ffebee; color: #c62828; }
+.status-cancelled { background: #fce4ec; color: #b71c1c; }

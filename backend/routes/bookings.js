@@ -25,7 +25,8 @@ function toDTO(b) {
     status:      b.status,
     bookingDate: b.bookingDate,
     bookingTime: b.bookingTime,
-    service:     b.service
+    service:     b.service,
+    petIds:      Array.isArray(b.petIds) ? b.petIds : []
   };
 }
 
@@ -40,13 +41,31 @@ router.get('/', requireAuth, (req, res) => {
 
 // POST /api/bookings
 router.post('/', requireAuth, (req, res) => {
-  const { minderKey, minderName, minderAvatar, service, bookingDate, bookingTime, petNames, price } = req.body;
+  const { minderKey, minderName, minderAvatar, service, bookingDate, bookingTime, petNames, petIds, price } = req.body;
+  const selectedPetIds = Array.isArray(petIds) ? petIds.map(String).filter(Boolean) : [];
+  const selectedPetNames = String(petNames || '').split(/\s*&\s*/).map(n => n.trim().toLowerCase()).filter(Boolean);
 
   if (!minderKey || !service || !bookingDate || !bookingTime || !petNames) {
     return res.status(400).json({ error: 'minderKey, service, bookingDate, bookingTime, and petNames are required' });
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(bookingDate)) {
     return res.status(400).json({ error: 'bookingDate must be YYYY-MM-DD' });
+  }
+
+  const existingConflict = db.get('bookings')
+    .filter({ ownerId: req.user.userId, bookingDate, bookingTime })
+    .find(b => {
+      const existingIds = Array.isArray(b.petIds) ? b.petIds.map(String) : [];
+      if (existingIds.length && selectedPetIds.length) {
+        return existingIds.some(id => selectedPetIds.includes(id));
+      }
+      const existingNames = String(b.petNames || '').split(/\s*&\s*/).map(n => n.trim().toLowerCase()).filter(Boolean);
+      return selectedPetNames.some(name => existingNames.includes(name));
+    })
+    .value();
+
+  if (existingConflict) {
+    return res.status(409).json({ error: 'A selected pet is already booked for that date/time' });
   }
 
   const booking = {
@@ -59,6 +78,7 @@ router.post('/', requireAuth, (req, res) => {
     bookingDate,
     bookingTime,
     petNames,
+    petIds:       selectedPetIds,
     price:        price || '£15.00',
     status:       'pending',
     createdAt:    new Date().toISOString()

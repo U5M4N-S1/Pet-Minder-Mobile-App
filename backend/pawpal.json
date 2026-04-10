@@ -203,7 +203,7 @@
       "bookingTime": "14:00",
       "petNames": "Luna",
       "price": "£12.00",
-      "status": "pending",
+      "status": "cancelled",
       "createdAt": "2026-04-09T19:08:00.163Z"
     },
     {
@@ -387,6 +387,23 @@
       "price": "£15.00",
       "status": "confirmed",
       "createdAt": "2026-04-10T20:39:18.793Z"
+    },
+    {
+      "id": 1016,
+      "ownerId": 1000,
+      "minderKey": "emma",
+      "minderName": "Emma T.",
+      "minderAvatar": "🧔",
+      "service": "Dog Walking",
+      "bookingDate": "2026-04-16",
+      "bookingTime": "14:00",
+      "petNames": "Buddy",
+      "petIds": [
+        "15"
+      ],
+      "price": "£15.00",
+      "status": "cancelled",
+      "createdAt": "2026-04-10T23:21:30.575Z"
     }
   ],
   "pets": [

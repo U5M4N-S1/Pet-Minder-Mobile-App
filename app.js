@@ -326,7 +326,7 @@ function openNotifications() {
 }
 
 // Active booking page
-function initActiveBookingPage() {
+async function initActiveBookingPage() {
   const params = new URLSearchParams(window.location.search);
   const minderId = params.get('minder') || 'sarah';
   const m = minderData[minderId] || { name: 'Your Minder', avatar: '🧑‍🦱' };
@@ -338,6 +338,7 @@ function initActiveBookingPage() {
   generateDateChips();
   renderBookingPetPicker();
   updateBookingSummary();
+  await refreshBookingTimeAvailability();
 }
 
 // Render the pet picker on the active-booking page from the logged-in
@@ -366,6 +367,66 @@ function renderBookingPetPicker() {
       '<span style="font-size:18px;opacity:' + opacity + '" class="pet-check">✓</span>';
     list.appendChild(row);
   });
+}
+
+const BOOKING_TIME_SLOTS = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00'];
+
+function getSelectedBookingDate() {
+  const dateEl = document.querySelector('.date-chip.selected');
+  const today = new Date();
+  const monthNums = { Jan:1, Feb:2, Mar:3, Apr:4, May:5, Jun:6, Jul:7, Aug:8, Sep:9, Oct:10, Nov:11, Dec:12 };
+  const day = dateEl ? (dateEl.dataset.day || String(today.getDate()).padStart(2,'0')) : String(today.getDate()).padStart(2,'0');
+  const month = dateEl ? (dateEl.dataset.month || ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()]) : ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
+  const year = today.getFullYear();
+  return `${year}-${String(monthNums[month] || today.getMonth() + 1).padStart(2,'0')}-${day}`;
+}
+
+function getUnavailableTimes(bookings, bookingDate) {
+  if (!Array.isArray(bookings)) return new Set();
+  return new Set(bookings
+    .filter(b => b.bookingDate === bookingDate && b.status !== 'cancelled')
+    .map(b => b.bookingTime)
+  );
+}
+
+function renderBookingTimeGrid(bookings) {
+  const container = document.querySelector('.time-grid');
+  if (!container) return;
+
+  const bookingDate = getSelectedBookingDate();
+  const unavailableTimes = getUnavailableTimes(bookings, bookingDate);
+  const currentSelected = document.querySelector('.time-chip.selected')?.textContent.trim();
+  const selectedIsUnavailable = currentSelected && unavailableTimes.has(currentSelected);
+
+  container.innerHTML = BOOKING_TIME_SLOTS.map((slot, index) => {
+    const unavailable = unavailableTimes.has(slot);
+    const isSelected = (!currentSelected && !unavailable && index === 0) || currentSelected === slot;
+    const classes = ['time-chip'];
+    if (isSelected) classes.push('selected');
+    if (unavailable) classes.push('unavailable');
+    return `<div class="${classes.join(' ')}"${unavailable ? '' : ' onclick="selectTime(this)"'}>${slot}</div>`;
+  }).join('');
+
+  if (selectedIsUnavailable) {
+    const firstAvailable = container.querySelector('.time-chip:not(.unavailable)');
+    if (firstAvailable) {
+      container.querySelectorAll('.time-chip').forEach(t => t.classList.remove('selected'));
+      firstAvailable.classList.add('selected');
+      updateBookingSummary();
+    }
+  }
+}
+
+async function refreshBookingTimeAvailability() {
+  const container = document.querySelector('.time-grid');
+  if (!container) return;
+  try {
+    const bookings = await api.getBookings();
+    allBookingsCache = bookings;
+    renderBookingTimeGrid(bookings);
+  } catch {
+    renderBookingTimeGrid([]);
+  }
 }
 
 function generateDateChips() {
@@ -470,6 +531,10 @@ function show(id) {
     document.getElementById('bookings-gps').style.display = 'none';
     const reqSection = document.getElementById('bookings-requests');
     if (reqSection) reqSection.style.display = 'none';
+  }
+
+  if (id === 'booking') {
+    refreshBookingTimeAvailability();
   }
 }
 
@@ -890,7 +955,7 @@ function switchBookingTab(btn, tab) {
 
 // ===== BOOKING FLOW =====
 function selectService(el) { el.closest('.service-list').querySelectorAll('.service-option').forEach(o => o.classList.remove('selected')); el.classList.add('selected'); updateBookingSummary(); }
-function selectDate(el) { document.querySelectorAll('.date-chip').forEach(d => d.classList.remove('selected')); el.classList.add('selected'); updateBookingSummary(); }
+async function selectDate(el) { document.querySelectorAll('.date-chip').forEach(d => d.classList.remove('selected')); el.classList.add('selected'); await refreshBookingTimeAvailability(); updateBookingSummary(); }
 function selectTime(el) { if (el.classList.contains('unavailable')) return; document.querySelectorAll('.time-chip').forEach(t => t.classList.remove('selected')); el.classList.add('selected'); updateBookingSummary(); }
 function toggleChip(el) { el.classList.toggle('active'); }
 function toggleFilterModal() { document.getElementById('filter-modal').classList.toggle('open'); }
@@ -1284,11 +1349,31 @@ async function confirmBooking() {
                       String(monthNums[month] || 4).padStart(2,'0') + '-' + day;
 
   if (selectedPets.length === 0) { showToast('❌ Please add a pet before booking'); return; }
-  const petNames = selectedPets.map(id => (petData[id] && petData[id].name) || id).join(' & ');
+  const selectedPetNames = selectedPets.map(id => (petData[id] && petData[id].name) || id);
+  const selectedPetIds = selectedPets.slice();
+  const petNames = selectedPetNames.join(' & ');
   const totalEl = document.getElementById('summary-total');
   const price   = totalEl ? totalEl.textContent : '£15.00';
 
   try {
+    const existingBookings = await api.getBookings();
+    const conflict = existingBookings.find(b => {
+      if (b.bookingDate !== bookingDate || b.bookingTime !== time) return false;
+
+      const existingIds = Array.isArray(b.petIds) ? b.petIds.map(String) : [];
+      if (existingIds.length && selectedPetIds.length) {
+        return existingIds.some(id => selectedPetIds.map(String).includes(id));
+      }
+
+      const existingNames = String(b.petNames || '').split(/\s*&\s*/).map(n => n.trim().toLowerCase());
+      return selectedPetNames.some(name => existingNames.includes(name.trim().toLowerCase()));
+    });
+
+    if (conflict) {
+      showToast('❌ One of your selected pets already has a booking at that date/time');
+      return;
+    }
+
     await api.createBooking({
       minderKey:    m.id,
       minderName:   m.name,
@@ -1297,6 +1382,7 @@ async function confirmBooking() {
       bookingDate,
       bookingTime:  time,
       petNames,
+      petIds:       selectedPetIds,
       price
     });
     showToast('✅ Booking sent to ' + m.name + '!');

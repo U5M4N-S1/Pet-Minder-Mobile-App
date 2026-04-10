@@ -1015,6 +1015,31 @@ function renderMinders(minders) {
 }
 
 // ===== PET MANAGEMENT =====
+function populatePetAgeOptions() {
+  const ageSelects = document.querySelectorAll('#pet-age-input');
+  if (!ageSelects.length) return;
+
+  const fragment = document.createDocumentFragment();
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  placeholder.textContent = 'Select age';
+  fragment.appendChild(placeholder);
+
+  for (let i = 1; i <= 99; i++) {
+    const option = document.createElement('option');
+    option.value = i;
+    option.textContent = i;
+    fragment.appendChild(option);
+  }
+
+  ageSelects.forEach(select => {
+    select.innerHTML = '';
+    select.appendChild(fragment.cloneNode(true));
+  });
+}
+
 function openPetModal(petId) {
   const modal = document.getElementById('pet-modal');
   const title = document.getElementById('pet-modal-title');
@@ -1050,6 +1075,7 @@ async function savePet() {
   const medical = document.getElementById('pet-medical-input').value.trim();
   const care    = document.getElementById('pet-care-input').value.trim();
   if (!name) { showToast('❌ Please enter a pet name'); return; }
+  if (!age) { showToast('❌ Please select your pet age'); return; }
   const body = { name, type, breed, age, medical, care, emoji: petEmojis[type] || '🐾' };
 
   // On the auth page the registration form exists — pets must be staged locally
@@ -1694,6 +1720,7 @@ function showToast(msg) {
 
 // Initial render
 refreshPetsUI();
+populatePetAgeOptions();
 if (document.getElementById('admin-users')) loadAdminData();
 if (document.getElementById('minders-list')) loadMinders();
 // Load notification count for minders on the profile page

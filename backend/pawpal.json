@@ -391,18 +391,6 @@
   ],
   "pets": [
     {
-      "id": 1,
-      "ownerId": 1000,
-      "name": "Buddy",
-      "type": "Dog",
-      "breed": "Golden Retriever",
-      "age": "3 years",
-      "medical": "",
-      "care": "",
-      "emoji": "🐕",
-      "createdAt": "2026-04-09T22:12:35.734Z"
-    },
-    {
       "id": 2,
       "ownerId": 1000,
       "name": "Luna",
@@ -557,6 +545,18 @@
       "care": "",
       "emoji": "🐕",
       "createdAt": "2026-04-10T20:38:50.254Z"
+    },
+    {
+      "id": 15,
+      "ownerId": 1000,
+      "name": "Buddy",
+      "type": "Dog",
+      "breed": "Golden Retriever",
+      "age": "6",
+      "medical": "",
+      "care": "",
+      "emoji": "🐕",
+      "createdAt": "2026-04-10T22:33:56.302Z"
     }
   ],
   "disputes": []

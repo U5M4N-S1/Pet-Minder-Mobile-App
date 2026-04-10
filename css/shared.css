@@ -67,7 +67,7 @@ body {
 /* Form inputs */
 .field-group { display: flex; flex-direction: column; gap: 6px; }
 .field-group label { font-size: 13px; font-weight: 500; color: var(--bark-light); }
-.field-group input, .field-group select { padding: 13px 16px; border: 1.5px solid var(--sand); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 15px; color: var(--bark); background: white; outline: none; transition: border-color 0.2s; }
+.field-group input, .field-group select { padding: 10px 14px; border: 1.5px solid var(--sand); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 15px; color: var(--bark); background: white; outline: none; transition: border-color 0.2s; }
 .field-group input:focus, .field-group select:focus { border-color: var(--terra); }
 
 /* Search bar */
@@ -96,7 +96,7 @@ body {
 .status-completed { background: var(--sand-light); color: var(--bark-light); }
 
 /* Pet edit/add modal */
-.pet-modal-overlay { position: fixed; inset: 0; background: rgba(61,43,31,0.5); z-index: 200; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; padding: 20px; }
+.pet-modal-overlay { position: fixed; inset: 0; background: rgba(61,43,31,0.5); z-index: 200; display: flex; align-items: flex-start; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; padding: 36px 20px 20px; }
 .pet-modal-overlay.open { opacity: 1; pointer-events: all; }
 .pet-modal { background: white; border-radius: var(--radius); width: 100%; max-width: 440px; padding: 28px 24px; box-shadow: 0 8px 40px var(--shadow); max-height: 85vh; overflow-y: auto; }
 .pet-modal h3 { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--bark); margin-bottom: 20px; }

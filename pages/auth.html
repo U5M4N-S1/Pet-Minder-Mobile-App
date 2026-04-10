@@ -24,7 +24,7 @@
       <div class="field-group"><label>Email</label><input type="email" placeholder="you@email.com" id="login-email"></div>
       <div class="field-group"><label>Password</label><input type="password" placeholder="••••••••" id="login-password"></div>
       <button class="btn-primary" style="margin-top:8px" onclick="handleLogin()">Log In</button>
-      <p style="text-align:center;font-size:13px;color:var(--bark-light);cursor:pointer">Forgot password?</p>
+      <p style="text-align:center;font-size:13px;color:var(--bark-light);cursor:pointer" onclick="showForgotPassword()">Forgot password?</p>
       <div style="text-align:center;margin-top:8px;border-top:1px solid var(--sand-light);padding-top:12px">
         <p style="font-size:12px;color:var(--bark-light);cursor:pointer" onclick="toggleAdminLogin()">🔒 Admin Login</p>
       </div>
@@ -68,6 +68,63 @@
         </div>
       </div>
       <button class="btn-primary" style="margin-top:8px" onclick="handleRegister()">Create Account</button>
+    </div>
+
+    <!-- FORGOT PASSWORD FLOW -->
+    <div class="auth-form hidden" id="form-forgot">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+        <button style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--bark);padding:0" onclick="closeForgotPassword()">←</button>
+        <h2 style="font-family:'Playfair Display',serif;font-size:20px;color:var(--bark);margin:0">Reset Password</h2>
+      </div>
+      <div class="reset-progress">
+        <span class="reset-dot active"></span>
+        <span class="reset-dot"></span>
+        <span class="reset-dot"></span>
+        <span class="reset-dot"></span>
+      </div>
+
+      <!-- Step 1: Enter email -->
+      <div class="reset-step" id="reset-step-1" style="display:flex">
+        <div style="text-align:center;margin-bottom:8px">
+          <div style="font-size:40px;margin-bottom:8px">🔐</div>
+          <p style="font-size:13px;color:var(--bark-light)">Enter the email address linked to your account</p>
+        </div>
+        <div class="field-group"><label>Email Address</label><input type="email" placeholder="you@email.com" id="reset-email"></div>
+        <button class="btn-primary" style="width:100%;margin-top:8px" onclick="resetStepEmail()">Find My Account</button>
+      </div>
+
+      <!-- Step 2: Verify code -->
+      <div class="reset-step" id="reset-step-2" style="display:none">
+        <div style="text-align:center;margin-bottom:8px">
+          <div style="font-size:40px;margin-bottom:8px">📩</div>
+          <p style="font-size:13px;color:var(--bark-light)">A 6-digit verification code has been sent to your email</p>
+        </div>
+        <div class="reset-code-banner" id="reset-code-display" style="display:none"></div>
+        <div class="field-group"><label>Verification Code</label><input type="text" placeholder="Enter 6-digit code" id="reset-code-input" maxlength="6" inputmode="numeric" style="text-align:center;font-size:20px;letter-spacing:8px;font-weight:600"></div>
+        <button class="btn-primary" style="width:100%;margin-top:8px" onclick="resetStepVerify()">Verify Code</button>
+        <p style="text-align:center;font-size:12px;color:var(--bark-light);margin-top:4px;cursor:pointer" onclick="resetStepEmail()">Resend code</p>
+      </div>
+
+      <!-- Step 3: New password -->
+      <div class="reset-step" id="reset-step-3" style="display:none">
+        <div style="text-align:center;margin-bottom:8px">
+          <div style="font-size:40px;margin-bottom:8px">🔑</div>
+          <p style="font-size:13px;color:var(--bark-light)">Choose a new password (min 8 characters)</p>
+        </div>
+        <div class="field-group"><label>New Password</label><input type="password" placeholder="New password" id="reset-new-password"></div>
+        <div class="field-group"><label>Confirm Password</label><input type="password" placeholder="Repeat new password" id="reset-confirm-password"></div>
+        <button class="btn-primary" style="width:100%;margin-top:8px" onclick="resetStepNewPassword()">Reset Password</button>
+      </div>
+
+      <!-- Step 4: Done -->
+      <div class="reset-step" id="reset-step-4" style="display:none">
+        <div style="text-align:center">
+          <div style="font-size:48px;margin-bottom:12px">✅</div>
+          <h3 style="font-family:'Playfair Display',serif;font-size:18px;color:var(--bark);margin-bottom:6px">Password Reset Complete</h3>
+          <p style="font-size:13px;color:var(--bark-light);margin-bottom:20px">Your password has been updated. Please log in with your new password.</p>
+          <button class="btn-primary" style="width:100%" onclick="resetComplete()">Back to Login</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>

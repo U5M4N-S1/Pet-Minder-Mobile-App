@@ -227,6 +227,41 @@ function readImageDimensions(buf, mime) {
   return null;
 }
 
+// POST /api/auth/forgot-password — generate a 6-digit reset code for the account
+router.post('/forgot-password', (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email is required' });
+
+  const user = db.get('users').find({ email: email.toLowerCase().trim() });
+  if (!user.value()) return res.status(404).json({ error: 'No account found with that email' });
+
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  user.assign({ resetCode: code, resetCodeExpires: Date.now() + 10 * 60 * 1000 }).write();
+  // In production this would be emailed — here we return it for the UI to display
+  res.json({ code, email: user.value().email });
+});
+
+// POST /api/auth/reset-password — verify code and set new password
+router.post('/reset-password', async (req, res) => {
+  const { email, code, newPassword } = req.body;
+  if (!email || !code || !newPassword) return res.status(400).json({ error: 'All fields are required' });
+  if (newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+
+  const user = db.get('users').find({ email: email.toLowerCase().trim() });
+  const u = user.value();
+  if (!u) return res.status(404).json({ error: 'No account found with that email' });
+  if (!u.resetCode || u.resetCode !== code) return res.status(400).json({ error: 'Invalid verification code' });
+  if (u.resetCodeExpires && Date.now() > u.resetCodeExpires) return res.status(400).json({ error: 'Verification code has expired' });
+
+  try {
+    const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    user.assign({ passwordHash, resetCode: null, resetCodeExpires: null }).write();
+    res.json({ message: 'Password reset successfully' });
+  } catch {
+    res.status(500).json({ error: 'Server error, please try again' });
+  }
+});
+
 // GET /api/minders — list all active petminder accounts (public, no auth required)
 router.get('/minders', (req, res) => {
   const minders = db.get('users')

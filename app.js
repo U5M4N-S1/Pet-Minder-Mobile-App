@@ -86,8 +86,10 @@ const api = {
     return data;
   },
 
-  login(email, password)   { return this._req('POST',   '/auth/login',  { email, password }); },
+  login(email, password)    { return this._req('POST',   '/auth/login',  { email, password }); },
   signup(data)              { return this._req('POST',   '/auth/signup', data); },
+  forgotPassword(email)     { return this._req('POST',   '/auth/forgot-password', { email }); },
+  resetPassword(email, code, newPassword) { return this._req('POST', '/auth/reset-password', { email, code, newPassword }); },
   getMe()                   { return this._req('GET',    '/auth/me'); },
   updateMe(data)            { return this._req('PATCH',  '/auth/me', data); },
   getBookings()             { return this._req('GET',    '/bookings'); },
@@ -354,6 +356,94 @@ async function handleAdminLogin() {
   } catch {
     showToast('❌ Invalid admin credentials');
   }
+}
+
+// ===== FORGOT PASSWORD FLOW =====
+let resetEmail = '';
+let resetCode  = '';
+
+function showForgotPassword() {
+  document.getElementById('form-login').classList.add('hidden');
+  document.getElementById('form-register').classList.add('hidden');
+  document.getElementById('form-forgot').classList.remove('hidden');
+  document.querySelector('.auth-tabs').style.display = 'none';
+  showResetStep(1);
+}
+
+function closeForgotPassword() {
+  document.getElementById('form-forgot').classList.add('hidden');
+  document.getElementById('form-login').classList.remove('hidden');
+  document.querySelector('.auth-tabs').style.display = 'flex';
+  resetEmail = '';
+  resetCode = '';
+}
+
+function showResetStep(n) {
+  for (let i = 1; i <= 4; i++) {
+    const el = document.getElementById('reset-step-' + i);
+    if (el) el.style.display = i === n ? 'flex' : 'none';
+  }
+  // Update progress dots
+  document.querySelectorAll('.reset-dot').forEach((d, idx) => {
+    d.classList.toggle('active', idx < n);
+  });
+}
+
+async function resetStepEmail() {
+  const email = document.getElementById('reset-email').value.trim();
+  if (!email) { showToast('❌ Please enter your email'); return; }
+  try {
+    const data = await api.forgotPassword(email);
+    resetEmail = data.email;
+    resetCode  = data.code;
+    // Show the code in UI and console for testing
+    const codeMsg = document.getElementById('reset-code-display');
+    if (codeMsg) {
+      codeMsg.textContent = 'Your verification code: ' + resetCode;
+      codeMsg.style.display = 'block';
+    }
+    console.log('[PawPal] Password reset code for ' + resetEmail + ': ' + resetCode);
+    showResetStep(2);
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Account not found'));
+  }
+}
+
+function resetStepVerify() {
+  const entered = document.getElementById('reset-code-input').value.trim();
+  if (!entered) { showToast('❌ Please enter the verification code'); return; }
+  if (entered !== resetCode) {
+    showToast('❌ Incorrect verification code');
+    document.getElementById('reset-code-input').style.borderColor = '#e53935';
+    return;
+  }
+  document.getElementById('reset-code-input').style.borderColor = 'var(--sand)';
+  showResetStep(3);
+}
+
+async function resetStepNewPassword() {
+  const pwd     = document.getElementById('reset-new-password').value;
+  const confirm = document.getElementById('reset-confirm-password').value;
+  if (!pwd || !confirm) { showToast('❌ Please fill in both fields'); return; }
+  if (pwd.length < 8) { showToast('❌ Password must be at least 8 characters'); return; }
+  if (pwd !== confirm) {
+    showToast('❌ Passwords do not match');
+    document.getElementById('reset-confirm-password').style.borderColor = '#e53935';
+    return;
+  }
+  try {
+    await api.resetPassword(resetEmail, resetCode, pwd);
+    showResetStep(4);
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Reset failed'));
+  }
+}
+
+function resetComplete() {
+  resetEmail = '';
+  resetCode  = '';
+  closeForgotPassword();
+  showToast('✅ Password reset! Please log in.');
 }
 
 async function handleRegister() {

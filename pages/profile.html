@@ -29,7 +29,15 @@
 <!-- PROFILE -->
 <div class="screen active" id="screen-profile">
   <div class="page-content">
-    <div class="profile-screen-hero"><div class="profile-screen-avatar">👤</div><div class="profile-screen-name" id="profile-display-name">Usman</div><div class="profile-screen-role" id="profile-display-role">Pet Owner · Member since 2024</div></div>
+    <div class="profile-screen-hero">
+      <div class="profile-screen-avatar" id="profile-avatar-wrapper" onclick="document.getElementById('avatar-upload-input').click()" style="cursor:pointer;position:relative">
+        <span id="profile-avatar-display">👤</span>
+        <div class="avatar-upload-hint">📷</div>
+        <input type="file" id="avatar-upload-input" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none" onchange="handleAvatarUpload(event)">
+      </div>
+      <div class="profile-screen-name" id="profile-display-name">Usman</div>
+      <div class="profile-screen-role" id="profile-display-role">Pet Owner · Member since 2024</div>
+    </div>
     <div class="profile-menu">
       <div class="menu-section-title">My Pets</div>
       <div id="profile-pets-list"></div>
@@ -74,7 +82,17 @@
 <div class="pet-modal-overlay" id="pet-modal" onclick="if(event.target===this)closePetModal()"><div class="pet-modal"><h3 id="pet-modal-title">Edit Pet</h3><div class="field-group"><label>Pet Name</label><input type="text" id="pet-name-input" placeholder="e.g. Buddy"></div><div class="field-group"><label>Pet Type</label><select id="pet-type-input"><option>Dog</option><option>Cat</option><option>Rabbit</option><option>Bird</option><option>Other</option></select></div><div class="field-group"><label>Breed</label><input type="text" id="pet-breed-input" placeholder="e.g. Golden Retriever"></div><div class="field-group"><label>Age</label><input type="text" id="pet-age-input" placeholder="e.g. 3 years"></div><div class="field-group"><label>Medical Notes</label><textarea id="pet-medical-input" placeholder="Allergies, medications, health conditions..."></textarea></div><div class="field-group"><label>Special Care Instructions</label><textarea id="pet-care-input" placeholder="Feeding schedule, walking routes, behavioural notes..."></textarea></div><input type="hidden" id="pet-edit-id" value=""><div class="pet-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="closePetModal()">Cancel</button><button class="btn-primary" style="flex:2;padding:14px" id="pet-save-btn" onclick="savePet()">Save Pet</button></div><div id="pet-delete-row" style="text-align:center;margin-top:14px;display:none"><button style="background:none;border:none;color:#e53935;font-size:14px;cursor:pointer;font-family:'DM Sans',sans-serif" onclick="confirmRemovePet()">Remove this pet</button></div></div></div>
 
 <!-- EDIT PROFILE MODAL -->
-<div class="pet-modal-overlay" id="edit-profile-modal" onclick="if(event.target===this)closeEditProfileModal()"><div class="pet-modal"><h3>Edit Profile</h3><div class="field-group"><label>First Name</label><input type="text" id="edit-first-name" placeholder="First name"></div><div class="field-group"><label>Last Name</label><input type="text" id="edit-last-name" placeholder="Last name"></div><div class="field-group"><label>Email</label><input type="email" id="edit-email" placeholder="Email address"></div><div class="field-group"><label>Phone</label><input type="tel" id="edit-phone" placeholder="Phone number"></div><div class="field-group"><label>Location</label><input type="text" id="edit-location" placeholder="e.g. Shoreditch, London"></div><div class="field-group"><label>Bio</label><textarea id="edit-bio" placeholder="Tell us about yourself..." style="width:100%;padding:12px 14px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);resize:vertical;min-height:70px;outline:none"></textarea></div><div class="pet-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="closeEditProfileModal()">Cancel</button><button class="btn-primary" style="flex:2;padding:14px" onclick="saveProfile()">Save Changes</button></div></div></div>
+<div class="pet-modal-overlay" id="edit-profile-modal" onclick="if(event.target===this)closeEditProfileModal()"><div class="pet-modal"><h3>Edit Profile</h3><div class="field-group"><label>First Name</label><input type="text" id="edit-first-name" placeholder="First name"></div><div class="field-group"><label>Last Name</label><input type="text" id="edit-last-name" placeholder="Last name"></div><div class="field-group"><label>Email</label><input type="email" id="edit-email" placeholder="Email address"></div><div class="field-group"><label>Phone</label><input type="tel" id="edit-phone" placeholder="Phone number"></div><div class="field-group"><label>Location</label><input type="text" id="edit-location" placeholder="e.g. Shoreditch, London"></div><div class="field-group"><label>Bio</label><textarea id="edit-bio" placeholder="Tell us about yourself..." style="width:100%;padding:12px 14px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);resize:vertical;min-height:70px;outline:none"></textarea></div>
+<!-- Minder-specific fields (hidden for pet owners) -->
+<div id="minder-fields" style="display:none">
+  <div style="margin:16px 0 8px;font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px">Pet Minder Details</div>
+  <div class="field-group"><label>Service Area</label><input type="text" id="edit-service-area" placeholder="e.g. Mile End, Shoreditch"></div>
+  <div class="field-group"><label>Pets Cared For</label><input type="text" id="edit-pets-cared" placeholder="e.g. Dogs, Cats, Rabbits"></div>
+  <div class="field-group"><label>Services Offered</label><input type="text" id="edit-services" placeholder="e.g. Walking, Home Visit, Grooming"></div>
+  <div class="field-group"><label>Rate</label><input type="text" id="edit-rate" placeholder="e.g. £15/hr"></div>
+  <div class="field-group"><label>Experience</label><input type="text" id="edit-experience" placeholder="e.g. 3 years"></div>
+</div>
+<div class="pet-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="closeEditProfileModal()">Cancel</button><button class="btn-primary" style="flex:2;padding:14px" onclick="saveProfile()">Save Changes</button></div></div></div>
 
 <script src="../app.js"></script>
 </body>

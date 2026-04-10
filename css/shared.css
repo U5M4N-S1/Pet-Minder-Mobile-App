@@ -127,3 +127,6 @@ body {
 .reg-pets-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .reg-pet-card { display: flex; align-items: center; gap: 8px; background: white; border: 1.5px solid var(--sand); border-radius: var(--radius-sm); padding: 8px 12px; cursor: pointer; transition: all 0.2s; font-size: 13px; }
 .reg-pet-card:hover { border-color: var(--terra); background: #fef3ed; }
+
+/* Shared avatar image – used everywhere a profile picture can appear */
+.avatar-img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 50%; }

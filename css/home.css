@@ -3,7 +3,9 @@
 .home-hero::after { content: ''; position: absolute; bottom: -20px; left: 0; right: 0; height: 40px; background: var(--cream); border-radius: 40px 40px 0 0; }
 .home-greeting { font-family: 'Playfair Display', serif; font-size: 26px; color: var(--cream); margin-bottom: 4px; }
 .home-greeting span { font-style: italic; color: var(--terra-light); }
-.home-sub { font-size: 14px; color: var(--sand); margin-bottom: 20px; }
+.home-sub { font-size: 14px; color: var(--sand); margin-bottom: 4px; }
+.home-avatar-row { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+.home-avatar { width: 56px; height: 56px; border-radius: 50%; background: var(--sand-light); display: flex; align-items: center; justify-content: center; font-size: 28px; flex-shrink: 0; border: 2px solid var(--terra-light); overflow: hidden; }
 
 /* Stats cards */
 .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 500px; margin: 0 auto; }

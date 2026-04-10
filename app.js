@@ -10,7 +10,12 @@ let currentReviewMinder = null;
 let reportSelectedUser = null;
 
 // User profile — populated from the session cache or API on page load
-let userProfile = { firstName: '', lastName: '', email: '', phone: '', location: '', bio: '' };
+let userProfile = {
+  firstName: '', lastName: '', email: '', phone: '', location: '', bio: '',
+  role: 'owner', profileImage: '',
+  // Minder-specific (blank for owners)
+  serviceArea: '', petsCaredFor: '', services: '', rate: '', experience: ''
+};
 
 // ===== LOCAL STORE =====
 // Thin wrapper around localStorage. The current session is stored under a
@@ -90,6 +95,11 @@ const api = {
   createPet(data)           { return this._req('POST',   '/pets', data); },
   updatePet(id, data)       { return this._req('PATCH',  '/pets/' + id, data); },
   deletePet(id)             { return this._req('DELETE', '/pets/' + id); },
+  // Profile image
+  uploadAvatar(image)       { return this._req('POST',   '/auth/avatar', { image }); },
+  deleteAvatar()            { return this._req('DELETE', '/auth/avatar'); },
+  // Minders (public)
+  getMinders()              { return this._req('GET',    '/minders'); },
   // Admin
   getAdminUsers()           { return this._req('GET',    '/admin/users'); },
   updateAdminUser(id, data) { return this._req('PATCH',  '/admin/users/' + id, data); },
@@ -101,16 +111,23 @@ const api = {
 
 // Hydrate userProfile from localStorage immediately (sync) so pages render
 // the correct name before the async /me call completes.
-(function initUserFromCache() {
-  const u = store.getUser();
+function hydrateUserProfile(u) {
   if (!u) return;
-  userProfile.firstName = u.firstName || '';
-  userProfile.lastName  = u.lastName  || '';
-  userProfile.email     = u.email     || '';
-  userProfile.phone     = u.phone     || '';
-  userProfile.location  = u.location  || '';
-  userProfile.bio       = u.bio       || '';
-}());
+  userProfile.firstName    = u.firstName    || '';
+  userProfile.lastName     = u.lastName     || '';
+  userProfile.email        = u.email        || '';
+  userProfile.phone        = u.phone        || '';
+  userProfile.location     = u.location     || '';
+  userProfile.bio          = u.bio          || '';
+  userProfile.role         = u.role         || 'owner';
+  userProfile.profileImage = u.profileImage || '';
+  userProfile.serviceArea  = u.serviceArea  || '';
+  userProfile.petsCaredFor = u.petsCaredFor || '';
+  userProfile.services     = u.services     || '';
+  userProfile.rate         = u.rate         || '';
+  userProfile.experience   = u.experience   || '';
+}
+(function initUserFromCache() { hydrateUserProfile(store.getUser()); }());
 
 // Minder data for profiles
 const minderData = {
@@ -308,14 +325,7 @@ async function handleLogin() {
     // store.setUser MUST run before any store.getPets/setPets call, because
     // the pets key is namespaced by the current user's id.
     store.setUser(user);
-    Object.assign(userProfile, {
-      firstName: user.firstName || '',
-      lastName:  user.lastName  || '',
-      email:     user.email     || '',
-      phone:     user.phone     || '',
-      location:  user.location  || '',
-      bio:       user.bio       || ''
-    });
+    hydrateUserProfile(user);
     // Pets are now fetched from the backend by the auth guard on the next
     // page load (so they follow the user across devices). We still reset
     // the in-memory object here in case any pre-redirect render fires.
@@ -362,14 +372,7 @@ async function handleRegister() {
     const { token, user } = await api.signup({ firstName, lastName, email, password: pwd, role: selectedRole });
     api.setToken(token);
     store.setUser(user);
-    Object.assign(userProfile, {
-      firstName: user.firstName || '',
-      lastName:  user.lastName  || '',
-      email:     user.email     || '',
-      phone:     '',
-      location:  user.location  || '',
-      bio:       ''
-    });
+    hydrateUserProfile(user);
     // Brand-new accounts always start with an empty pet list.
     petData = {};
     store.setPets(petData);
@@ -419,15 +422,157 @@ function setNavActive(tab) {
   });
 }
 
+// ===== AVATAR HELPER =====
+// Returns an <img> tag if profileImage exists, otherwise the emoji fallback.
+function avatarHTML(profileImage, fallbackEmoji, sizeClass) {
+  if (profileImage) {
+    return '<img src="' + profileImage + '" alt="avatar" class="avatar-img ' + (sizeClass || '') + '">';
+  }
+  return fallbackEmoji || '👤';
+}
+
+// ===== PROFILE AVATAR =====
+// Limits (must match backend)
+const AVATAR_MAX_SIZE  = 2 * 1024 * 1024; // 2 MB
+const AVATAR_MAX_DIM   = 1024;            // px
+const AVATAR_MIME_OK   = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+function renderProfileAvatar() {
+  const el = document.getElementById('profile-avatar-display');
+  if (!el) return;
+  if (userProfile.profileImage) {
+    el.innerHTML = '<img src="' + userProfile.profileImage + '" alt="avatar" class="avatar-img avatar-profile">';
+  } else {
+    el.textContent = '👤';
+  }
+  // Also update the role line
+  const roleEl = document.getElementById('profile-display-role');
+  if (roleEl) {
+    const label = userProfile.role === 'minder' ? 'Pet Minder' : 'Pet Owner';
+    roleEl.textContent = label;
+  }
+}
+
+async function handleAvatarUpload(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  // Client-side validation
+  if (!AVATAR_MIME_OK.includes(file.type)) {
+    showToast('❌ Only JPEG, PNG, WebP, or GIF images are allowed');
+    event.target.value = '';
+    return;
+  }
+  if (file.size > AVATAR_MAX_SIZE) {
+    showToast('❌ Image too large. Maximum 2 MB');
+    event.target.value = '';
+    return;
+  }
+
+  // Read as data URI, validate dimensions, then upload
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    const dataURI = e.target.result;
+
+    // Check dimensions
+    const img = new Image();
+    img.onload = async function() {
+      if (img.width > AVATAR_MAX_DIM || img.height > AVATAR_MAX_DIM) {
+        showToast('❌ Image too large. Maximum ' + AVATAR_MAX_DIM + 'x' + AVATAR_MAX_DIM + ' px');
+        return;
+      }
+      // Upload to backend
+      try {
+        const { profileImage } = await api.uploadAvatar(dataURI);
+        userProfile.profileImage = profileImage;
+        store.setUser(userProfile);
+        renderProfileAvatar();
+        refreshPetsUI();
+        showToast('✅ Profile picture updated!');
+      } catch (err) {
+        showToast('❌ ' + (err.message || 'Upload failed'));
+      }
+    };
+    img.onerror = function() { showToast('❌ Could not read image'); };
+    img.src = dataURI;
+  };
+  reader.readAsDataURL(file);
+  event.target.value = ''; // reset so the same file can be re-selected
+}
+
+// ===== FIND MINDERS =====
+// Cached array of minders loaded from the API (used by search + profile view).
+let loadedMinders = [];
+
+async function loadMinders() {
+  const list = document.getElementById('minders-list');
+  if (!list) return;
+  try {
+    loadedMinders = await api.getMinders();
+    if (loadedMinders.length === 0) {
+      list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No pet minders have signed up yet.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    loadedMinders.forEach(m => {
+      const avatar = m.profileImage
+        ? '<img src="' + m.profileImage + '" alt="' + m.name + '" class="avatar-img" style="width:100%;height:100%;object-fit:cover;border-radius:14px">'
+        : '👤';
+      const loc  = m.location ? '📍 ' + m.location : '';
+      const rate = m.rate ? m.rate : '';
+      const tags = [];
+      if (m.services) m.services.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
+      if (m.petsCaredFor) m.petsCaredFor.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
+
+      const card = document.createElement('div');
+      card.className = 'minder-list-card';
+      card.style.cursor = 'pointer';
+      card.onclick = function() { openMinderProfile(m.id); };
+      card.innerHTML =
+        '<div class="minder-list-avatar">' + avatar + '</div>' +
+        '<div class="minder-list-info">' +
+          '<div class="minder-list-name">' + m.name + '</div>' +
+          (loc ? '<div class="minder-list-loc">' + loc + '</div>' : '') +
+          (tags.length ? '<div class="minder-list-tags">' + tags.join('') + '</div>' : '') +
+          (rate ? '<div class="minder-list-rate">' + rate + '</div>' : '') +
+          '<div class="minder-btns">' +
+            '<button class="btn-msg-minder" onclick="event.stopPropagation();showToast(\'Chat coming soon!\')">💬 Message</button>' +
+            '<button class="btn-book-sm" onclick="event.stopPropagation();window.location.href=\'active-booking.html?minder=' + m.id + '\'">Book Now</button>' +
+          '</div>' +
+        '</div>';
+      list.appendChild(card);
+    });
+  } catch {
+    list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">Could not load minders. Try refreshing.</div>';
+  }
+}
+
 function openMinderProfile(minderId) {
   previousScreen = currentScreen;
-  if (minderId && minderData[minderId]) {
-    const m = minderData[minderId];
-    document.getElementById('mp-avatar').textContent = m.avatar;
-    document.getElementById('mp-name').textContent = m.name;
-    document.getElementById('mp-loc').textContent = m.loc;
-    document.getElementById('mp-stars').innerHTML = m.stars + ' <span style="font-size:13px;opacity:0.8">(' + m.reviews + ' reviews)</span>';
-    document.getElementById('mp-bio').textContent = m.bio;
+  // Try real minder data first, fall back to legacy hardcoded data
+  const minder = loadedMinders.find(m => m.id === minderId) || minderData[minderId];
+  if (minder) {
+    const mpAvatar = document.getElementById('mp-avatar');
+    if (minder.profileImage) {
+      mpAvatar.innerHTML = '<img src="' + minder.profileImage + '" alt="avatar" class="avatar-img" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
+    } else {
+      mpAvatar.textContent = minder.avatar || '👤';
+    }
+    document.getElementById('mp-name').textContent = minder.name;
+    document.getElementById('mp-loc').textContent = minder.location ? '📍 ' + minder.location : (minder.loc || '');
+    document.getElementById('mp-bio').textContent = minder.bio || '';
+    // Update the detail section with real data
+    const details = document.getElementById('mp-details');
+    if (details && (minder.experience || minder.petsCaredFor || minder.services || minder.rate)) {
+      details.innerHTML = '';
+      if (minder.experience)   details.innerHTML += '<div class="info-row"><span class="info-label">Experience</span><span class="info-value">' + minder.experience + '</span></div>';
+      if (minder.petsCaredFor) details.innerHTML += '<div class="info-row"><span class="info-label">Pets accepted</span><span class="info-value">' + minder.petsCaredFor + '</span></div>';
+      if (minder.services)     details.innerHTML += '<div class="info-row"><span class="info-label">Services</span><span class="info-value">' + minder.services + '</span></div>';
+      if (minder.rate)         details.innerHTML += '<div class="info-row"><span class="info-label">Rate</span><span class="info-value">' + minder.rate + '</span></div>';
+    }
+    // Hide stars for real minders (no review system wired to them yet)
+    const starsEl = document.getElementById('mp-stars');
+    if (starsEl) starsEl.innerHTML = minder.stars ? minder.stars + ' <span style="font-size:13px;opacity:0.8">(' + (minder.reviews || 0) + ' reviews)</span>' : '';
   }
   // Reset to About tab
   document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
@@ -630,6 +775,17 @@ function refreshPetsUI() {
     if (profileName) profileName.textContent = userProfile.firstName;
     const homeName = document.getElementById('home-user-name');
     if (homeName) homeName.textContent = userProfile.firstName;
+  }
+  // Update profile avatar on profile.html
+  renderProfileAvatar();
+  // Update home page avatar if present
+  const homeAvatar = document.getElementById('home-user-avatar');
+  if (homeAvatar) {
+    if (userProfile.profileImage) {
+      homeAvatar.innerHTML = '<img src="' + userProfile.profileImage + '" alt="avatar" class="avatar-img avatar-home">';
+    } else {
+      homeAvatar.textContent = '👤';
+    }
   }
 }
 
@@ -856,6 +1012,18 @@ function openEditProfileModal() {
   document.getElementById('edit-phone').value = userProfile.phone;
   document.getElementById('edit-location').value = userProfile.location;
   document.getElementById('edit-bio').value = userProfile.bio;
+  // Show minder fields only for minder accounts
+  const minderFields = document.getElementById('minder-fields');
+  if (minderFields) {
+    minderFields.style.display = userProfile.role === 'minder' ? 'block' : 'none';
+    if (userProfile.role === 'minder') {
+      document.getElementById('edit-service-area').value = userProfile.serviceArea || '';
+      document.getElementById('edit-pets-cared').value = userProfile.petsCaredFor || '';
+      document.getElementById('edit-services').value = userProfile.services || '';
+      document.getElementById('edit-rate').value = userProfile.rate || '';
+      document.getElementById('edit-experience').value = userProfile.experience || '';
+    }
+  }
   document.getElementById('edit-profile-modal').classList.add('open');
 }
 function closeEditProfileModal() { document.getElementById('edit-profile-modal').classList.remove('open'); }
@@ -872,18 +1040,28 @@ function saveProfile() {
       location:  document.getElementById('edit-location').value.trim(),
       bio:       document.getElementById('edit-bio').value.trim(),
     };
+    // Include minder-specific fields if user is a minder
+    if (userProfile.role === 'minder') {
+      updates.serviceArea  = (document.getElementById('edit-service-area')  || {}).value || '';
+      updates.petsCaredFor = (document.getElementById('edit-pets-cared')    || {}).value || '';
+      updates.services     = (document.getElementById('edit-services')      || {}).value || '';
+      updates.rate         = (document.getElementById('edit-rate')          || {}).value || '';
+      updates.experience   = (document.getElementById('edit-experience')   || {}).value || '';
+    }
     // Optimistic local update so the UI feels instant
     Object.assign(userProfile, updates);
     store.setUser(userProfile);
     closeEditProfileModal();
     refreshPetsUI();
+    renderProfileAvatar();
 
     // Push to the backend so the change survives logout/login
     try {
       const saved = await api.updateMe(updates);
-      Object.assign(userProfile, saved);
+      hydrateUserProfile(saved);
       store.setUser(userProfile);
       refreshPetsUI();
+      renderProfileAvatar();
       showToast('✅ Profile updated!');
     } catch (err) {
       showToast('⚠️ Saved locally — ' + (err.message || 'server update failed'));
@@ -1081,6 +1259,7 @@ function showToast(msg) {
 // Initial render
 refreshPetsUI();
 if (document.getElementById('admin-users')) loadAdminData();
+if (document.getElementById('minders-list')) loadMinders();
 
 // ===== AUTH GUARD =====
 // Pages that require a valid session. auth.html and index.html are excluded.
@@ -1102,12 +1281,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Fetch them in parallel, overwrite local cache, then re-render.
     const [user, pets] = await Promise.all([api.getMe(), api.getPets()]);
 
-    userProfile.firstName = user.firstName || '';
-    userProfile.lastName  = user.lastName  || '';
-    userProfile.email     = user.email     || '';
-    userProfile.phone     = user.phone     || '';
-    userProfile.location  = user.location  || '';
-    userProfile.bio       = user.bio       || '';
+    hydrateUserProfile(user);
     store.setUser(userProfile);
 
     // Rebuild petData keyed by backend id, then mirror to localStorage so

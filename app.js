@@ -14,7 +14,8 @@ let userProfile = {
   firstName: '', lastName: '', email: '', phone: '', location: '', bio: '',
   role: 'owner', profileImage: '',
   // Minder-specific (blank for owners)
-  serviceArea: '', petsCaredFor: '', services: '', rate: '', experience: ''
+  serviceArea: '', petsCaredFor: '', services: '', rate: '', experience: '',
+  priceMin: 0, priceMax: 50
 };
 
 // ===== LOCAL STORE =====
@@ -126,6 +127,8 @@ function hydrateUserProfile(u) {
   userProfile.services     = u.services     || '';
   userProfile.rate         = u.rate         || '';
   userProfile.experience   = u.experience   || '';
+  userProfile.priceMin     = u.priceMin     ?? 0;
+  userProfile.priceMax     = u.priceMax     ?? 50;
 }
 (function initUserFromCache() { hydrateUserProfile(store.getUser()); }());
 
@@ -519,10 +522,12 @@ async function loadMinders() {
         ? '<img src="' + m.profileImage + '" alt="' + m.name + '" class="avatar-img" style="width:100%;height:100%;object-fit:cover;border-radius:14px">'
         : '👤';
       const loc  = m.location ? '📍 ' + m.location : '';
-      const rate = m.rate ? m.rate : '';
+      const petEmojis = { Dogs: '🐕', Cats: '🐈', 'Small Pets': '🐇', Birds: '🐦' };
+      const svcEmojis = { Walking: '🚶', 'Home Visit': '🏠', Grooming: '🛁', Vet: '🏥', Training: '🎓' };
+      const rate = (m.priceMin != null && m.priceMax != null) ? '£' + m.priceMin + '–£' + m.priceMax + '/hr' : (m.rate || '');
       const tags = [];
-      if (m.services) m.services.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
-      if (m.petsCaredFor) m.petsCaredFor.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
+      if (m.services) m.services.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + (svcEmojis[s] || '') + ' ' + s + '</span>'); });
+      if (m.petsCaredFor) m.petsCaredFor.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + (petEmojis[s] || '') + ' ' + s + '</span>'); });
 
       const card = document.createElement('div');
       card.className = 'minder-list-card';
@@ -563,12 +568,16 @@ function openMinderProfile(minderId) {
     document.getElementById('mp-bio').textContent = minder.bio || '';
     // Update the detail section with real data
     const details = document.getElementById('mp-details');
-    if (details && (minder.experience || minder.petsCaredFor || minder.services || minder.rate)) {
+    if (details && (minder.experience || minder.petsCaredFor || minder.services || minder.rate || minder.priceMin != null)) {
       details.innerHTML = '';
       if (minder.experience)   details.innerHTML += '<div class="info-row"><span class="info-label">Experience</span><span class="info-value">' + minder.experience + '</span></div>';
       if (minder.petsCaredFor) details.innerHTML += '<div class="info-row"><span class="info-label">Pets accepted</span><span class="info-value">' + minder.petsCaredFor + '</span></div>';
       if (minder.services)     details.innerHTML += '<div class="info-row"><span class="info-label">Services</span><span class="info-value">' + minder.services + '</span></div>';
-      if (minder.rate)         details.innerHTML += '<div class="info-row"><span class="info-label">Rate</span><span class="info-value">' + minder.rate + '</span></div>';
+      if (minder.priceMin != null && minder.priceMax != null) {
+        details.innerHTML += '<div class="info-row"><span class="info-label">Price range</span><span class="info-value">£' + minder.priceMin + ' – £' + minder.priceMax + '/hr</span></div>';
+      } else if (minder.rate) {
+        details.innerHTML += '<div class="info-row"><span class="info-label">Rate</span><span class="info-value">' + minder.rate + '</span></div>';
+      }
     }
     // Hide stars for real minders (no review system wired to them yet)
     const starsEl = document.getElementById('mp-stars');
@@ -1004,6 +1013,14 @@ function submitReport() {
   });
 }
 
+// ===== PRICE RANGE HELPER =====
+function clampPrice(el) {
+  let v = parseInt(el.value, 10);
+  if (isNaN(v) || v < 0) v = 0;
+  if (v > 50) v = 50;
+  el.value = v;
+}
+
 // ===== EDIT PROFILE =====
 function openEditProfileModal() {
   document.getElementById('edit-first-name').value = userProfile.firstName;
@@ -1018,10 +1035,22 @@ function openEditProfileModal() {
     minderFields.style.display = userProfile.role === 'minder' ? 'block' : 'none';
     if (userProfile.role === 'minder') {
       document.getElementById('edit-service-area').value = userProfile.serviceArea || '';
-      document.getElementById('edit-pets-cared').value = userProfile.petsCaredFor || '';
-      document.getElementById('edit-services').value = userProfile.services || '';
-      document.getElementById('edit-rate').value = userProfile.rate || '';
       document.getElementById('edit-experience').value = userProfile.experience || '';
+      // Populate pet type chips from stored petsCaredFor (comma-separated string)
+      const storedPets = (userProfile.petsCaredFor || '').split(',').map(s => s.trim()).filter(Boolean);
+      document.querySelectorAll('#edit-pet-type-chips .chip-pill').forEach(c => {
+        c.classList.toggle('active', storedPets.includes(c.dataset.value));
+      });
+      // Populate service type chips from stored services (comma-separated string)
+      const storedSvcs = (userProfile.services || '').split(',').map(s => s.trim()).filter(Boolean);
+      document.querySelectorAll('#edit-service-type-chips .chip-pill').forEach(c => {
+        c.classList.toggle('active', storedSvcs.includes(c.dataset.value));
+      });
+      // Populate price range
+      const priceMinEl = document.getElementById('edit-price-min');
+      const priceMaxEl = document.getElementById('edit-price-max');
+      if (priceMinEl) priceMinEl.value = userProfile.priceMin ?? 0;
+      if (priceMaxEl) priceMaxEl.value = userProfile.priceMax ?? 50;
     }
   }
   document.getElementById('edit-profile-modal').classList.add('open');
@@ -1031,6 +1060,12 @@ function closeEditProfileModal() { document.getElementById('edit-profile-modal')
 function saveProfile() {
   const fn = document.getElementById('edit-first-name').value.trim();
   if (!fn) { showToast('❌ First name is required'); return; }
+  // Validate price range for minders
+  if (userProfile.role === 'minder') {
+    const pMin = parseInt((document.getElementById('edit-price-min') || {}).value, 10) || 0;
+    const pMax = parseInt((document.getElementById('edit-price-max') || {}).value, 10) || 50;
+    if (pMin > pMax) { showToast('❌ Min price cannot exceed max price'); return; }
+  }
   showConfirmModal('💾', 'Save Profile Changes?', 'Update your profile information?', async function() {
     const updates = {
       firstName: fn,
@@ -1043,10 +1078,19 @@ function saveProfile() {
     // Include minder-specific fields if user is a minder
     if (userProfile.role === 'minder') {
       updates.serviceArea  = (document.getElementById('edit-service-area')  || {}).value || '';
-      updates.petsCaredFor = (document.getElementById('edit-pets-cared')    || {}).value || '';
-      updates.services     = (document.getElementById('edit-services')      || {}).value || '';
-      updates.rate         = (document.getElementById('edit-rate')          || {}).value || '';
       updates.experience   = (document.getElementById('edit-experience')   || {}).value || '';
+      // Read pet types from active chips
+      updates.petsCaredFor = Array.from(document.querySelectorAll('#edit-pet-type-chips .chip-pill.active'))
+        .map(c => c.dataset.value).join(', ');
+      // Read service types from active chips
+      updates.services = Array.from(document.querySelectorAll('#edit-service-type-chips .chip-pill.active'))
+        .map(c => c.dataset.value).join(', ');
+      // Read price range
+      const pMin = Math.max(0, Math.min(50, parseInt((document.getElementById('edit-price-min') || {}).value, 10) || 0));
+      const pMax = Math.max(0, Math.min(50, parseInt((document.getElementById('edit-price-max') || {}).value, 10) || 50));
+      updates.priceMin = pMin;
+      updates.priceMax = pMax;
+      updates.rate = '£' + pMin + '–£' + pMax + '/hr';
     }
     // Optimistic local update so the UI feels instant
     Object.assign(userProfile, updates);

@@ -19,7 +19,7 @@
 .card-row::-webkit-scrollbar { display: none; }
 .minder-card { background: white; border-radius: var(--radius); padding: 18px; min-width: 200px; box-shadow: 0 2px 16px var(--shadow); transition: transform 0.2s, box-shadow 0.2s; flex-shrink: 0; display: flex; flex-direction: column; }
 .minder-card:hover { transform: translateY(-3px); box-shadow: 0 6px 24px var(--shadow); }
-.minder-avatar { width: 56px; height: 56px; border-radius: 50%; background: var(--sand-light); display: flex; align-items: center; justify-content: center; font-size: 28px; margin-bottom: 12px; }
+.minder-avatar { width: 56px; height: 56px; border-radius: 50%; background: var(--sand-light); display: flex; align-items: center; justify-content: center; font-size: 28px; margin-bottom: 12px; overflow: hidden; }
 .minder-name { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 600; color: var(--bark); margin-bottom: 2px; }
 .minder-loc { font-size: 12px; color: var(--bark-light); margin-bottom: 8px; }
 .minder-stars { color: #f5a623; font-size: 13px; }

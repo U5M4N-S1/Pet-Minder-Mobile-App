@@ -13,6 +13,17 @@
 .menu-label { flex: 1; font-size: 15px; color: var(--bark); font-weight: 500; }
 .menu-arrow { color: var(--bark-light); font-size: 18px; }
 
+/* Chip/Pill selector for pet type and service type */
+.chip-selector { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.chip-pill { display: inline-flex; align-items: center; gap: 4px; padding: 8px 16px; border-radius: 50px; border: 1.5px solid var(--sand); background: white; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; color: var(--bark-light); cursor: pointer; transition: all 0.2s; user-select: none; }
+.chip-pill:hover { border-color: var(--terra-light); color: var(--bark); }
+.chip-pill.active { background: var(--terra); border-color: var(--terra); color: white; }
+
+/* Price range row */
+.price-range-row { display: flex; gap: 10px; align-items: center; }
+.price-range-row input { flex: 1; padding: 10px 14px; border: 1.5px solid var(--sand); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--bark); outline: none; min-width: 0; }
+.price-range-row input:focus { border-color: var(--terra); }
+
 /* Review minder list cards (in profile reviews) */
 .review-minder-card { display: flex; align-items: center; gap: 14px; background: white; border-radius: var(--radius); padding: 18px; box-shadow: 0 2px 12px var(--shadow); margin-bottom: 12px; cursor: pointer; transition: transform 0.2s; }
 .review-minder-card:hover { transform: translateY(-2px); box-shadow: 0 4px 20px var(--shadow); }

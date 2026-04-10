@@ -30,7 +30,9 @@ function userDTO(u) {
     petsCaredFor: u.petsCaredFor || '',
     services:     u.services     || '',
     rate:         u.rate         || '',
-    experience:   u.experience   || ''
+    experience:   u.experience   || '',
+    priceMin:     u.priceMin     ?? 0,
+    priceMax:     u.priceMax     ?? 50
   };
 }
 
@@ -112,7 +114,7 @@ router.patch('/me', requireAuth, (req, res) => {
   if (!user.value()) return res.status(404).json({ error: 'User not found' });
 
   const { firstName, lastName, email, phone, location, bio,
-          serviceArea, petsCaredFor, services, rate, experience } = req.body;
+          serviceArea, petsCaredFor, services, rate, experience, priceMin, priceMax } = req.body;
   const updates = {};
   if (typeof firstName    === 'string' && firstName.trim()) updates.firstName    = firstName.trim();
   if (typeof lastName     === 'string') updates.lastName     = lastName.trim();
@@ -125,6 +127,8 @@ router.patch('/me', requireAuth, (req, res) => {
   if (typeof services     === 'string') updates.services     = services.trim();
   if (typeof rate         === 'string') updates.rate         = rate.trim();
   if (typeof experience   === 'string') updates.experience   = experience.trim();
+  if (typeof priceMin     === 'number') updates.priceMin     = Math.max(0, Math.min(50, priceMin));
+  if (typeof priceMax     === 'number') updates.priceMax     = Math.max(0, Math.min(50, priceMax));
 
   // Email changes need a uniqueness check
   if (typeof email === 'string' && email.trim()) {
@@ -235,7 +239,9 @@ router.get('/minders', (req, res) => {
       petsCaredFor: u.petsCaredFor || '',
       services:     u.services     || '',
       rate:         u.rate         || '',
-      experience:   u.experience   || ''
+      experience:   u.experience   || '',
+      priceMin:     u.priceMin     ?? 0,
+      priceMax:     u.priceMax     ?? 50
     }));
   res.json(minders);
 });

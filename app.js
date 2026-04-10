@@ -95,6 +95,8 @@ const api = {
   getMe()                   { return this._req('GET',    '/auth/me'); },
   updateMe(data)            { return this._req('PATCH',  '/auth/me', data); },
   getBookings()             { return this._req('GET',    '/bookings'); },
+  getBookingRequests()      { return this._req('GET',    '/bookings/requests'); },
+  updateBooking(id, data)   { return this._req('PATCH',  '/bookings/' + id, data); },
   createBooking(data)       { return this._req('POST',   '/bookings', data); },
   getPets()                 { return this._req('GET',    '/pets'); },
   createPet(data)           { return this._req('POST',   '/pets', data); },
@@ -157,7 +159,7 @@ const bookedMinders = [
 // fresh account can't accidentally see another user's bookings.
 const upcomingBookings = [];
 const pastBookings = [];
-const statusLabels = { confirmed: 'Confirmed', pending: 'Pending', completed: 'Done' };
+const statusLabels = { confirmed: 'Confirmed', pending: 'Pending', completed: 'Done', declined: 'Declined' };
 
 function renderBookingCards(containerId, bookings) {
   const el = document.getElementById(containerId);
@@ -174,6 +176,75 @@ function renderBookingCards(containerId, bookings) {
       </div>
       <span class="booking-status status-${b.status}">${statusLabels[b.status]}</span>
     </div>`).join('');
+}
+
+// ===== BOOKING REQUESTS (minder view) =====
+async function loadBookingRequests() {
+  const el = document.getElementById('bookings-requests-list');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--bark-light);font-size:13px">Loading requests...</div>';
+  try {
+    const requests = await api.getBookingRequests();
+    if (requests.length === 0) {
+      el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No booking requests yet.</div>';
+      return;
+    }
+    el.innerHTML = requests.map(b => `
+      <div class="booking-card" style="cursor:default;flex-wrap:wrap">
+        <div class="booking-date-block"><div class="booking-date-day">${b.day}</div><div class="booking-date-month">${b.month}</div></div>
+        <div class="booking-date-sep"></div>
+        <div class="booking-avatar">${b.avatar}</div>
+        <div class="booking-info">
+          <div class="booking-minder">${b.ownerName || 'Pet Owner'}</div>
+          <div class="booking-detail">${b.petEmoji} ${b.petDetail}</div>
+          ${b.price ? '<div class="booking-detail" style="margin-top:4px;color:var(--terra)">' + b.price + '</div>' : ''}
+        </div>
+        <span class="booking-status status-${b.status}">${statusLabels[b.status] || b.status}</span>
+        ${b.status === 'pending' ? '<div class="booking-request-actions" style="width:100%;display:flex;gap:8px;margin-top:10px;padding-left:62px"><button class="btn-primary" style="flex:1;padding:10px;font-size:13px" onclick="respondToBooking(' + b.id + ',\'confirmed\',this)">Accept</button><button class="btn-outline" style="flex:1;padding:10px;font-size:13px;color:var(--bark-light);border-color:var(--sand)" onclick="respondToBooking(' + b.id + ',\'declined\',this)">Decline</button></div>' : ''}
+      </div>`).join('');
+  } catch {
+    el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">Could not load requests.</div>';
+  }
+}
+
+async function respondToBooking(bookingId, status, btnEl) {
+  // Disable buttons to prevent double-click
+  const row = btnEl.closest('.booking-request-actions');
+  if (row) row.querySelectorAll('button').forEach(b => b.disabled = true);
+  try {
+    await api.updateBooking(bookingId, { status });
+    showToast(status === 'confirmed' ? '✅ Booking accepted!' : '❌ Booking declined');
+    loadBookingRequests();        // refresh the list
+    loadNotificationCount();      // update badge
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Failed to update booking'));
+    if (row) row.querySelectorAll('button').forEach(b => b.disabled = false);
+  }
+}
+
+// ===== NOTIFICATIONS (minder booking request count) =====
+let notifCount = 0;
+
+async function loadNotificationCount() {
+  if (userProfile.role !== 'minder') return;
+  try {
+    const requests = await api.getBookingRequests();
+    notifCount = requests.filter(b => b.status === 'pending').length;
+    // Update badge on profile page notifications row
+    const badge = document.getElementById('notif-badge');
+    if (badge) {
+      badge.textContent = notifCount;
+      badge.style.display = notifCount > 0 ? 'inline-flex' : 'none';
+    }
+  } catch { /* silent */ }
+}
+
+function openNotifications() {
+  if (userProfile.role === 'minder' && notifCount > 0) {
+    window.location.href = 'bookings.html?tab=requests';
+  } else {
+    showToast('No new notifications');
+  }
 }
 
 // Active booking page
@@ -311,12 +382,16 @@ function show(id) {
     // Force upcoming tab active
     const upTab = document.getElementById('bookings-tab-upcoming');
     const pastTab = document.getElementById('bookings-tab-past');
+    const reqTab = document.getElementById('bookings-tab-requests');
     upTab.classList.add('active');
     pastTab.classList.remove('active');
+    if (reqTab) reqTab.classList.remove('active');
     document.getElementById('bookings-upcoming').style.display = 'block';
     document.getElementById('bookings-gps-live').style.display = 'block';
     document.getElementById('bookings-past').style.display = 'none';
     document.getElementById('bookings-gps').style.display = 'none';
+    const reqSection = document.getElementById('bookings-requests');
+    if (reqSection) reqSection.style.display = 'none';
   }
 }
 
@@ -730,6 +805,9 @@ function switchBookingTab(btn, tab) {
   document.getElementById('bookings-gps-live').style.display = tab === 'upcoming' ? 'block' : 'none';
   document.getElementById('bookings-past').style.display = tab === 'past' ? 'block' : 'none';
   document.getElementById('bookings-gps').style.display = tab === 'past' ? 'block' : 'none';
+  const reqSection = document.getElementById('bookings-requests');
+  if (reqSection) reqSection.style.display = tab === 'requests' ? 'block' : 'none';
+  if (tab === 'requests') loadBookingRequests();
 }
 
 // ===== BOOKING FLOW =====
@@ -1540,6 +1618,8 @@ function showToast(msg) {
 refreshPetsUI();
 if (document.getElementById('admin-users')) loadAdminData();
 if (document.getElementById('minders-list')) loadMinders();
+// Load notification count for minders on the profile page
+if (document.getElementById('notif-badge')) loadNotificationCount();
 
 // ===== AUTH GUARD =====
 // Pages that require a valid session. auth.html and index.html are excluded.

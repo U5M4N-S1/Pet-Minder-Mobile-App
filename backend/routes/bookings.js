@@ -68,4 +68,42 @@ router.post('/', requireAuth, (req, res) => {
   res.status(201).json(toDTO(booking));
 });
 
+// GET /api/bookings/requests — bookings where the logged-in user is the minder
+router.get('/requests', requireAuth, (req, res) => {
+  const bookings = db.get('bookings')
+    .filter(b => Number(b.minderKey) === req.user.userId)
+    .sortBy('createdAt')
+    .value()
+    .reverse();                    // newest first
+  // Attach pet-owner name so the minder knows who's requesting
+  const enriched = bookings.map(b => {
+    const owner = db.get('users').find({ id: b.ownerId }).value();
+    const dto   = toDTO(b);
+    dto.ownerName = owner ? ((owner.firstName || '') + ' ' + (owner.lastName || '')).trim() : 'Unknown';
+    return dto;
+  });
+  res.json(enriched);
+});
+
+// PATCH /api/bookings/:id — accept or decline a booking (minder only)
+router.patch('/:id', requireAuth, (req, res) => {
+  const id  = Number(req.params.id);
+  const row = db.get('bookings').find({ id });
+  const booking = row.value();
+  if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+  // Only the assigned minder may update the booking
+  if (Number(booking.minderKey) !== req.user.userId) {
+    return res.status(403).json({ error: 'Only the assigned minder can update this booking' });
+  }
+
+  const { status } = req.body;
+  if (!['confirmed', 'declined'].includes(status)) {
+    return res.status(400).json({ error: 'Status must be "confirmed" or "declined"' });
+  }
+
+  row.assign({ status }).write();
+  res.json(toDTO(row.value()));
+});
+
 module.exports = router;

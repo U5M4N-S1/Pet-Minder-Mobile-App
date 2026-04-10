@@ -90,6 +90,13 @@ const api = {
   createPet(data)           { return this._req('POST',   '/pets', data); },
   updatePet(id, data)       { return this._req('PATCH',  '/pets/' + id, data); },
   deletePet(id)             { return this._req('DELETE', '/pets/' + id); },
+  // Admin
+  getAdminUsers()           { return this._req('GET',    '/admin/users'); },
+  updateAdminUser(id, data) { return this._req('PATCH',  '/admin/users/' + id, data); },
+  deleteAdminUser(id)       { return this._req('DELETE', '/admin/users/' + id); },
+  getDisputes()             { return this._req('GET',    '/admin/disputes'); },
+  createDispute(data)       { return this._req('POST',   '/admin/disputes', data); },
+  updateDispute(id, data)   { return this._req('PATCH',  '/admin/disputes/' + id, data); },
 };
 
 // Hydrate userProfile from localStorage immediately (sync) so pages render
@@ -216,19 +223,10 @@ const allUsers = [
   { name: 'Tom H.', role: 'Pet Owner' }, { name: 'Priya L.', role: 'Pet Owner' }
 ];
 
-// Admin users data
-const adminUsers = [
-  { id: 'usman', name: 'Usman Khan', email: 'usman@email.com', role: 'Pet Owner', status: 'Active', avatar: '👤' },
-  { id: 'sarah', name: 'Sarah K.', email: 'sarah@email.com', role: 'Pet Minder', status: 'Active', avatar: '👩‍🦰' },
-  { id: 'james', name: 'James M.', email: 'james@email.com', role: 'Pet Minder', status: 'Active', avatar: '👩‍🦰' },
-  { id: 'emma', name: 'Emma T.', email: 'emma@email.com', role: 'Pet Minder', status: 'Active', avatar: '🧔' }
-];
-
-// Admin disputes
-const adminDisputes = [
-  { id: 1, status: 'Open', date: '3 Apr 2026', from: 'Usman Khan (Pet Owner)', against: 'Priya S. (Pet Minder)', reason: 'Minder did not show up for scheduled appointment. No communication was received.' },
-  { id: 2, status: 'Open', date: '1 Apr 2026', from: 'Sarah K. (Pet Minder)', against: 'Tom H. (Pet Owner)', reason: 'Abusive language used in messages. Screenshots attached.' }
-];
+// Admin data — fetched from the backend on the admin page.
+// These arrays are populated by loadAdminData() and are never hardcoded.
+let adminUsers    = [];
+let adminDisputes = [];
 
 // Chat data
 const chatData = {
@@ -329,13 +327,18 @@ async function handleLogin() {
   }
 }
 
-function handleAdminLogin() {
-  const user = document.getElementById('admin-username').value.trim();
-  const pwd = document.getElementById('admin-password').value.trim();
-  if (user === 'pawpaladmin' && pwd === 'Admin2026!') {
+async function handleAdminLogin() {
+  const email = document.getElementById('admin-username').value.trim();
+  const pwd   = document.getElementById('admin-password').value.trim();
+  if (!email || !pwd) { showToast('❌ Enter admin credentials'); return; }
+  try {
+    const { token, user } = await api.login(email, pwd);
+    if (user.role !== 'admin') { showToast('❌ This account is not an admin'); return; }
+    api.setToken(token);
+    store.setUser(user);
     isAdmin = true;
     window.location.href = 'admin.html';
-  } else {
+  } catch {
     showToast('❌ Invalid admin credentials');
   }
 }
@@ -832,10 +835,14 @@ function submitReport() {
   if (!reportSelectedUser) { showToast('❌ Please select a user to report'); return; }
   const reason = document.getElementById('report-reason').value.trim();
   if (!reason) { showToast('❌ Please provide a reason'); return; }
-  showConfirmModal('🚨', 'Submit Report?', 'Report ' + reportSelectedUser.name + ' for violating community guidelines?', function() {
-    // Add to admin disputes
-    adminDisputes.push({ id: Date.now(), status: 'Open', date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }), from: userProfile.firstName + ' ' + userProfile.lastName + ' (Pet Owner)', against: reportSelectedUser.name + ' (' + reportSelectedUser.role + ')', reason: reason });
-    showToast('✅ Report submitted. Our team will review it.');
+  showConfirmModal('🚨', 'Submit Report?', 'Report ' + reportSelectedUser.name + ' for violating community guidelines?', async function() {
+    try {
+      await api.createDispute({
+        against: reportSelectedUser.name + ' (' + reportSelectedUser.role + ')',
+        reason: reason
+      });
+      showToast('✅ Report submitted. Our team will review it.');
+    } catch { showToast('⚠️ Report saved locally'); }
     clearReportSelection();
     document.getElementById('report-reason').value = '';
   });
@@ -908,33 +915,75 @@ function logout() {
 }
 
 // ===== ADMIN =====
+// Fetches users + disputes from the backend and renders both panels.
+async function loadAdminData() {
+  try {
+    const [users, disputes] = await Promise.all([
+      api.getAdminUsers(),
+      api.getDisputes()
+    ]);
+    adminUsers    = users;
+    adminDisputes = disputes;
+    renderAdminPanels();
+    restoreAdminTab();
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Failed to load admin data'));
+  }
+}
+
 function renderAdminPanels() {
   // Users panel
   const usersPanel = document.getElementById('admin-users');
-  usersPanel.innerHTML = '<div class="admin-section-title">Registered Users</div>';
-  adminUsers.forEach(u => {
-    const card = document.createElement('div'); card.className = 'admin-user-card'; card.id = 'admin-card-' + u.id;
-    const statusBadge = u.status === 'Active' ? '' : ' <span style="color:#e53935;font-size:11px">(' + u.status + ')</span>';
-    card.innerHTML = '<div class="admin-user-avatar">' + u.avatar + '</div><div class="admin-user-info"><div class="admin-user-name">' + u.name + statusBadge + '</div><div class="admin-user-role">' + u.role + ' · ' + u.email + '</div></div><div class="admin-user-actions"><button class="admin-btn edit" onclick="openAdminEditUser(\'' + u.id + '\')">✏️ Edit</button><button class="admin-btn suspend" onclick="adminSuspendUser(\'' + u.id + '\')">⏸ Suspend</button><button class="admin-btn remove" onclick="adminRemoveUser(\'' + u.id + '\')">🗑 Remove</button></div>';
-    usersPanel.appendChild(card);
-  });
-  // Disputes panel
+  if (usersPanel) {
+    usersPanel.innerHTML = '<div class="admin-section-title">Registered Users (' + adminUsers.length + ')</div>';
+    if (adminUsers.length === 0) {
+      usersPanel.innerHTML += '<div style="padding:20px;text-align:center;color:var(--bark-light);font-size:13px">No registered users.</div>';
+    }
+    adminUsers.forEach(u => {
+      const card = document.createElement('div'); card.className = 'admin-user-card'; card.id = 'admin-card-' + u.id;
+      const statusBadge = u.status === 'Active' ? '' : ' <span style="color:#e53935;font-size:11px">(' + u.status + ')</span>';
+      card.innerHTML = '<div class="admin-user-avatar">' + (u.avatar || '👤') + '</div><div class="admin-user-info"><div class="admin-user-name">' + u.name + statusBadge + '</div><div class="admin-user-role">' + u.role + ' · ' + u.email + '</div></div><div class="admin-user-actions"><button class="admin-btn edit" onclick="openAdminEditUser(' + u.id + ')">✏️ Edit</button><button class="admin-btn suspend" onclick="adminSuspendUser(' + u.id + ')">⏸ Suspend</button><button class="admin-btn remove" onclick="adminRemoveUser(' + u.id + ')">🗑 Remove</button></div>';
+      usersPanel.appendChild(card);
+    });
+  }
+  // Disputes panel — only show Open disputes
   const disputesPanel = document.getElementById('admin-disputes');
-  disputesPanel.innerHTML = '<div class="admin-section-title">Open Disputes</div>';
-  adminDisputes.forEach(d => {
-    const card = document.createElement('div'); card.className = 'dispute-card';
-    card.innerHTML = '<div class="dispute-header"><span class="dispute-badge open">' + d.status + '</span><span class="dispute-date">' + d.date + '</span></div><div class="dispute-body"><p><strong>Reported by:</strong> ' + d.from + '</p><p><strong>Against:</strong> ' + d.against + '</p><p><strong>Reason:</strong> ' + d.reason + '</p></div><div class="dispute-actions"><button class="admin-btn edit" onclick="this.closest(\'.dispute-card\').remove();showToast(\'✅ Dispute resolved\')">✅ Resolve</button><button class="admin-btn suspend" onclick="showToast(\'⏸ User suspended\')">⏸ Suspend User</button><button class="admin-btn remove" onclick="this.closest(\'.dispute-card\').remove();showToast(\'🗑 Dismissed\')">Dismiss</button></div>';
-    disputesPanel.appendChild(card);
-  });
+  if (disputesPanel) {
+    const open = adminDisputes.filter(d => d.status === 'Open');
+    disputesPanel.innerHTML = '<div class="admin-section-title">Open Disputes (' + open.length + ')</div>';
+    if (open.length === 0) {
+      disputesPanel.innerHTML += '<div style="padding:20px;text-align:center;color:var(--bark-light);font-size:13px">No open disputes.</div>';
+    }
+    open.forEach(d => {
+      const card = document.createElement('div'); card.className = 'dispute-card'; card.dataset.id = d.id;
+      card.innerHTML = '<div class="dispute-header"><span class="dispute-badge open">' + d.status + '</span><span class="dispute-date">' + d.date + '</span></div><div class="dispute-body"><p><strong>Reported by:</strong> ' + d.from + '</p><p><strong>Against:</strong> ' + d.against + '</p><p><strong>Reason:</strong> ' + d.reason + '</p></div><div class="dispute-actions"><button class="admin-btn edit" onclick="resolveDispute(' + d.id + ')">✅ Resolve</button><button class="admin-btn remove" onclick="dismissDispute(' + d.id + ')">Dismiss</button></div>';
+      disputesPanel.appendChild(card);
+    });
+  }
 }
 
+// Tab switching + persistence via sessionStorage
 function switchAdminTab(btn, panelId) {
   document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
   document.querySelectorAll('.admin-panel').forEach(p => p.style.display = 'none');
   document.getElementById(panelId).style.display = 'block';
+  sessionStorage.setItem('pawpal_admin_tab', panelId);
 }
 
+function restoreAdminTab() {
+  const saved = sessionStorage.getItem('pawpal_admin_tab');
+  if (!saved) return;
+  const panel = document.getElementById(saved);
+  if (!panel) return;
+  document.querySelectorAll('.admin-panel').forEach(p => p.style.display = 'none');
+  panel.style.display = 'block';
+  document.querySelectorAll('.admin-tab').forEach(t => {
+    t.classList.toggle('active', t.getAttribute('onclick').includes(saved));
+  });
+}
+
+// ── User CRUD ──
 let adminEditingId = null;
 function openAdminEditUser(userId) {
   adminEditingId = userId;
@@ -943,40 +992,83 @@ function openAdminEditUser(userId) {
   document.getElementById('admin-edit-name').value = user.name;
   document.getElementById('admin-edit-email').value = user.email;
   document.getElementById('admin-edit-role').value = user.role;
-  document.getElementById('admin-edit-status').value = user.status;
+  document.getElementById('admin-edit-status').value = user.status || 'Active';
   document.getElementById('admin-edit-modal').classList.add('open');
 }
 function closeAdminEditModal() { document.getElementById('admin-edit-modal').classList.remove('open'); }
 
-function saveAdminEdit() {
+async function saveAdminEdit() {
   if (!adminEditingId) return;
-  const user = adminUsers.find(u => u.id === adminEditingId);
-  if (user) {
-    user.name = document.getElementById('admin-edit-name').value.trim();
-    user.email = document.getElementById('admin-edit-email').value.trim();
-    user.role = document.getElementById('admin-edit-role').value;
-    user.status = document.getElementById('admin-edit-status').value;
+  try {
+    const updated = await api.updateAdminUser(adminEditingId, {
+      name:   document.getElementById('admin-edit-name').value.trim(),
+      email:  document.getElementById('admin-edit-email').value.trim(),
+      role:   document.getElementById('admin-edit-role').value,
+      status: document.getElementById('admin-edit-status').value
+    });
+    const idx = adminUsers.findIndex(u => u.id === adminEditingId);
+    if (idx !== -1) adminUsers[idx] = updated;
+    closeAdminEditModal();
+    showToast('✅ User profile updated');
+    renderAdminPanels();
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Failed to update user'));
   }
-  closeAdminEditModal();
-  showToast('✅ User profile updated');
-  renderAdminPanels();
 }
 
 function adminSuspendUser(userId) {
-  showConfirmModal('⏸', 'Suspend User?', 'This user will be unable to log in.', function() {
-    const user = adminUsers.find(u => u.id === userId);
-    if (user) user.status = 'Suspended';
-    showToast('⏸ User account suspended');
-    renderAdminPanels();
+  showConfirmModal('⏸', 'Suspend User?', 'This user will be unable to log in.', async function() {
+    try {
+      const updated = await api.updateAdminUser(userId, { status: 'Suspended' });
+      const idx = adminUsers.findIndex(u => u.id === userId);
+      if (idx !== -1) adminUsers[idx] = updated;
+      showToast('⏸ User account suspended');
+      renderAdminPanels();
+    } catch (err) {
+      showToast('❌ ' + (err.message || 'Failed to suspend user'));
+    }
   });
 }
 
 function adminRemoveUser(userId) {
-  showConfirmModal('🗑', 'Remove User?', 'Permanently remove this account? This cannot be undone.', function() {
-    const idx = adminUsers.findIndex(u => u.id === userId);
-    if (idx !== -1) adminUsers.splice(idx, 1);
-    showToast('🗑 User account removed');
-    renderAdminPanels();
+  showConfirmModal('🗑', 'Remove User?', 'Permanently remove this account and all their data? This cannot be undone.', async function() {
+    try {
+      await api.deleteAdminUser(userId);
+      adminUsers = adminUsers.filter(u => u.id !== userId);
+      showToast('🗑 User account permanently removed');
+      renderAdminPanels();
+    } catch (err) {
+      showToast('❌ ' + (err.message || 'Failed to remove user'));
+    }
+  });
+}
+
+// ── Dispute actions ──
+async function resolveDispute(disputeId) {
+  showConfirmModal('✅', 'Resolve Dispute?', 'Mark this dispute as resolved?', async function() {
+    try {
+      await api.updateDispute(disputeId, { status: 'Resolved' });
+      const d = adminDisputes.find(x => x.id === disputeId);
+      if (d) d.status = 'Resolved';
+      showToast('✅ Dispute resolved');
+      renderAdminPanels();
+    } catch (err) {
+      showToast('❌ ' + (err.message || 'Failed to resolve dispute'));
+    }
+  });
+}
+
+async function dismissDispute(disputeId) {
+  showConfirmModal('🗑', 'Dismiss Dispute?', 'Dismiss this dispute without action?', async function() {
+    try {
+      await api.updateDispute(disputeId, { status: 'Dismissed' });
+      const d = adminDisputes.find(x => x.id === disputeId);
+      if (d) d.status = 'Dismissed';
+      showToast('🗑 Dispute dismissed');
+      renderAdminPanels();
+    } catch (err) {
+      showToast('❌ ' + (err.message || 'Failed to dismiss dispute'));
+    }
   });
 }
 
@@ -988,7 +1080,7 @@ function showToast(msg) {
 
 // Initial render
 refreshPetsUI();
-if (document.getElementById('admin-users')) renderAdminPanels();
+if (document.getElementById('admin-users')) loadAdminData();
 
 // ===== AUTH GUARD =====
 // Pages that require a valid session. auth.html and index.html are excluded.

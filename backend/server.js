@@ -14,6 +14,7 @@ app.use(express.static(path.join(__dirname, '..')));
 app.use('/api/auth',     require('./routes/auth'));
 app.use('/api/bookings', require('./routes/bookings'));
 app.use('/api/pets',     require('./routes/pets'));
+app.use('/api/admin',   require('./routes/admin'));
 
 // Catch-all: any unmatched path serves the landing page
 app.get('*', (_req, res) => {

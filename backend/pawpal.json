@@ -83,16 +83,15 @@
       "createdAt": "2026-04-09T21:54:17.895Z"
     },
     {
-      "id": 1002,
-      "firstName": "Balexz",
-      "lastName": "B",
-      "email": "user3@gmail.com",
-      "passwordHash": "$2b$12$/aUVtEKK/Y7d2BsCl0fiDucxZ.yK4gS3rb4vJUxKddyXUxnUm1Bf6",
-      "role": "owner",
-      "location": "London",
-      "createdAt": "2026-04-09T22:00:17.239Z",
-      "phone": "",
-      "bio": ""
+      "id": 1003,
+      "firstName": "PawPal",
+      "lastName": "Admin",
+      "email": "pawpaladmin",
+      "passwordHash": "$2b$12$NM/kbIdtSFQhc632c6.GcOyvVhSKp7RmYYTHLb3.tBRSGq87ABBbS",
+      "role": "admin",
+      "status": "Active",
+      "location": "",
+      "createdAt": "2026-04-10T09:31:28.113Z"
     }
   ],
   "bookings": [
@@ -207,20 +206,6 @@
       "price": "£12.00",
       "status": "pending",
       "createdAt": "2026-04-09T21:51:34.949Z"
-    },
-    {
-      "id": 1009,
-      "ownerId": 1002,
-      "minderKey": "sarah",
-      "minderName": "Sarah K.",
-      "minderAvatar": "🧑‍🦱",
-      "service": "Dog Walking",
-      "bookingDate": "2026-04-09",
-      "bookingTime": "08:00",
-      "petNames": "Tasty",
-      "price": "£15.00",
-      "status": "pending",
-      "createdAt": "2026-04-09T22:13:57.777Z"
     }
   ],
   "pets": [
@@ -247,18 +232,7 @@
       "care": "",
       "emoji": "🐦",
       "createdAt": "2026-04-09T22:12:50.983Z"
-    },
-    {
-      "id": 4,
-      "ownerId": 1002,
-      "name": "a",
-      "type": "Rabbit",
-      "breed": "Golden Retriever",
-      "age": "",
-      "medical": "",
-      "care": "",
-      "emoji": "🐇",
-      "createdAt": "2026-04-09T22:18:11.057Z"
     }
-  ]
+  ],
+  "disputes": []
 }

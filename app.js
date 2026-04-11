@@ -489,10 +489,12 @@ async function initActiveBookingPage() {
       const match = loadedMinders.find(x => String(x.id) === String(minderId));
       if (match) {
         resolved = {
-          id:           match.id,
-          name:         match.name || 'Minder',
-          avatar:       '🧑‍🦱',              // emoji fallback for cards
-          profileImage: match.profileImage || '' // real picture (data URI)
+          id:             match.id,
+          name:           match.name || 'Minder',
+          avatar:         '🧑‍🦱',              // emoji fallback for cards
+          profileImage:   match.profileImage || '', // real picture (data URI)
+          availableDays:  Array.isArray(match.availableDays)  ? match.availableDays  : [],
+          availableSlots: Array.isArray(match.availableSlots) ? match.availableSlots : []
         };
       }
     } catch { /* silent — fall through to hardcoded */ }
@@ -543,6 +545,57 @@ function renderBookingPetPicker() {
 
 const BOOKING_TIME_SLOTS = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00'];
 
+// Mirror of backend/lib/availability.js — kept tiny so client and server
+// agree on which HH:MM falls in which slot bucket and which weekday a date
+// belongs to. If you change one side, change both.
+const AVAIL_SLOT_RANGES = {
+  morning:   { start: 8,  end: 12 },
+  afternoon: { start: 12, end: 17 },
+  evening:   { start: 17, end: 20 }
+};
+const AVAIL_DAY_KEYS = ['sun','mon','tue','wed','thu','fri','sat'];
+const AVAIL_DAY_LABELS = { mon:'Monday', tue:'Tuesday', wed:'Wednesday', thu:'Thursday', fri:'Friday', sat:'Saturday', sun:'Sunday' };
+
+function availSlotForTime(timeStr) {
+  const m = String(timeStr || '').match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const h = Number(m[1]) + Number(m[2]) / 60;
+  for (const [key, r] of Object.entries(AVAIL_SLOT_RANGES)) {
+    if (h >= r.start && h < r.end) return key;
+  }
+  return null;
+}
+function availDayForDate(dateStr) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr || ''))) return null;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return AVAIL_DAY_KEYS[dt.getUTCDay()];
+}
+// Pure check used both by the time-grid renderer and the pre-submit guard.
+// Returns { ok: true } or { ok: false, reason: string }.
+function checkMinderAvailability(minder, bookingDate, bookingTime) {
+  if (!minder) return { ok: false, reason: 'Minder not found' };
+  // Legacy demo minders (string ids like 'sarah') have no availability fields
+  // and are not persisted server-side, so skip the check for them.
+  if (typeof minder.id !== 'number') return { ok: true };
+  const days  = Array.isArray(minder.availableDays)  ? minder.availableDays  : [];
+  const slots = Array.isArray(minder.availableSlots) ? minder.availableSlots : [];
+  if (!days.length || !slots.length) {
+    return { ok: false, reason: 'This minder has not published their availability yet' };
+  }
+  const day = availDayForDate(bookingDate);
+  if (!day) return { ok: false, reason: 'Invalid booking date' };
+  if (!days.includes(day)) {
+    return { ok: false, reason: 'This minder is not available on ' + (AVAIL_DAY_LABELS[day] || day) };
+  }
+  const slot = availSlotForTime(bookingTime);
+  if (!slot) return { ok: false, reason: 'Booking time is outside working hours' };
+  if (!slots.includes(slot)) {
+    return { ok: false, reason: 'This minder is not available in the ' + slot + ' on the selected date' };
+  }
+  return { ok: true };
+}
+
 function getSelectedBookingDate() {
   const dateEl = document.querySelector('.date-chip.selected');
   const today = new Date();
@@ -566,7 +619,7 @@ function getSelectedBookingDate() {
 // Both checks are scoped to the date, so slots on other dates are never
 // affected. This replaces the previous logic which treated every slot the
 // user had any booking at as globally blocked.
-function getUnavailableTimes(myBookings, minderTaken, bookingDate) {
+function getUnavailableTimes(myBookings, minderTaken, bookingDate, minderAvailability) {
   const unavailable = new Set();
 
   // (2) Minder already confirmed at this date/slot (comes from the public
@@ -583,15 +636,32 @@ function getUnavailableTimes(myBookings, minderTaken, bookingDate) {
       if (ids.some(id => selected.includes(id))) unavailable.add(b.bookingTime);
     });
   }
+
+  // (3) Outside the minder's published availability — block any slot that
+  // either falls on an unavailable weekday or in an unavailable time bucket.
+  // `minderAvailability` is { availableDays, availableSlots, isReal } where
+  // isReal=false skips the check (legacy demo minders).
+  if (minderAvailability && minderAvailability.isReal) {
+    const days  = Array.isArray(minderAvailability.availableDays)  ? minderAvailability.availableDays  : [];
+    const slots = Array.isArray(minderAvailability.availableSlots) ? minderAvailability.availableSlots : [];
+    const day = availDayForDate(bookingDate);
+    const dayOff = !days.length || !day || !days.includes(day);
+    BOOKING_TIME_SLOTS.forEach(t => {
+      if (dayOff) { unavailable.add(t); return; }
+      const slot = availSlotForTime(t);
+      if (!slot || !slots.includes(slot)) unavailable.add(t);
+    });
+  }
+
   return unavailable;
 }
 
-function renderBookingTimeGrid(myBookings, minderTaken) {
+function renderBookingTimeGrid(myBookings, minderTaken, minderAvailability) {
   const container = document.querySelector('.time-grid');
   if (!container) return;
 
   const bookingDate = getSelectedBookingDate();
-  const unavailableTimes = getUnavailableTimes(myBookings, minderTaken, bookingDate);
+  const unavailableTimes = getUnavailableTimes(myBookings, minderTaken, bookingDate, minderAvailability);
   const currentSelected = document.querySelector('.time-chip.selected')?.textContent.trim();
   const selectedIsUnavailable = currentSelected && unavailableTimes.has(currentSelected);
 
@@ -621,6 +691,7 @@ async function refreshBookingTimeAvailability() {
   const minderId    = (window._activeMinder && window._activeMinder.id) || '';
   let myBookings = [];
   let minderTaken = [];
+  let minderAvailability = { isReal: false, availableDays: [], availableSlots: [] };
   try {
     myBookings = await api.getBookings();
     allBookingsCache = myBookings;
@@ -632,9 +703,14 @@ async function refreshBookingTimeAvailability() {
     try {
       const data = await api.getMinderTakenTimes(minderId, bookingDate);
       minderTaken = Array.isArray(data.taken) ? data.taken : [];
+      minderAvailability = {
+        isReal:         true,
+        availableDays:  Array.isArray(data.availableDays)  ? data.availableDays  : [],
+        availableSlots: Array.isArray(data.availableSlots) ? data.availableSlots : []
+      };
     } catch { /* silent */ }
   }
-  renderBookingTimeGrid(myBookings, minderTaken);
+  renderBookingTimeGrid(myBookings, minderTaken, minderAvailability);
 }
 
 function generateDateChips() {
@@ -1848,6 +1924,16 @@ async function confirmBooking() {
                       String(monthNums[month] || 4).padStart(2,'0') + '-' + day;
 
   if (selectedPets.length === 0) { showToast('❌ Please add a pet before booking'); return; }
+
+  // Pre-submit availability guard. The backend re-validates this on POST
+  // /api/bookings, but checking here gives instant feedback and prevents a
+  // round-trip when the user has somehow landed on an unavailable slot.
+  const availCheck = checkMinderAvailability(m, bookingDate, time);
+  if (!availCheck.ok) {
+    showToast('❌ ' + availCheck.reason);
+    return;
+  }
+
   const selectedPetNames = selectedPets.map(id => (petData[id] && petData[id].name) || id);
   const selectedPetIds = selectedPets.slice();
   const petNames = selectedPetNames.join(' & ');
@@ -2039,6 +2125,20 @@ function openReportMinderModal() {
   openReportModalWith(currentReportTarget);
 }
 
+function openReportFromChat() {
+  if (!activeChat) { showToast('❌ Open a chat first'); return; }
+  const chat = chatListCache.find(c => c.id === activeChat);
+  if (!chat || !chat.other) { showToast('❌ Unable to report this chat'); return; }
+  currentReportTarget = {
+    targetUserId: chat.other.id,
+    targetName:   chat.other.name,
+    targetRole:   null,
+    context:      'chat',
+    chatId:       activeChat
+  };
+  openReportModalWith(currentReportTarget);
+}
+
 function openReportCustomerModal(bookingId, ownerId, ownerName) {
   currentReportTarget = {
     targetUserId: ownerId,
@@ -2085,7 +2185,8 @@ async function submitReportModal() {
       targetName:   currentReportTarget.targetName,
       targetRole:   currentReportTarget.targetRole,
       context:      currentReportTarget.context,
-      bookingId:    currentReportTarget.bookingId
+      bookingId:    currentReportTarget.bookingId,
+      chatId:       currentReportTarget.chatId
     });
     showToast('✅ Report submitted. Our team will review it.');
     closeReportModal();

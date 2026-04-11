@@ -103,7 +103,7 @@ router.post('/disputes', requireAuth, (req, res) => {
   const {
     against, reason,
     targetUserId, targetName, targetRole,
-    context, bookingId
+    context, bookingId, chatId
   } = req.body;
 
   if (!reason || !String(reason).trim()) {
@@ -121,9 +121,28 @@ router.post('/disputes', requireAuth, (req, res) => {
   let resolvedTargetRole = targetRole || null;
   let resolvedContext    = context || 'help-centre';
   let resolvedBookingId  = bookingId != null ? Number(bookingId) : null;
+  let resolvedChatId     = chatId != null ? Number(chatId) : null;
 
+  // Chat-context reports: either party in an existing 1-on-1 chat can
+  // report the other. The chat itself is the link between reporter and
+  // target, so booking validation is skipped for this branch.
+  if (resolvedContext === 'chat') {
+    if (!resolvedChatId) {
+      return res.status(400).json({ error: 'chatId is required for chat reports' });
+    }
+    const chat = db.get('chats').find({ id: resolvedChatId }).value();
+    if (!chat) return res.status(404).json({ error: 'Chat not found' });
+    if (chat.userA !== reporter.id && chat.userB !== reporter.id) {
+      return res.status(403).json({ error: 'You are not a member of this chat' });
+    }
+    const otherId = chat.userA === reporter.id ? chat.userB : chat.userA;
+    const other   = db.get('users').find({ id: otherId }).value();
+    resolvedTargetId   = otherId;
+    resolvedTargetName = other ? ((other.firstName || '') + ' ' + (other.lastName || '')).trim() : (resolvedTargetName || 'Unknown');
+    resolvedTargetRole = other ? other.role : (resolvedTargetRole || null);
+  }
   // Minder → owner reports require a booking that links them.
-  if (reporter.role === 'minder' && resolvedContext !== 'help-centre') {
+  else if (reporter.role === 'minder' && resolvedContext !== 'help-centre') {
     if (!resolvedBookingId) {
       return res.status(400).json({ error: 'Pet minders may only report a customer via an existing booking' });
     }
@@ -142,8 +161,9 @@ router.post('/disputes', requireAuth, (req, res) => {
   }
 
   // Owner → minder reports: if targetUserId is provided, validate it points
-  // at an actual minder account.
-  if (reporter.role === 'owner' && resolvedTargetId != null) {
+  // at an actual minder account. Skipped for chat-context reports because
+  // those are validated above by chat membership and may target either role.
+  if (reporter.role === 'owner' && resolvedTargetId != null && resolvedContext !== 'chat') {
     const target = db.get('users').find({ id: resolvedTargetId }).value();
     if (!target) {
       return res.status(404).json({ error: 'Reported user not found' });
@@ -170,6 +190,7 @@ router.post('/disputes', requireAuth, (req, res) => {
     targetRole:    resolvedTargetRole,
     context:       resolvedContext,
     bookingId:     resolvedBookingId,
+    chatId:        resolvedChatId,
     createdAt:     new Date().toISOString()
   };
   db.get('disputes').push(dispute).write();

@@ -94,7 +94,9 @@
       "priceMin": 10,
       "priceMax": 50,
       "resetCode": null,
-      "resetCodeExpires": null
+      "resetCodeExpires": null,
+      "online": true,
+      "lastSeenAt": "2026-04-11T12:23:54.773Z"
     },
     {
       "id": 1005,
@@ -184,7 +186,9 @@
       "passwordHash": "$2b$12$cezrdaRyK2EI64j7OEia4.SfydVCBYZF19g0qOYHmuWduHcsmbRR6",
       "role": "minder",
       "location": "London",
-      "createdAt": "2026-04-11T11:56:55.908Z"
+      "createdAt": "2026-04-11T11:56:55.908Z",
+      "online": false,
+      "lastSeenAt": "2026-04-11T12:22:51.154Z"
     }
   ],
   "bookings": [
@@ -786,9 +790,18 @@
       "userA": 1004,
       "userB": 1013,
       "createdAt": "2026-04-11T12:10:54.140Z",
-      "lastMessageAt": "2026-04-11T12:10:54.140Z",
-      "lastPreview": ""
+      "lastMessageAt": "2026-04-11T12:23:37.462Z",
+      "lastPreview": "testing"
     }
   ],
-  "messages": []
+  "messages": [
+    {
+      "id": 1,
+      "chatId": 1,
+      "fromUserId": 1004,
+      "text": "testing",
+      "read": false,
+      "createdAt": "2026-04-11T12:23:37.462Z"
+    }
+  ]
 }

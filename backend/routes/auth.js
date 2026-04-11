@@ -70,6 +70,8 @@ router.post('/signup', async (req, res) => {
       location:  'London',
       createdAt: new Date().toISOString()
     };
+    user.online     = true;
+    user.lastSeenAt = new Date().toISOString();
     db.get('users').push(user).write();
 
     const token = jwt.sign({ userId: id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
@@ -98,14 +100,26 @@ router.post('/login', async (req, res) => {
   }
 
   const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+  // Mark the account online + stamp lastSeenAt for the presence window.
+  db.get('users').find({ id: user.id }).assign({ online: true, lastSeenAt: new Date().toISOString() }).write();
   res.json({ token, user: userDTO(user) });
 });
 
-// GET /api/auth/me
+// POST /api/auth/logout — flip online flag off. The JWT itself is stateless,
+// so "logging out" just marks the user offline for presence display.
+router.post('/logout', requireAuth, (req, res) => {
+  db.get('users').find({ id: req.user.userId }).assign({ online: false, lastSeenAt: new Date().toISOString() }).write();
+  res.json({ ok: true });
+});
+
+// GET /api/auth/me — also doubles as a presence heartbeat. Every page load
+// refreshes lastSeenAt so a user who closed the tab naturally ages out of
+// "online" after ~2 minutes without needing an explicit logout.
 router.get('/me', requireAuth, (req, res) => {
-  const user = db.get('users').find({ id: req.user.userId }).value();
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json(userDTO(user));
+  const user = db.get('users').find({ id: req.user.userId });
+  if (!user.value()) return res.status(404).json({ error: 'User not found' });
+  user.assign({ online: true, lastSeenAt: new Date().toISOString() }).write();
+  res.json(userDTO(user.value()));
 });
 
 // PATCH /api/auth/me — update profile fields

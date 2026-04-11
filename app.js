@@ -89,6 +89,7 @@ const api = {
   },
 
   login(email, password)    { return this._req('POST',   '/auth/login',  { email, password }); },
+  logout()                  { return this._req('POST',   '/auth/logout'); },
   signup(data)              { return this._req('POST',   '/auth/signup', data); },
   forgotPassword(email)     { return this._req('POST',   '/auth/forgot-password', { email }); },
   resetPassword(email, code, newPassword) { return this._req('POST', '/auth/reset-password', { email, code, newPassword }); },
@@ -1081,8 +1082,13 @@ function renderChatList() {
   list.innerHTML = chatListCache.map(c => {
     const activeCls = activeChat === c.id ? ' active-chat' : '';
     const unread = (c.unread && activeChat !== c.id) ? '<div class="chat-unread">' + c.unread + '</div>' : '';
+    // Green dot for online counterparts, grey dot for offline. The CSS class
+    // .chat-online already paints green; offline gets an inline grey override.
+    const presenceDot = c.other.online
+      ? '<div class="chat-online"></div>'
+      : '<div class="chat-online" style="background:#9e9e9e"></div>';
     return '<div class="chat-item' + activeCls + '" data-chat-id="' + c.id + '" onclick="openChatInline(' + c.id + ')">'
-      + '<div class="chat-avatar">' + chatAvatarHTML(c.other) + '</div>'
+      + '<div class="chat-avatar">' + chatAvatarHTML(c.other) + presenceDot + '</div>'
       + '<div class="chat-info"><div class="chat-name">' + (c.other.name || 'User') + '</div>'
       + '<div class="chat-preview">' + (c.lastPreview || 'No messages yet') + '</div></div>'
       + '<div class="chat-meta"><div class="chat-time">' + formatChatTime(c.lastMessageAt) + '</div>' + unread + '</div>'
@@ -1110,8 +1116,10 @@ async function openChatInline(chatId) {
     avatarEl.innerHTML = chatAvatarHTML(chat.other);
     document.getElementById('chat-active-name').textContent = chat.other.name || 'User';
   }
-  document.getElementById('chat-active-status').innerHTML = '● Online';
-  document.getElementById('chat-active-status').style.color = '#4caf50';
+  const statusEl = document.getElementById('chat-active-status');
+  const isOnline = !!(chat && chat.other && chat.other.online);
+  statusEl.innerHTML = isOnline ? '● Online' : '● Offline';
+  statusEl.style.color = isOnline ? '#4caf50' : '#9e9e9e';
   const msgs = document.getElementById('chat-active-messages');
   msgs.innerHTML = '<div style="color:var(--bark-light);font-size:13px;text-align:center">Loading…</div>';
   document.getElementById('messages-container').classList.add('chat-open');
@@ -1870,8 +1878,11 @@ function closeConfirmModal() { document.getElementById('confirm-modal').classLis
 function confirmLogout() {
   showConfirmModal('🚪', 'Log Out?', 'Are you sure you want to log out?', function() { logout(); });
 }
-function logout() {
+async function logout() {
   isAdmin = false;
+  // Tell the backend to flip the online flag off before we drop the token,
+  // so any active chat counterpart sees us as offline right away.
+  try { await api.logout(); } catch { /* silent — still clear local session */ }
   api.clearSession();
   window.location.href = '../index.html';
 }

@@ -31,13 +31,24 @@ function findOrCreateChat(userAId, userBId) {
   return chat;
 }
 
+// A user is "online" only when both their online flag is true AND their
+// last heartbeat (lastSeenAt, refreshed on every /auth/me call) is within
+// the presence window. This way a user who closes the tab without hitting
+// logout falls back to offline on their own.
+const PRESENCE_WINDOW_MS = 2 * 60 * 1000;
+function isOnline(u) {
+  if (!u || !u.online) return false;
+  if (!u.lastSeenAt) return false;
+  return (Date.now() - new Date(u.lastSeenAt).getTime()) < PRESENCE_WINDOW_MS;
+}
+
 function otherUserDTO(u) {
   if (!u) return { id: null, name: 'Unknown', avatar: '', online: false };
   return {
     id:     u.id,
     name:   ((u.firstName || '') + ' ' + (u.lastName || '')).trim() || u.email || 'User',
     avatar: u.profileImage || '',
-    online: false
+    online: isOnline(u)
   };
 }
 

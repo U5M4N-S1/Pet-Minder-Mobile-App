@@ -1,16 +1,7 @@
-# Pet-Minder-Mobile-App
-## Node.js
-### check if installed 
-- run `node -v`
-- if installed, should display the version
-- else download it
+trying to make it so a user can be a pet owner and pet minder
 
-### downloading npm  
-- you can download the installer from the official: [Node.js website](https://nodejs.org/en)
-
-
-## running code
-- if you have Node.js installed
-- run `npm install` to install dependencies
-- run `npm start` to start the server
-- go URL shown in the terminal, looks like: https://localhost:xxxx/
+cant book yourself (option is hidden, even if it appears wont allow to book)
+a user can provide no services (or can choose to opt to not provide using a toggle next to the ) if they choose to, they will be automatically removed
+when user signs up to be a minder they auto gets services, walk and home visit
+user can upload certificate if want to do grooming, vet, and training
+these services only appear on their profile once the certificate has been verified

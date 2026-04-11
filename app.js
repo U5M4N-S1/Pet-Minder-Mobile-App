@@ -958,56 +958,6 @@ async function bmConfirm() {
   }
 }
 
-// Renders the minderServices list with trash icons inside the edit profile modal
-function renderMinderServicesList() {
-  // Show trash icons only for dual-role users (owner + minder)
-  const roles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role];
-  if (!roles.includes('owner') || !roles.includes('minder')) return;
-  let container = document.getElementById('minder-services-list');
-  if (!container) {
-    // Insert above the service area field
-    const saField = document.getElementById('edit-service-area');
-    if (!saField) return;
-    const wrapper = document.createElement('div');
-    wrapper.id = 'minder-services-list';
-    wrapper.style.cssText = 'margin-bottom:14px';
-    saField.closest('.field-group').parentNode.insertBefore(wrapper, saField.closest('.field-group'));
-    container = wrapper;
-  }
-  const services = userProfile.minderServices || [];
-  if (services.length === 0) { container.innerHTML = ''; return; }
-  container.innerHTML = '<div style="font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Your Minder Services</div>';
-  services.forEach(svc => {
-    const svcData = BM_ALL_SERVICES.find(s => s.name === svc) || { icon: '🐾', desc: '' };
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:12px;background:white;border:1.5px solid var(--sand-light);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px';
-    row.innerHTML =
-      '<span style="font-size:20px">' + svcData.icon + '</span>' +
-      '<div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--bark)">' + svc + '</div>' +
-      '<div style="font-size:12px;color:var(--bark-light)">' + svcData.desc + '</div></div>' +
-      '<button style="background:none;border:none;font-size:18px;cursor:pointer;color:#e53935;padding:4px" title="Remove service" onclick="bmRemoveService(\'' + svc + '\', this)">🗑</button>';
-    container.appendChild(row);
-  });
-}
-
-async function bmRemoveService(serviceName, btn) {
-  const updated = (userProfile.minderServices || []).filter(s => s !== serviceName);
-  if (updated.length === 0) { showToast('⚠️ You must keep at least one service'); return; }
-  // Optimistic UI
-  const row = btn.closest('div[style]');
-  if (row) row.remove();
-  userProfile.minderServices = updated;
-  store.setUser(userProfile);
-  try {
-    const saved = await api.updateMe({ minderServices: updated });
-    hydrateUserProfile(saved);
-    store.setUser(userProfile);
-    showToast('🗑 Service removed');
-  } catch (err) {
-    showToast('❌ ' + (err.message || 'Failed to remove service'));
-  }
-}
-
 // ===== NAVIGATION =====
 function goToHome() { window.location.href = 'home.html'; }
 function switchTab(tab) {
@@ -1123,12 +1073,17 @@ async function loadMinders() {
   if (!list) return;
   try {
     loadedMinders = await api.getMinders();
-    if (loadedMinders.length === 0) {
+    // Filter out the logged-in user and minders with no services
+    const visibleMinders = loadedMinders.filter(m =>
+      String(m.id) !== String(store.currentUserId()) &&
+      (m.minderServices && m.minderServices.length > 0)
+    );
+    if (visibleMinders.length === 0) {
       list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No pet minders have signed up yet.</div>';
       return;
     }
     list.innerHTML = '';
-    loadedMinders.forEach(m => {
+    visibleMinders.forEach(m => {
       const avatar = m.profileImage
         ? '<img src="' + m.profileImage + '" alt="' + m.name + '" class="avatar-img" style="width:100%;height:100%;object-fit:cover;border-radius:14px">'
         : '👤';
@@ -1358,6 +1313,8 @@ function applyFilters() {
 function renderMinders(minders) {
   const list = document.getElementById('minders-list');
   if (!list) return;
+  // Filter out minders with no services
+  minders = minders.filter(m => m.minderServices && m.minderServices.length > 0);
   if (minders.length === 0) {
     list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No minders match your filters.</div>';
     return;
@@ -1386,7 +1343,9 @@ function renderMinders(minders) {
         (price ? '<div class="minder-list-rate">' + price + '</div>' : '') +
         '<div class="minder-btns">' +
           '<button class="btn-msg-minder" onclick="event.stopPropagation();showToast(\'Chat coming soon!\')">💬 Message</button>' +
-          '<button class="btn-book-sm" onclick="event.stopPropagation();window.location.href=\'active-booking.html?minder=' + m.id + '\'">Book Now</button>' +
+          (String(m.id) !== String(store.currentUserId())
+            ? '<button class="btn-book-sm" onclick="event.stopPropagation();window.location.href=\'active-booking.html?minder=' + m.id + '\'">Book Now</button>'
+            : '<span style="font-size:12px;color:var(--bark-light);padding:10px 12px">Your listing</span>') +
         '</div>' +
       '</div>';
     list.appendChild(card);
@@ -1663,6 +1622,12 @@ async function confirmBooking() {
   const bookingDate = new Date().getFullYear() + '-' +
                       String(monthNums[month] || 4).padStart(2,'0') + '-' + day;
 
+  // Prevent booking yourself
+  if (String(m.id) === String(store.currentUserId())) {
+    showToast('❌ You cannot book yourself as a minder');
+    return;
+  }
+
   if (selectedPets.length === 0) { showToast('❌ Please add a pet before booking'); return; }
   const selectedPetNames = selectedPets.map(id => (petData[id] && petData[id].name) || id);
   const selectedPetIds = selectedPets.slice();
@@ -1881,8 +1846,7 @@ function openEditProfileModal() {
       document.getElementById('edit-price-min').value = userProfile.priceMin != null ? userProfile.priceMin : 0;
       document.getElementById('edit-price-max').value = userProfile.priceMax != null ? userProfile.priceMax : 50;
       document.getElementById('edit-experience').value = userProfile.experience || '';
-      // Render minderServices list with trash icons (for dual-role owners)
-      renderMinderServicesList();
+
     }
   }
   document.getElementById('edit-profile-modal').classList.add('open');

@@ -70,6 +70,11 @@ router.post('/', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'bookingDate must be YYYY-MM-DD' });
   }
 
+  // Prevent a minder from booking themselves
+  if (String(minderKey) === String(req.user.userId)) {
+    return res.status(400).json({ error: 'You cannot book yourself as a minder' });
+  }
+
   // Conflict 1: same pet already has a non-cancelled booking at this slot
   const petConflict = db.get('bookings')
     .filter(b => b.ownerId === req.user.userId

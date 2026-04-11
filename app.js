@@ -2038,6 +2038,20 @@ function openReportMinderModal() {
   openReportModalWith(currentReportTarget);
 }
 
+function openReportFromChat() {
+  if (!activeChat) { showToast('❌ Open a chat first'); return; }
+  const chat = chatListCache.find(c => c.id === activeChat);
+  if (!chat || !chat.other) { showToast('❌ Unable to report this chat'); return; }
+  currentReportTarget = {
+    targetUserId: chat.other.id,
+    targetName:   chat.other.name,
+    targetRole:   null,
+    context:      'chat',
+    chatId:       activeChat
+  };
+  openReportModalWith(currentReportTarget);
+}
+
 function openReportCustomerModal(bookingId, ownerId, ownerName) {
   currentReportTarget = {
     targetUserId: ownerId,
@@ -2084,7 +2098,8 @@ async function submitReportModal() {
       targetName:   currentReportTarget.targetName,
       targetRole:   currentReportTarget.targetRole,
       context:      currentReportTarget.context,
-      bookingId:    currentReportTarget.bookingId
+      bookingId:    currentReportTarget.bookingId,
+      chatId:       currentReportTarget.chatId
     });
     showToast('✅ Report submitted. Our team will review it.');
     closeReportModal();

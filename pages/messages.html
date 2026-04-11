@@ -43,10 +43,11 @@
         <div class="chat-header-bar">
           <button class="chat-back-btn" onclick="closeMobileChat()">←</button>
           <div class="chat-avatar" style="width:38px;height:38px;font-size:18px" id="chat-active-avatar">🧑</div>
-          <div>
+          <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:15px" id="chat-active-name">Chat</div>
             <div class="chat-active-status" id="chat-active-status">● Online</div>
           </div>
+          <button class="chat-report-btn" onclick="openReportFromChat()" aria-label="Report user" title="Report user" style="margin-left:auto;background:none;border:none;font-size:20px;cursor:pointer;padding:6px 10px;color:#c62828">🚩</button>
         </div>
         <div class="chat-messages" id="chat-active-messages"></div>
         <div class="chat-input-bar">
@@ -60,6 +61,30 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- REPORT USER MODAL (shared) -->
+<div class="report-modal-overlay" id="report-modal" onclick="if(event.target===this)closeReportModal()">
+  <div class="report-modal">
+    <div class="report-modal-header">
+      <h3 id="report-modal-title">🚩 Report User</h3>
+      <button class="report-modal-close" onclick="closeReportModal()" aria-label="Close">×</button>
+    </div>
+    <p class="report-modal-target" id="report-modal-target">Reporting: —</p>
+    <div class="field-group"><label>Category</label><select id="report-modal-category">
+      <option>Inappropriate behaviour</option>
+      <option>Harassment or abuse</option>
+      <option>Scam or fraud</option>
+      <option>Unsafe pet care</option>
+      <option>No-show / missed booking</option>
+      <option>Other</option>
+    </select></div>
+    <div class="field-group"><label>What happened?</label><textarea id="report-modal-reason" placeholder="Please describe the issue in detail..." rows="5"></textarea></div>
+    <div class="report-modal-actions">
+      <button class="btn-outline" onclick="closeReportModal()">Cancel</button>
+      <button class="btn-primary" onclick="submitReportModal()">Submit Report</button>
+    </div>
+  </div>
+</div>
 
 <script src="../app.js"></script>
 <script>

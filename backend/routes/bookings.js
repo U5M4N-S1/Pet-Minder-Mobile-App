@@ -1,4 +1,5 @@
 const express    = require('express');
+const notifier = require('../notifier');
 const db         = require('../db');
 const { requireAuth } = require('../middleware/authMiddleware');
 
@@ -41,7 +42,6 @@ router.get('/', requireAuth, (req, res) => {
 // POST /api/bookings
 router.post('/', requireAuth, (req, res) => {
   const { minderKey, minderName, minderAvatar, service, bookingDate, bookingTime, petNames, price } = req.body;
-
   if (!minderKey || !service || !bookingDate || !bookingTime || !petNames) {
     return res.status(400).json({ error: 'minderKey, service, bookingDate, bookingTime, and petNames are required' });
   }
@@ -65,6 +65,7 @@ router.post('/', requireAuth, (req, res) => {
   };
 
   db.get('bookings').push(booking).write();
+  notifier.notifyBookingCreated(booking);
   res.status(201).json(toDTO(booking));
 });
 
@@ -98,6 +99,11 @@ router.patch('/:id', requireAuth, (req, res) => {
 
   if (isMinder && ['confirmed', 'declined'].includes(status)) {
     row.assign({ status }).write();
+    const updated = row.value();
+    if (status === 'confirmed') notifier.notifyBookingAccepted(updated);
+    if (status === 'declined')  notifier.notifyBookingDeclined(updated);
+    if (status === 'cancelled') notifier.notifyBookingCancelled(updated);
+    
     return res.json(toDTO(row.value()));
   }
   if (isOwner && status === 'cancelled') {

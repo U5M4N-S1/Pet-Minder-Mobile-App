@@ -8,6 +8,8 @@ let profileReviewStars = 0;
 let currentEditPetId = null;
 let regPendingPets = []; // pets added during registration (before account exists)
 let regPetNextId = 1;    // local counter for pending pet IDs
+let regPendingCerts = []; // certifications added during registration (pet minder only)
+let regCertNextId = 1;    // local counter for pending cert IDs
 let currentReviewMinder = null;
 let reportSelectedUser = null;
 
@@ -825,6 +827,15 @@ async function handleRegister() {
     showToast('❌ Please add at least one pet before creating your account');
     return;
   }
+  if (selectedRole === 'minder') {
+    const certBox = document.getElementById('reg-minder-extras-box');
+    if (regPendingCerts.length === 0) {
+      showToast('❌ Please upload at least one certification to create a Pet Minder account');
+      if (certBox) certBox.style.borderColor = 'var(--terra)';
+      return;
+    }
+    if (certBox) certBox.style.borderColor = 'var(--sand)';
+  }
 
   try {
     const { token, user } = await api.signup({ firstName, lastName, email, password: pwd, role: selectedRole });
@@ -842,6 +853,8 @@ async function handleRegister() {
     }
     store.setPets(petData);
     regPendingPets = [];
+    regPendingCerts = [];
+    refreshRegCerts();
     goToHome();
   } catch (err) {
     showToast('❌ ' + err.message);
@@ -868,7 +881,49 @@ function selectRole(el, role) {
 
 function handleCertUpload() {
   const input = document.getElementById('cert-upload-input');
-  document.getElementById('cert-file-names').textContent = '✅ ' + Array.from(input.files).map(f => f.name).join(', ');
+  if (!input || !input.files) return;
+  Array.from(input.files).forEach(file => {
+    regPendingCerts.push({
+      id: regCertNextId++,
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      file: file
+    });
+  });
+  // Reset input so the same filename can be re-added after removal
+  input.value = '';
+  refreshRegCerts();
+  const certBox = document.getElementById('reg-minder-extras-box');
+  if (certBox && regPendingCerts.length > 0) certBox.style.borderColor = 'var(--sand)';
+}
+
+function removeRegCert(certId) {
+  regPendingCerts = regPendingCerts.filter(c => c.id !== certId);
+  refreshRegCerts();
+}
+
+function refreshRegCerts() {
+  const grid = document.getElementById('reg-certs-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  regPendingCerts.forEach(c => {
+    const card = document.createElement('div');
+    card.className = 'reg-pet-card';
+    const icon = (c.type && c.type.startsWith('image/')) ? '🖼️' : '📄';
+    card.innerHTML =
+      '<span>' + icon + '</span>' +
+      '<span style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + c.name + '</span>' +
+      '<span class="reg-cert-remove" title="Remove" style="margin-left:4px;color:#e53935;font-weight:700;cursor:pointer">×</span>';
+    card.querySelector('.reg-cert-remove').onclick = (e) => { e.stopPropagation(); removeRegCert(c.id); };
+    grid.appendChild(card);
+  });
+  const label = document.getElementById('cert-file-names');
+  if (label) {
+    label.textContent = regPendingCerts.length > 0
+      ? '✅ ' + regPendingCerts.length + ' file' + (regPendingCerts.length === 1 ? '' : 's') + ' added'
+      : '';
+  }
 }
 
 // ===== NAVIGATION =====

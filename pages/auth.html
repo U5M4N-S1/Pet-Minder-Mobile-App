@@ -64,11 +64,12 @@
       </div>
       <!----remove and ask after account is created-->
       <div id="reg-minder-extras" style="display:none">
-        <div class="reg-extras-box">
-          <p class="reg-extras-title">📜 Upload Certifications</p>
-          <p class="reg-extras-sub">Upload your qualifications &amp; certifications</p>
-          <label class="file-upload-label"><input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple id="cert-upload-input" onchange="handleCertUpload()" style="display:none">📎 Choose Files</label>
+        <div class="reg-extras-box" id="reg-minder-extras-box">
+          <p class="reg-extras-title">📜 Upload Certifications <span style="color:var(--terra)">*</span></p>
+          <p class="reg-extras-sub">Required — add your qualifications &amp; certifications. You can add more than one.</p>
+          <label class="file-upload-label"><input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple id="cert-upload-input" onchange="handleCertUpload()" style="display:none">＋ Add Certification</label>
           <div id="cert-file-names" style="margin-top:8px;font-size:12px;color:var(--moss)"></div>
+          <div id="reg-certs-grid" class="reg-pets-grid"></div>
         </div>
       </div>
       <button class="btn-primary" onclick="handleRegister()">Create Account</button>

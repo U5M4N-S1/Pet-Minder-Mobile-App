@@ -16,7 +16,6 @@ let userProfile = {
   // Minder-specific (blank for owners)
   serviceArea: '', petsCaredFor: '', services: '', rate: '', experience: '',
   priceMin: 0, priceMax: 50,
-  minderServices: []
 };
 
 // ===== LOCAL STORE =====
@@ -138,7 +137,6 @@ function hydrateUserProfile(u) {
   userProfile.experience   = u.experience   || '';
   userProfile.priceMin     = u.priceMin != null ? u.priceMin : 0;
   userProfile.priceMax     = u.priceMax != null ? u.priceMax : 50;
-  userProfile.minderServices = Array.isArray(u.minderServices) ? u.minderServices : [];
 }
 (function initUserFromCache() { hydrateUserProfile(store.getUser()); }());
 
@@ -863,15 +861,13 @@ function handleCertUpload() {
 
 // ===== BECOME A MINDER =====
 const BM_ALL_SERVICES = [
-  { name: 'Dog Walking',  icon: '🚶', desc: '1 hour walk',   basic: true  },
+  { name: 'Walking',  icon: '🚶', desc: '1 hour walk',   basic: true  },
   { name: 'Home Visit',   icon: '🏠', desc: '30 min check-in',     basic: true  },
 ];
 let _bmHasQuals = false;
-let _bmSelected = [];
 
 function openBecomeMinder() {
   _bmHasQuals = false;
-  _bmSelected = [];
   document.getElementById('bm-step-1').style.display       = 'block';
   document.getElementById('bm-step-quals').style.display   = 'none';
   document.getElementById('bm-step-services').style.display = 'none';
@@ -923,9 +919,9 @@ function bmShowStep3() {
     ? 'thank you for providing your qualifications! we will look them over and get back to you, making the following services available for you to offer.'
     : 'Without qualifications you can offer basic services. Upload qualifications later to unlock more.';
 
-  prev.onclick = _bmHasQuals ? function() { upload(); bmShowStep2(true); } : function() { openBecomeMinder(); };
+  prev.onclick = _bmHasQuals ? function() { bmShowStep2(true); } : function() { /*upload();*/ openBecomeMinder(); };
 
-  _bmSelected = available.map(s => s.name); // pre-select all available
+  services = available.map(s => s.name); // pre-select all available
   const container = document.getElementById('bm-service-options');
   container.innerHTML = '';
   available.forEach(s => {
@@ -944,19 +940,19 @@ function bmShowStep3() {
 
 function bmToggleService(el, name) {
   const isSelected = el.classList.contains('selected');
-  if (isSelected && _bmSelected.length === 1) {
-    showToast('⚠️ Select at least one service'); return;
-  }
   el.classList.toggle('selected');
   el.querySelector('.bm-check').style.opacity = el.classList.contains('selected') ? '1' : '0.2';
-  if (el.classList.contains('selected')) { if (!_bmSelected.includes(name)) _bmSelected.push(name); }
-  else { _bmSelected = _bmSelected.filter(n => n !== name); }
+  if (el.classList.contains('selected')) { if (!services.includes(name)) services.push(name); }
+  else { services = services.filter(n => n !== name); }
 }
 
 async function bmConfirm() {
-  if (_bmSelected.length === 0) { showToast('❌ Please select at least one service'); return; }
+  if (services.length === 0) { showToast('❌ Please select at least one service'); return; }
   try {
-    const saved = await api.updateMe({ addMinderRole: true, minderServices: _bmSelected });
+    const saved = await api.updateMe({
+    addMinderRole: true,
+    services: services.join(', ')
+  });
     hydrateUserProfile(saved);
     store.setUser(userProfile);
     closeBecomeMinder();

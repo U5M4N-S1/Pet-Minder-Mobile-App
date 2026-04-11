@@ -12,10 +12,11 @@ removing all services from profile doesnt remove from find minders
 if yes have qualifications it still allows to pick grooming, vet, and training
 
 now: 
-- when selecting services on become minder it crosses over 
+- when selecting services on become minder it crosses over (✅)
 - allow minders to have a toggle button
 - fix notif button in profile section
 - make a review system for admins for qualifications
 - admins should be able to enable services for minders
 - minder can add more qualifications (✅)
 - make an upload function
+- add the other when user becomes minder

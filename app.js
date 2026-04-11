@@ -249,7 +249,7 @@ function renderBookingCards(containerId, bookings) {
     // owner-side cards keep the existing minder name display.
     const headline = b._recipient ? (b.ownerName || 'Pet Owner') : (b.minderName || 'Minder');
     return `
-    <div class="booking-card${recipientCls}" onclick="openBookingDetail(${b.id})" style="cursor:pointer">
+    <div class="booking-card${recipientCls}" onclick="openBookingDetail(${b.id}, ${b._recipient})" style="cursor:pointer">
       <div class="booking-date-block"><div class="booking-date-day">${b.day}</div><div class="booking-date-month">${b.month}</div></div>
       <div class="booking-date-sep"></div>
       <div class="booking-avatar">${bookingAvatarHTML(b)}</div>
@@ -263,7 +263,7 @@ function renderBookingCards(containerId, bookings) {
   }).join('');
 }
 
-function openBookingDetail(bookingId) {
+function openBookingDetail(bookingId, recipientBool) {
   const b = allBookingsCache.find(x => x.id === bookingId);
   if (!b) return;
   const el = document.getElementById('booking-detail-content');
@@ -284,7 +284,7 @@ function openBookingDetail(bookingId) {
         (b.price ? '<div class="info-row" style="display:flex;justify-content:space-between;padding:10px 0"><span style="color:var(--bark-light);font-size:13px">Price</span><span style="font-weight:700;font-size:16px;color:var(--terra)">' + b.price + '</span></div>' : '') +
       '</div>' +
     '</div>' +
-    (canCancel ? '<button class="btn-primary" style="width:100%;margin-top:20px;padding:14px;background:#008000">Confirm Completion</button>' : '') +
+    (canCancel && recipientBool ? '<button class="btn-primary" style="width:100%;margin-top:20px;padding:14px;background:#008000">Confirm Completion</button>' : '') +
     (canCancel ? '<button class="btn-primary" style="width:100%;margin-top:20px;padding:14px;background:#e53935" onclick="cancelBooking(' + b.id + ')">Cancel Booking</button>' : '');
   document.getElementById('bookings-detail-section').style.display = 'block';
   document.getElementById('bookings-main-section').style.display = 'none';

@@ -863,11 +863,8 @@ function handleCertUpload() {
 
 // ===== BECOME A MINDER =====
 const BM_ALL_SERVICES = [
-  { name: 'Dog Walking',  icon: '🚶', desc: '1 hour walk with GPS tracking',   basic: true  },
-  { name: 'Home Visit',   icon: '🏠', desc: '30 min check-in at your home',     basic: true  },
-  { name: 'Grooming',     icon: '🛁', desc: 'Full wash, dry & brush',           basic: false },
-  { name: 'Vet Escort',   icon: '🏥', desc: 'Take pet to & from the vet',       basic: false },
-  { name: 'Training',     icon: '🎓', desc: 'Basic obedience training sessions', basic: false },
+  { name: 'Dog Walking',  icon: '🚶', desc: '1 hour walk',   basic: true  },
+  { name: 'Home Visit',   icon: '🏠', desc: '30 min check-in',     basic: true  },
 ];
 let _bmHasQuals = false;
 let _bmSelected = [];
@@ -882,6 +879,16 @@ function openBecomeMinder() {
 }
 function closeBecomeMinder() {
   document.getElementById('become-minder-modal').classList.remove('open');
+}
+
+function openQualifications(){
+  const replaceNext = document.getElementById('display-Next');
+  document.getElementById('become-minder-modal').classList.add('open');
+  document.getElementById('bm-step-1').style.display = 'none';
+  document.getElementById('bm-step-quals').style.display  = 'block';
+  replaceNext.textContent = 'upload';
+  replaceNext.onclick = function() { upload(); };
+  document.getElementById('display-Back').style.display = 'none';
 }
 
 function bmShowStep2(hasQuals) {
@@ -909,11 +916,14 @@ function bmShowStep3() {
   document.getElementById('bm-step-services').style.display = 'block';
 
   // Show all services if qualified, basic-only otherwise
-  const available = _bmHasQuals ? BM_ALL_SERVICES : BM_ALL_SERVICES.filter(s => s.basic);
+  const available = BM_ALL_SERVICES.filter(s => s.basic);
   const hint = document.getElementById('bm-services-hint');
+  const prev = document.getElementById('bm-back-btn');
   hint.textContent = _bmHasQuals
-    ? 'Select all services you can offer.'
+    ? 'thank you for providing your qualifications! we will look them over and get back to you, making the following services available for you to offer.'
     : 'Without qualifications you can offer basic services. Upload qualifications later to unlock more.';
+
+  prev.onclick = _bmHasQuals ? function() { upload(); bmShowStep2(true); } : function() { openBecomeMinder(); };
 
   _bmSelected = available.map(s => s.name); // pre-select all available
   const container = document.getElementById('bm-service-options');
@@ -1015,6 +1025,11 @@ function renderProfileAvatar() {
   if (bmItem) {
     bmItem.style.display = (isOwner && !isMinder) ? 'flex' : 'none';
   }
+
+  const qualItem = document.getElementById('upload-quals-item');
+  if(isMinder){
+    qualItem.style.display = 'flex';
+  } 
 }
 
 async function handleAvatarUpload(event) {
@@ -1073,17 +1088,12 @@ async function loadMinders() {
   if (!list) return;
   try {
     loadedMinders = await api.getMinders();
-    // Filter out the logged-in user and minders with no services
-    const visibleMinders = loadedMinders.filter(m =>
-      String(m.id) !== String(store.currentUserId()) &&
-      (m.minderServices && m.minderServices.length > 0)
-    );
-    if (visibleMinders.length === 0) {
+    if (loadedMinders.length === 0) {
       list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No pet minders have signed up yet.</div>';
       return;
     }
     list.innerHTML = '';
-    visibleMinders.forEach(m => {
+    loadedMinders.forEach(m => {
       const avatar = m.profileImage
         ? '<img src="' + m.profileImage + '" alt="' + m.name + '" class="avatar-img" style="width:100%;height:100%;object-fit:cover;border-radius:14px">'
         : '👤';
@@ -1313,8 +1323,6 @@ function applyFilters() {
 function renderMinders(minders) {
   const list = document.getElementById('minders-list');
   if (!list) return;
-  // Filter out minders with no services
-  minders = minders.filter(m => m.minderServices && m.minderServices.length > 0);
   if (minders.length === 0) {
     list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No minders match your filters.</div>';
     return;

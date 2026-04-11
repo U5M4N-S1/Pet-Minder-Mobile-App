@@ -97,6 +97,10 @@ const api = {
   getBookings()             { return this._req('GET',    '/bookings'); },
   getBookingRequests()      { return this._req('GET',    '/bookings/requests'); },
   updateBooking(id, data)   { return this._req('PATCH',  '/bookings/' + id, data); },
+  getMinderTakenTimes(minderId, date) { return this._req('GET', '/bookings/minder/' + minderId + '/taken?date=' + encodeURIComponent(date)); },
+  getNotifications()        { return this._req('GET',    '/notifications'); },
+  markNotificationRead(id)  { return this._req('PATCH',  '/notifications/' + id, { read: true }); },
+  deleteNotification(id)    { return this._req('DELETE', '/notifications/' + id); },
   createBooking(data)       { return this._req('POST',   '/bookings', data); },
   getPets()                 { return this._req('GET',    '/pets'); },
   createPet(data)           { return this._req('POST',   '/pets', data); },
@@ -275,15 +279,23 @@ async function respondToBooking(bookingId, status, btnEl) {
   }
 }
 
-// ===== NOTIFICATIONS (minder booking request count) =====
+// ===== NOTIFICATIONS =====
+// Minders see incoming booking requests. Owners see system notifications
+// (e.g. "your request was declined because the minder accepted another
+// booking for that slot"). Both come through the same notification UI.
 let notifCount = 0;
-let notifRequests = []; // cached for rendering the list
+let notifRequests = [];      // minder: pending booking requests
+let notifOwnerMessages = []; // owner: declined/other notifications from /api/notifications
 
 async function loadNotificationCount() {
-  if (userProfile.role !== 'minder') return;
   try {
-    notifRequests = await api.getBookingRequests();
-    notifCount = notifRequests.filter(b => b.status === 'pending').length;
+    if (userProfile.role === 'minder') {
+      notifRequests = await api.getBookingRequests();
+      notifCount = notifRequests.filter(b => b.status === 'pending').length;
+    } else {
+      notifOwnerMessages = await api.getNotifications();
+      notifCount = notifOwnerMessages.filter(n => !n.read).length;
+    }
     const badge = document.getElementById('notif-badge');
     if (badge) {
       badge.textContent = notifCount;
@@ -293,36 +305,59 @@ async function loadNotificationCount() {
 }
 
 function openNotifications() {
-  if (userProfile.role !== 'minder') {
-    showToast('No new notifications');
-    return;
-  }
   previousScreen = currentScreen;
-  // Render notification list
   const list = document.getElementById('notif-list');
-  if (list) {
-    if (notifRequests.length === 0) {
-      list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No notifications yet.</div>';
-    } else {
-      const pending = notifRequests.filter(b => b.status === 'pending');
-      const rest    = notifRequests.filter(b => b.status !== 'pending');
-      const all     = pending.concat(rest); // pending first
-      list.innerHTML = all.map(b => {
-        const isPending = b.status === 'pending';
-        return '<div class="menu-item" style="' + (isPending ? 'border-left:3px solid var(--terra);' : 'opacity:0.7;') + '" onclick="window.location.href=\'bookings.html?tab=requests\'">' +
-          '<span class="menu-icon">' + (isPending ? '🔔' : (b.status === 'confirmed' ? '✅' : '❌')) + '</span>' +
-          '<span class="menu-label" style="display:flex;flex-direction:column;gap:2px">' +
-            '<span style="font-weight:600;font-size:14px">' + (b.ownerName || 'Pet Owner') + '</span>' +
-            '<span style="font-size:12px;color:var(--bark-light)">' + b.service + ' · ' + b.day + ' ' + b.month + ' · ' + b.price + '</span>' +
-            '<span style="font-size:11px;color:' + (isPending ? 'var(--terra)' : 'var(--bark-light)') + ';font-weight:' + (isPending ? '600' : '400') + '">' + (statusLabels[b.status] || b.status) + '</span>' +
-          '</span>' +
-          '<span class="menu-arrow">›</span>' +
-        '</div>';
-      }).join('');
+
+  if (userProfile.role === 'minder') {
+    if (list) {
+      if (notifRequests.length === 0) {
+        list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No notifications yet.</div>';
+      } else {
+        const pending = notifRequests.filter(b => b.status === 'pending');
+        const rest    = notifRequests.filter(b => b.status !== 'pending');
+        const all     = pending.concat(rest);
+        list.innerHTML = all.map(b => {
+          const isPending = b.status === 'pending';
+          return '<div class="menu-item" style="' + (isPending ? 'border-left:3px solid var(--terra);' : 'opacity:0.7;') + '" onclick="window.location.href=\'bookings.html?tab=requests\'">' +
+            '<span class="menu-icon">' + (isPending ? '🔔' : (b.status === 'confirmed' ? '✅' : '❌')) + '</span>' +
+            '<span class="menu-label" style="display:flex;flex-direction:column;gap:2px">' +
+              '<span style="font-weight:600;font-size:14px">' + (b.ownerName || 'Pet Owner') + '</span>' +
+              '<span style="font-size:12px;color:var(--bark-light)">' + b.service + ' · ' + b.day + ' ' + b.month + ' · ' + b.price + '</span>' +
+              '<span style="font-size:11px;color:' + (isPending ? 'var(--terra)' : 'var(--bark-light)') + ';font-weight:' + (isPending ? '600' : '400') + '">' + (statusLabels[b.status] || b.status) + '</span>' +
+            '</span>' +
+            '<span class="menu-arrow">›</span>' +
+          '</div>';
+        }).join('');
+      }
+    }
+  } else {
+    // Owner view — system notifications from /api/notifications
+    if (list) {
+      if (!notifOwnerMessages || notifOwnerMessages.length === 0) {
+        list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No notifications yet.</div>';
+      } else {
+        list.innerHTML = notifOwnerMessages.map(n => {
+          const unread = !n.read;
+          const icon = n.type === 'booking_declined' ? '❌' : '🔔';
+          return '<div class="menu-item" style="' + (unread ? 'border-left:3px solid var(--terra);' : 'opacity:0.75;') + '" onclick="handleOwnerNotifClick(' + n.id + ')">' +
+            '<span class="menu-icon">' + icon + '</span>' +
+            '<span class="menu-label" style="display:flex;flex-direction:column;gap:2px">' +
+              '<span style="font-weight:600;font-size:14px">' + (n.title || 'Notification') + '</span>' +
+              '<span style="font-size:12px;color:var(--bark-light);line-height:1.4">' + (n.message || '') + '</span>' +
+            '</span>' +
+            '<span class="menu-arrow">›</span>' +
+          '</div>';
+        }).join('');
+      }
     }
   }
   show('notifications');
   currentScreen = 'notifications';
+}
+
+async function handleOwnerNotifClick(id) {
+  try { await api.markNotificationRead(id); } catch { /* silent */ }
+  window.location.href = 'bookings.html';
 }
 
 // Active booking page
@@ -381,26 +416,51 @@ function getSelectedBookingDate() {
   return `${year}-${String(monthNums[month] || today.getMonth() + 1).padStart(2,'0')}-${day}`;
 }
 
-function getUnavailableTimes(bookings, bookingDate) {
-  if (!Array.isArray(bookings)) return new Set();
-  return new Set(bookings
-    .filter(b => b.bookingDate === bookingDate && b.status !== 'cancelled')
-    .map(b => b.bookingTime)
-  );
+// Returns the set of time slots that must be marked unavailable on the
+// active-booking page. A slot is unavailable in exactly two cases:
+//
+//  1. SAME-PET: one of the currently-selected pets already has a
+//     non-cancelled booking at (bookingDate, slot). Different pets on the
+//     same account can still share the same slot.
+//  2. SAME-MINDER-ACCEPTED: this specific minder already has a confirmed
+//     booking at (bookingDate, slot) with anyone. Pending requests from
+//     other users do NOT block the slot — only an already-accepted one.
+//
+// Both checks are scoped to the date, so slots on other dates are never
+// affected. This replaces the previous logic which treated every slot the
+// user had any booking at as globally blocked.
+function getUnavailableTimes(myBookings, minderTaken, bookingDate) {
+  const unavailable = new Set();
+
+  // (2) Minder already confirmed at this date/slot (comes from the public
+  // /bookings/minder/:id/taken endpoint — see refreshBookingTimeAvailability)
+  if (Array.isArray(minderTaken)) minderTaken.forEach(t => unavailable.add(t));
+
+  // (1) Currently-selected pets already booked at this date/slot
+  const selected = (selectedPets || []).map(String);
+  if (selected.length && Array.isArray(myBookings)) {
+    myBookings.forEach(b => {
+      if (b.bookingDate !== bookingDate) return;
+      if (b.status === 'cancelled' || b.status === 'declined') return;
+      const ids = Array.isArray(b.petIds) ? b.petIds.map(String) : [];
+      if (ids.some(id => selected.includes(id))) unavailable.add(b.bookingTime);
+    });
+  }
+  return unavailable;
 }
 
-function renderBookingTimeGrid(bookings) {
+function renderBookingTimeGrid(myBookings, minderTaken) {
   const container = document.querySelector('.time-grid');
   if (!container) return;
 
   const bookingDate = getSelectedBookingDate();
-  const unavailableTimes = getUnavailableTimes(bookings, bookingDate);
+  const unavailableTimes = getUnavailableTimes(myBookings, minderTaken, bookingDate);
   const currentSelected = document.querySelector('.time-chip.selected')?.textContent.trim();
   const selectedIsUnavailable = currentSelected && unavailableTimes.has(currentSelected);
 
   container.innerHTML = BOOKING_TIME_SLOTS.map((slot, index) => {
     const unavailable = unavailableTimes.has(slot);
-    const isSelected = (!currentSelected && !unavailable && index === 0) || currentSelected === slot;
+    const isSelected = (!currentSelected && !unavailable && index === 0) || (currentSelected === slot && !unavailable);
     const classes = ['time-chip'];
     if (isSelected) classes.push('selected');
     if (unavailable) classes.push('unavailable');
@@ -420,13 +480,24 @@ function renderBookingTimeGrid(bookings) {
 async function refreshBookingTimeAvailability() {
   const container = document.querySelector('.time-grid');
   if (!container) return;
+  const bookingDate = getSelectedBookingDate();
+  const minderId    = (window._activeMinder && window._activeMinder.id) || '';
+  let myBookings = [];
+  let minderTaken = [];
   try {
-    const bookings = await api.getBookings();
-    allBookingsCache = bookings;
-    renderBookingTimeGrid(bookings);
-  } catch {
-    renderBookingTimeGrid([]);
+    myBookings = await api.getBookings();
+    allBookingsCache = myBookings;
+  } catch { /* silent — treat as empty */ }
+  // Only real (backend) minders have a numeric id; legacy hardcoded keys
+  // like 'sarah' won't resolve on the server, so skip the taken-times call
+  // for those and fall back to pet-only checks.
+  if (minderId && /^\d+$/.test(String(minderId))) {
+    try {
+      const data = await api.getMinderTakenTimes(minderId, bookingDate);
+      minderTaken = Array.isArray(data.taken) ? data.taken : [];
+    } catch { /* silent */ }
   }
+  renderBookingTimeGrid(myBookings, minderTaken);
 }
 
 function generateDateChips() {
@@ -1298,6 +1369,9 @@ function togglePetSelect(el, petId) {
   else { check.style.opacity = '0.3'; selectedPets = selectedPets.filter(p => p !== petId); }
   if (selectedPets.length === 0) { el.classList.add('selected'); check.style.opacity = '1'; selectedPets.push(petId); showToast('You must select at least one pet'); return; }
   updateBookingSummary();
+  // Selected pets changed — recompute which slots are blocked because the
+  // same-pet conflict set now looks different.
+  refreshBookingTimeAvailability();
 }
 function updateBookingSummary() {
   const petsEl = document.getElementById('summary-pets');
@@ -1356,15 +1430,17 @@ async function confirmBooking() {
   const price   = totalEl ? totalEl.textContent : '£15.00';
 
   try {
+    // Client-side same-pet pre-check for a nicer error message. The real
+    // authoritative conflict enforcement (same-pet AND same-minder-accepted)
+    // happens in POST /api/bookings on the server.
     const existingBookings = await api.getBookings();
     const conflict = existingBookings.find(b => {
       if (b.bookingDate !== bookingDate || b.bookingTime !== time) return false;
-
+      if (b.status === 'cancelled' || b.status === 'declined') return false;
       const existingIds = Array.isArray(b.petIds) ? b.petIds.map(String) : [];
       if (existingIds.length && selectedPetIds.length) {
         return existingIds.some(id => selectedPetIds.map(String).includes(id));
       }
-
       const existingNames = String(b.petNames || '').split(/\s*&\s*/).map(n => n.trim().toLowerCase());
       return selectedPetNames.some(name => existingNames.includes(name.trim().toLowerCase()));
     });

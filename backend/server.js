@@ -16,9 +16,10 @@ app.use('/api/auth', authRoutes);
 // The /minders handler inside auth.js is router.get('/minders', ...),
 // so mount the router at /api so the full path is /api/minders (not /api/minders/minders).
 app.use('/api', authRoutes);
-app.use('/api/bookings', require('./routes/bookings'));
-app.use('/api/pets',     require('./routes/pets'));
-app.use('/api/admin',    require('./routes/admin'));
+app.use('/api/bookings',      require('./routes/bookings'));
+app.use('/api/pets',          require('./routes/pets'));
+app.use('/api/admin',         require('./routes/admin'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 // Catch-all: any unmatched path serves the landing page
 app.get('*', (_req, res) => {

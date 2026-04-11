@@ -59,12 +59,17 @@
   try {
     const bookings = await api.getBookings();
     allBookingsCache = bookings;
-    renderBookingCards('bookings-upcoming-list', bookings.filter(b => b.status !== 'completed' && b.status !== 'cancelled'));
-    renderBookingCards('bookings-past-list',     bookings.filter(b => b.status === 'completed' || b.status === 'cancelled'));
+    renderBookingCards('bookings-upcoming-list', filterUpcoming(bookings));
+    renderBookingCards('bookings-past-list',     filterPast(bookings));
   } catch {
     renderBookingCards('bookings-upcoming-list', upcomingBookings);
     renderBookingCards('bookings-past-list',     pastBookings);
   }
+
+  // If the logged-in user is a minder, also pre-load their pending
+  // requests tab so switching to it is instant and the pending count is
+  // correct from the moment the page renders.
+  if (userProfile.role === 'minder') loadBookingRequests();
 
   // Show Requests tab for minders
   if (userProfile.role === 'minder') {

@@ -17,11 +17,24 @@ function nextNotifId() {
 
 function toDTO(b) {
   const d = new Date(b.bookingDate + 'T00:00:00');
+  // Re-hydrate the minder's live name + profile image from the users
+  // table so the booking card always shows the current picture even if
+  // the minder updated it after the booking was created.
+  let liveName  = b.minderName;
+  let liveImage = b.minderImage || '';
+  if (b.minderKey != null) {
+    const mu = db.get('users').find({ id: Number(b.minderKey) }).value();
+    if (mu) {
+      liveName  = ((mu.firstName || '') + ' ' + (mu.lastName || '')).trim() || liveName;
+      liveImage = mu.profileImage || liveImage;
+    }
+  }
   return {
     id:          b.id,
     minder:      b.minderKey,
-    minderName:  b.minderName,
-    avatar:      b.minderAvatar,
+    minderName:  liveName,
+    minderImage: liveImage,
+    avatar:      b.minderAvatar || '🧑‍🦱',
     day:         String(d.getDate()).padStart(2, '0'),
     month:       MONTHS[d.getMonth()],
     petEmoji:    b.petNames.toLowerCase().includes('luna') ? '🐈' : '🐕',
@@ -46,7 +59,7 @@ router.get('/', requireAuth, (req, res) => {
 
 // POST /api/bookings
 router.post('/', requireAuth, (req, res) => {
-  const { minderKey, minderName, minderAvatar, service, bookingDate, bookingTime, petNames, petIds, price } = req.body;
+  const { minderKey, minderName, minderAvatar, minderImage, service, bookingDate, bookingTime, petNames, petIds, price } = req.body;
   const selectedPetIds = Array.isArray(petIds) ? petIds.map(String).filter(Boolean) : [];
   const selectedPetNames = String(petNames || '').split(/\s*&\s*/).map(n => n.trim().toLowerCase()).filter(Boolean);
 
@@ -90,12 +103,26 @@ router.post('/', requireAuth, (req, res) => {
     return res.status(409).json({ error: 'This minder is already booked at that date/time. Please choose another slot.' });
   }
 
+  // Resolve the authoritative minder info from the users table when the
+  // minderKey points at a real account, so the stored booking always uses
+  // the correct name + profile image regardless of what the client sent.
+  let resolvedName  = minderName  || 'Minder';
+  let resolvedImage = minderImage || '';
+  if (minderKey != null && /^\d+$/.test(String(minderKey))) {
+    const mu = db.get('users').find({ id: Number(minderKey) }).value();
+    if (mu) {
+      resolvedName  = ((mu.firstName || '') + ' ' + (mu.lastName || '')).trim() || resolvedName;
+      resolvedImage = mu.profileImage || resolvedImage;
+    }
+  }
+
   const booking = {
     id:           nextId(),
     ownerId:      req.user.userId,
     minderKey:    minderKey,
-    minderName:   minderName  || 'Minder',
+    minderName:   resolvedName,
     minderAvatar: minderAvatar || '🧑‍🦱',
+    minderImage:  resolvedImage,
     service,
     bookingDate,
     bookingTime,

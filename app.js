@@ -168,20 +168,49 @@ const statusLabels = { confirmed: 'Confirmed', pending: 'Pending', completed: 'D
 // All loaded bookings — stored so the detail view can look them up by id
 let allBookingsCache = [];
 
+// ── Booking filters (single source of truth) ────────────────────────────────
+// Active lists never include declined/cancelled/completed. Pending stays in
+// the owner's Upcoming view (owners have no Requests tab); accepted bookings
+// always live in Upcoming. Past contains everything that is no longer active.
+const ACTIVE_STATUSES = ['pending', 'confirmed'];
+const PAST_STATUSES   = ['completed', 'cancelled', 'declined'];
+function filterUpcoming(bookings) { return (bookings || []).filter(b => ACTIVE_STATUSES.includes(b.status)); }
+function filterPast(bookings)     { return (bookings || []).filter(b => PAST_STATUSES.includes(b.status)); }
+
+// Render a minder's picture as either an emoji/glyph or an <img> if we have
+// a real data-URI profile image stored on the booking. Falls back to the
+// default 👤 glyph if nothing sensible is available.
+function bookingAvatarHTML(b) {
+  const img = b && b.minderImage;
+  if (img && typeof img === 'string' && img.startsWith('data:image/')) {
+    return '<img src="' + img + '" alt="' + (b.minderName || 'Minder') + '" class="avatar-img">';
+  }
+  const glyph = (b && b.avatar) ? b.avatar : '👤';
+  // If someone put a data URI into the legacy avatar field, render that too
+  if (typeof glyph === 'string' && glyph.startsWith('data:image/')) {
+    return '<img src="' + glyph + '" alt="' + (b.minderName || 'Minder') + '" class="avatar-img">';
+  }
+  return glyph;
+}
+
 function renderBookingCards(containerId, bookings) {
   const el = document.getElementById(containerId);
   if (!el) return;
+  if (!bookings || bookings.length === 0) {
+    el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No bookings to show.</div>';
+    return;
+  }
   el.innerHTML = bookings.map(b => `
     <div class="booking-card" onclick="openBookingDetail(${b.id})" style="cursor:pointer">
       <div class="booking-date-block"><div class="booking-date-day">${b.day}</div><div class="booking-date-month">${b.month}</div></div>
       <div class="booking-date-sep"></div>
-      <div class="booking-avatar">${b.avatar}</div>
+      <div class="booking-avatar">${bookingAvatarHTML(b)}</div>
       <div class="booking-info">
-        <div class="booking-minder">${b.minderName}</div>
+        <div class="booking-minder">${b.minderName || 'Minder'}</div>
         <div class="booking-detail">${b.petEmoji} ${b.petDetail}</div>
         ${b.price ? `<div class="booking-detail" style="margin-top:4px;color:var(--terra)">${b.price}</div>` : ''}
       </div>
-      <span class="booking-status status-${b.status}">${statusLabels[b.status]}</span>
+      <span class="booking-status status-${b.status}">${statusLabels[b.status] || b.status}</span>
     </div>`).join('');
 }
 
@@ -194,7 +223,7 @@ function openBookingDetail(bookingId) {
   el.innerHTML =
     '<div style="background:white;border-radius:var(--radius);padding:20px;box-shadow:0 2px 12px var(--shadow)">' +
       '<div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">' +
-        '<div class="booking-avatar" style="width:56px;height:56px;font-size:28px;flex-shrink:0">' + (b.avatar || '👤') + '</div>' +
+        '<div class="booking-avatar" style="width:56px;height:56px;font-size:28px;flex-shrink:0;overflow:hidden">' + bookingAvatarHTML(b) + '</div>' +
         '<div><div style="font-family:\'Playfair Display\',serif;font-size:18px;font-weight:600;color:var(--bark)">' + b.minderName + '</div>' +
         '<span class="booking-status status-' + b.status + '" style="margin-top:4px;display:inline-block">' + (statusLabels[b.status] || b.status) + '</span></div>' +
       '</div>' +
@@ -226,8 +255,8 @@ function cancelBooking(bookingId) {
       try {
         const bookings = await api.getBookings();
         allBookingsCache = bookings;
-        renderBookingCards('bookings-upcoming-list', bookings.filter(b => b.status !== 'completed' && b.status !== 'cancelled'));
-        renderBookingCards('bookings-past-list', bookings.filter(b => b.status === 'completed' || b.status === 'cancelled'));
+        renderBookingCards('bookings-upcoming-list', filterUpcoming(bookings));
+        renderBookingCards('bookings-past-list',     filterPast(bookings));
       } catch { /* silent */ }
     } catch (err) {
       showToast('❌ ' + (err.message || 'Failed to cancel booking'));
@@ -241,9 +270,13 @@ async function loadBookingRequests() {
   if (!el) return;
   el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--bark-light);font-size:13px">Loading requests...</div>';
   try {
-    const requests = await api.getBookingRequests();
+    // Requests tab shows only PENDING requests. Once the minder accepts or
+    // declines one it leaves this list — accepted bookings move to the
+    // Upcoming tab and declined/cancelled ones disappear from active views.
+    const all = await api.getBookingRequests();
+    const requests = all.filter(b => b.status === 'pending');
     if (requests.length === 0) {
-      el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No booking requests yet.</div>';
+      el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No pending booking requests.</div>';
       return;
     }
     el.innerHTML = requests.map(b => `
@@ -271,8 +304,19 @@ async function respondToBooking(bookingId, status, btnEl) {
   try {
     await api.updateBooking(bookingId, { status });
     showToast(status === 'confirmed' ? '✅ Booking accepted!' : '❌ Booking declined');
-    loadBookingRequests();        // refresh the list
+    loadBookingRequests();        // refresh the requests list
     loadNotificationCount();      // update badge
+    // Also refresh the owner-side Upcoming/Past lists on the same page so
+    // a freshly-accepted booking immediately moves to Upcoming and a
+    // declined one disappears from the active view.
+    try {
+      if (document.getElementById('bookings-upcoming-list')) {
+        const bookings = await api.getBookings();
+        allBookingsCache = bookings;
+        renderBookingCards('bookings-upcoming-list', filterUpcoming(bookings));
+        renderBookingCards('bookings-past-list',     filterPast(bookings));
+      }
+    } catch { /* silent */ }
   } catch (err) {
     showToast('❌ ' + (err.message || 'Failed to update booking'));
     if (row) row.querySelectorAll('button').forEach(b => b.disabled = false);
@@ -364,12 +408,38 @@ async function handleOwnerNotifClick(id) {
 async function initActiveBookingPage() {
   const params = new URLSearchParams(window.location.search);
   const minderId = params.get('minder') || 'sarah';
-  const m = minderData[minderId] || { name: 'Your Minder', avatar: '🧑‍🦱' };
-  window._activeMinder = { ...m, id: minderId };
+
+  // Resolve the minder from the real backend list first (numeric ids),
+  // then fall back to the legacy hardcoded minderData (string keys). This
+  // is what lets the booking carry the real name + profile picture instead
+  // of the "Your Minder" / 🧑‍🦱 placeholder.
+  let resolved = null;
+  if (/^\d+$/.test(String(minderId))) {
+    try {
+      if (!loadedMinders || loadedMinders.length === 0) {
+        loadedMinders = await api.getMinders();
+      }
+      const match = loadedMinders.find(x => String(x.id) === String(minderId));
+      if (match) {
+        resolved = {
+          id:           match.id,
+          name:         match.name || 'Minder',
+          avatar:       '🧑‍🦱',              // emoji fallback for cards
+          profileImage: match.profileImage || '' // real picture (data URI)
+        };
+      }
+    } catch { /* silent — fall through to hardcoded */ }
+  }
+  if (!resolved) {
+    const legacy = minderData[minderId] || { name: 'Your Minder', avatar: '🧑‍🦱' };
+    resolved = { ...legacy, id: minderId, profileImage: '' };
+  }
+
+  window._activeMinder = resolved;
   const header = document.getElementById('booking-minder-name');
-  if (header) header.textContent = 'Book ' + m.name;
+  if (header) header.textContent = 'Book ' + resolved.name;
   const summaryMinder = document.getElementById('summary-minder');
-  if (summaryMinder) summaryMinder.textContent = m.name;
+  if (summaryMinder) summaryMinder.textContent = resolved.name;
   generateDateChips();
   renderBookingPetPicker();
   updateBookingSummary();
@@ -1454,6 +1524,7 @@ async function confirmBooking() {
       minderKey:    m.id,
       minderName:   m.name,
       minderAvatar: m.avatar,
+      minderImage:  m.profileImage || '',
       service:      serviceName,
       bookingDate,
       bookingTime:  time,

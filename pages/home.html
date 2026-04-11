@@ -122,7 +122,8 @@
   let upcoming;
   try {
     const bookings = await api.getBookings();
-    upcoming = bookings.filter(b => b.status !== 'completed');
+    allBookingsCache = bookings;
+    upcoming = filterUpcoming(bookings);
   } catch {
     upcoming = upcomingBookings;
   }

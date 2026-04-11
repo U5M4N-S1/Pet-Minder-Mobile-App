@@ -81,7 +81,10 @@
 <script>
 (async () => {
   try {
-    const bookings = await api.getBookings();
+    // Pull bookings from BOTH perspectives so a minder sees both the
+    // bookings they placed as an owner and the ones they received as a
+    // minder (recipient cards are tagged for the orange/yellow style).
+    const bookings = await loadAllBookingsForUser();
     allBookingsCache = bookings;
     renderBookingCards('bookings-upcoming-list', filterUpcoming(bookings));
     renderBookingCards('bookings-past-list',     filterPast(bookings));

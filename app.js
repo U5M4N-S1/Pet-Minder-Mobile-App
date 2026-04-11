@@ -195,6 +195,27 @@ const PAST_STATUSES   = ['completed', 'cancelled', 'declined'];
 function filterUpcoming(bookings) { return (bookings || []).filter(b => ACTIVE_STATUSES.includes(b.status)); }
 function filterPast(bookings)     { return (bookings || []).filter(b => PAST_STATUSES.includes(b.status)); }
 
+// Fetch the current user's bookings from BOTH perspectives:
+//   - owner side (api.getBookings): bookings they placed as a pet owner
+//   - minder side (api.getBookingRequests): bookings placed against them
+//     when they are a minder
+// Minder-side rows are tagged with `_recipient: true` so the renderer can
+// apply the light orange/yellow style and show the owner's name. We use
+// real stored user ids (not UI state) so the result is identical after a
+// page refresh.
+async function loadAllBookingsForUser() {
+  const owned = await api.getBookings().catch(() => []);
+  let received = [];
+  if (userProfile.role === 'minder') {
+    received = await api.getBookingRequests().catch(() => []);
+    received = received.map(b => Object.assign({}, b, { _recipient: true }));
+  }
+  // Dedupe in case a user is somehow both owner and minder of the same row
+  const seen = new Set(owned.map(b => b.id));
+  const merged = owned.concat(received.filter(b => !seen.has(b.id)));
+  return merged;
+}
+
 // Render a minder's picture as either an emoji/glyph or an <img> if we have
 // a real data-URI profile image stored on the booking. Falls back to the
 // default 👤 glyph if nothing sensible is available.
@@ -218,18 +239,28 @@ function renderBookingCards(containerId, bookings) {
     el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No bookings to show.</div>';
     return;
   }
-  el.innerHTML = bookings.map(b => `
-    <div class="booking-card" onclick="openBookingDetail(${b.id})" style="cursor:pointer">
+  el.innerHTML = bookings.map(b => {
+    // Recipient styling: when the logged-in user is the minder for this
+    // booking (i.e. they are the recipient of the request, not the one
+    // who placed it) we paint the card with a light orange/yellow tint.
+    // The flag is computed from real stored ids, so it survives a refresh.
+    const recipientCls = b._recipient ? ' recipient' : '';
+    // For minder-side cards we show the pet owner's name (b.ownerName);
+    // owner-side cards keep the existing minder name display.
+    const headline = b._recipient ? (b.ownerName || 'Pet Owner') : (b.minderName || 'Minder');
+    return `
+    <div class="booking-card${recipientCls}" onclick="openBookingDetail(${b.id})" style="cursor:pointer">
       <div class="booking-date-block"><div class="booking-date-day">${b.day}</div><div class="booking-date-month">${b.month}</div></div>
       <div class="booking-date-sep"></div>
       <div class="booking-avatar">${bookingAvatarHTML(b)}</div>
       <div class="booking-info">
-        <div class="booking-minder">${b.minderName || 'Minder'}</div>
+        <div class="booking-minder">${headline}</div>
         <div class="booking-detail">${b.petEmoji} ${b.petDetail}</div>
         ${b.price ? `<div class="booking-detail" style="margin-top:4px;color:var(--terra)">${b.price}</div>` : ''}
       </div>
       <span class="booking-status status-${b.status}">${statusLabels[b.status] || b.status}</span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function openBookingDetail(bookingId) {
@@ -271,7 +302,7 @@ function cancelBooking(bookingId) {
       closeBookingDetail();
       // Refresh bookings list
       try {
-        const bookings = await api.getBookings();
+        const bookings = await loadAllBookingsForUser();
         allBookingsCache = bookings;
         renderBookingCards('bookings-upcoming-list', filterUpcoming(bookings));
         renderBookingCards('bookings-past-list',     filterPast(bookings));
@@ -288,15 +319,12 @@ async function loadBookingRequests() {
   if (!el) return;
   el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--bark-light);font-size:13px">Loading requests...</div>';
   try {
-    // The Requests tab shows ALL bookings where the logged-in user is the
-    // minder. Pending ones display the Accept/Decline actions and lead the
-    // list; accepted, declined, cancelled and completed ones still appear
-    // (sorted after pending) so the minder can report a customer from any
-    // past booking as well.
+    // The Requests tab shows ONLY pending bookings where the logged-in
+    // user is the minder. Once a booking is accepted it leaves Requests
+    // and surfaces in Upcoming (with a recipient-tinted style), and
+    // declined/cancelled bookings disappear from Requests entirely.
     const all = await api.getBookingRequests();
-    const pending = all.filter(b => b.status === 'pending');
-    const rest    = all.filter(b => b.status !== 'pending');
-    const requests = pending.concat(rest);
+    const requests = all.filter(b => b.status === 'pending');
     if (requests.length === 0) {
       el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No booking requests yet.</div>';
       return;
@@ -307,7 +335,7 @@ async function loadBookingRequests() {
       // quotes (would terminate the JS string).
       const ownerNameAttr = String(b.ownerName || 'Pet Owner').replace(/"/g, '').replace(/'/g, "\\'");
       return `
-      <div class="booking-card" style="cursor:default;flex-wrap:wrap">
+      <div class="booking-card recipient" style="cursor:default;flex-wrap:wrap">
         <div class="booking-date-block"><div class="booking-date-day">${b.day}</div><div class="booking-date-month">${b.month}</div></div>
         <div class="booking-date-sep"></div>
         <div class="booking-avatar">${b.avatar}</div>
@@ -349,7 +377,7 @@ async function respondToBooking(bookingId, status, btnEl) {
     // declined one disappears from the active view.
     try {
       if (document.getElementById('bookings-upcoming-list')) {
-        const bookings = await api.getBookings();
+        const bookings = await loadAllBookingsForUser();
         allBookingsCache = bookings;
         renderBookingCards('bookings-upcoming-list', filterUpcoming(bookings));
         renderBookingCards('bookings-past-list',     filterPast(bookings));

@@ -1,6 +1,7 @@
 const express    = require('express');
 const db         = require('../db');
 const { requireAuth } = require('../middleware/authMiddleware');
+const { validateBookingSlot } = require('../lib/availability');
 
 const router = express.Router();
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -68,6 +69,21 @@ router.post('/', requireAuth, (req, res) => {
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(bookingDate)) {
     return res.status(400).json({ error: 'bookingDate must be YYYY-MM-DD' });
+  }
+
+  // Availability check — enforced for any booking targeting a real minder
+  // account. Legacy demo minders (non-numeric keys like 'sarah') are not in
+  // the users table and have no availability data, so we skip them to keep
+  // the seeded demo flow working. Real numeric ids must validate.
+  if (minderKey != null && /^\d+$/.test(String(minderKey))) {
+    const minderUser = db.get('users').find({ id: Number(minderKey) }).value();
+    if (!minderUser || minderUser.role !== 'minder') {
+      return res.status(404).json({ error: 'Minder not found' });
+    }
+    const check = validateBookingSlot(minderUser, bookingDate, bookingTime);
+    if (!check.ok) {
+      return res.status(409).json({ error: check.error });
+    }
   }
 
   // Conflict 1: same pet already has a non-cancelled booking at this slot
@@ -234,7 +250,20 @@ router.get('/minder/:id/taken', requireAuth, (req, res) => {
               && b.status === 'confirmed')
     .map('bookingTime')
     .value();
-  res.json({ minderId, date, taken });
+
+  // Also return the minder's published availability so the booking UI can
+  // grey out slots that fall on unavailable days/times. Empty arrays signal
+  // "no availability published" and the client treats every slot as blocked.
+  let availableDays  = [];
+  let availableSlots = [];
+  if (/^\d+$/.test(minderId)) {
+    const mu = db.get('users').find({ id: Number(minderId) }).value();
+    if (mu) {
+      availableDays  = Array.isArray(mu.availableDays)  ? mu.availableDays  : [];
+      availableSlots = Array.isArray(mu.availableSlots) ? mu.availableSlots : [];
+    }
+  }
+  res.json({ minderId, date, taken, availableDays, availableSlots });
 });
 
 module.exports = router;

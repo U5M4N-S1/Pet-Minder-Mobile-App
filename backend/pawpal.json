@@ -98,7 +98,7 @@
       "resetCode": null,
       "resetCodeExpires": null,
       "online": true,
-      "lastSeenAt": "2026-04-11T19:25:26.737Z",
+      "lastSeenAt": "2026-04-11T19:42:05.100Z",
       "availableDays": [
         "tue",
         "wed",
@@ -106,7 +106,6 @@
       ],
       "availableSlots": [
         "morning",
-        "afternoon",
         "evening"
       ],
       "certifications": ""

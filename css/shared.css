@@ -67,7 +67,7 @@ body {
 /* Form inputs */
 .field-group { display: flex; flex-direction: column; gap: 6px; }
 .field-group label { font-size: 13px; font-weight: 500; color: var(--bark-light); }
-.field-group input, .field-group select { padding: 13px 16px; border: 1.5px solid var(--sand); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 15px; color: var(--bark); background: white; outline: none; transition: border-color 0.2s; }
+.field-group input, .field-group select { padding: 10px 14px; border: 1.5px solid var(--sand); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 15px; color: var(--bark); background: white; outline: none; transition: border-color 0.2s; }
 .field-group input:focus, .field-group select:focus { border-color: var(--terra); }
 
 /* Search bar */
@@ -86,7 +86,7 @@ body {
 .booking-date-day { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 700; color: var(--bark); line-height: 1; }
 .booking-date-month { font-size: 11px; color: var(--bark-light); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
 .booking-date-sep { width: 1px; align-self: stretch; background: var(--sand); margin: 0 4px; flex-shrink: 0; }
-.booking-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--sand-light); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+.booking-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--sand-light); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; overflow: hidden; }
 .booking-info { flex: 1; min-width: 0; }
 .booking-minder { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 600; color: var(--bark); }
 .booking-detail { font-size: 12px; color: var(--bark-light); margin-top: 3px; }
@@ -96,7 +96,7 @@ body {
 .status-completed { background: var(--sand-light); color: var(--bark-light); }
 
 /* Pet edit/add modal */
-.pet-modal-overlay { position: fixed; inset: 0; background: rgba(61,43,31,0.5); z-index: 200; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; padding: 20px; }
+.pet-modal-overlay { position: fixed; inset: 0; background: rgba(61,43,31,0.5); z-index: 200; display: flex; align-items: flex-start; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; padding: 36px 20px 20px; }
 .pet-modal-overlay.open { opacity: 1; pointer-events: all; }
 .pet-modal { background: white; border-radius: var(--radius); width: 100%; max-width: 440px; padding: 28px 24px; box-shadow: 0 8px 40px var(--shadow); max-height: 85vh; overflow-y: auto; }
 .pet-modal h3 { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--bark); margin-bottom: 20px; }
@@ -115,7 +115,7 @@ body {
 .confirm-modal-actions { display: flex; gap: 10px; }
 
 /* Toast */
-.toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--bark); color: white; padding: 12px 24px; border-radius: 50px; font-size: 14px; z-index: 300; opacity: 0; transition: all 0.3s; white-space: nowrap; }
+.toast { position: fixed; top: 25px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--bark); color: white; padding: 12px 20px; border-radius: 24px; font-size: 14px; line-height: 1.4; z-index: 300; opacity: 0; transition: all 0.3s; max-width: calc(100vw - 32px); width: max-content; text-align: center; word-wrap: break-word; overflow-wrap: break-word; box-sizing: border-box; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* Back button */
@@ -127,6 +127,30 @@ body {
 .reg-pets-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .reg-pet-card { display: flex; align-items: center; gap: 8px; background: white; border: 1.5px solid var(--sand); border-radius: var(--radius-sm); padding: 8px 12px; cursor: pointer; transition: all 0.2s; font-size: 13px; }
 .reg-pet-card:hover { border-color: var(--terra); background: #fef3ed; }
+
+/* Report button on minder profile hero */
+.mp-report-btn { position: absolute; top: 16px; right: 16px; background: rgba(255,255,255,0.15); border: 1.5px solid rgba(255,255,255,0.35); color: white; padding: 7px 14px; border-radius: 50px; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer; z-index: 5; transition: all 0.2s; }
+.mp-report-btn:hover { background: rgba(229,57,53,0.85); border-color: rgba(229,57,53,0.9); }
+
+/* Report customer button on booking cards */
+.booking-report-btn { background: none; border: 1.5px solid var(--sand); color: var(--bark-light); padding: 6px 12px; border-radius: 50px; font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+.booking-report-btn:hover { border-color: #e53935; color: #e53935; background: #fff5f5; }
+
+/* Report modal */
+.report-modal-overlay { position: fixed; inset: 0; background: rgba(61,43,31,0.55); z-index: 260; display: flex; align-items: flex-start; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.25s; padding: 40px 16px 16px; }
+.report-modal-overlay.open { opacity: 1; pointer-events: all; }
+.report-modal { background: white; border-radius: var(--radius); width: 100%; max-width: 420px; padding: 24px 22px; box-shadow: 0 8px 40px var(--shadow); max-height: 90vh; overflow-y: auto; }
+.report-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.report-modal-header h3 { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--bark); margin: 0; }
+.report-modal-close { background: none; border: none; font-size: 24px; color: var(--bark-light); cursor: pointer; line-height: 1; padding: 0 6px; }
+.report-modal-close:hover { color: var(--bark); }
+.report-modal-target { font-size: 13px; color: var(--bark-light); margin-bottom: 16px; background: var(--sand-light); padding: 10px 12px; border-radius: var(--radius-sm); }
+.report-modal .field-group { margin-bottom: 14px; }
+.report-modal textarea { width: 100%; padding: 12px 14px; border: 1.5px solid var(--sand); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--bark); resize: vertical; min-height: 100px; outline: none; box-sizing: border-box; }
+.report-modal textarea:focus { border-color: var(--terra); }
+.report-modal-actions { display: flex; gap: 10px; margin-top: 8px; }
+.report-modal-actions .btn-outline { flex: 1; padding: 12px; color: var(--bark-light); border-color: var(--sand); }
+.report-modal-actions .btn-primary { flex: 2; padding: 12px; }
 
 /* Shared avatar image – used everywhere a profile picture can appear */
 .avatar-img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 50%; }

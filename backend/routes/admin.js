@@ -87,20 +87,90 @@ router.get('/disputes', requireAuth, requireAdmin, (_req, res) => {
   res.json(disputes);
 });
 
-// POST /api/admin/disputes — create (used by the Report User flow)
+// POST /api/admin/disputes — create a report
+//   Accepts either the legacy payload ({ against, reason }) used by the
+//   Help Centre "Report a user" flow OR a richer payload from the new
+//   in-context reporting flow:
+//     { reason, targetUserId, targetName, targetRole, context, bookingId }
+//
+//   Authorization rules for in-context reports:
+//     • Pet owners may report any pet minder (context: 'minder-profile').
+//     • Pet minders may only report a pet owner they have a booking with
+//       (context: 'booking' + bookingId). The server verifies the booking
+//       links the reporter (as minder) to the target (as owner).
+//     • Admins may report anyone.
 router.post('/disputes', requireAuth, (req, res) => {
-  const { against, reason } = req.body;
-  if (!reason) return res.status(400).json({ error: 'Reason is required' });
+  const {
+    against, reason,
+    targetUserId, targetName, targetRole,
+    context, bookingId
+  } = req.body;
+
+  if (!reason || !String(reason).trim()) {
+    return res.status(400).json({ error: 'Reason is required' });
+  }
 
   const reporter = db.get('users').find({ id: req.user.userId }).value();
+  if (!reporter) return res.status(401).json({ error: 'Unknown reporter' });
+  const reporterName = ((reporter.firstName || '') + ' ' + (reporter.lastName || '')).trim() || 'Unknown';
+
+  // Default: legacy payload — just pass the freeform `against` string
+  // through. This preserves the existing Help Centre flow.
+  let resolvedTargetId   = targetUserId != null ? Number(targetUserId) : null;
+  let resolvedTargetName = targetName || against || 'Unknown';
+  let resolvedTargetRole = targetRole || null;
+  let resolvedContext    = context || 'help-centre';
+  let resolvedBookingId  = bookingId != null ? Number(bookingId) : null;
+
+  // Minder → owner reports require a booking that links them.
+  if (reporter.role === 'minder' && resolvedContext !== 'help-centre') {
+    if (!resolvedBookingId) {
+      return res.status(400).json({ error: 'Pet minders may only report a customer via an existing booking' });
+    }
+    const booking = db.get('bookings').find({ id: resolvedBookingId }).value();
+    if (!booking) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+    if (Number(booking.minderKey) !== reporter.id) {
+      return res.status(403).json({ error: 'You can only report customers from your own bookings' });
+    }
+    // Use the booking to derive the authoritative target info
+    const owner = db.get('users').find({ id: booking.ownerId }).value();
+    resolvedTargetId   = booking.ownerId;
+    resolvedTargetName = owner ? ((owner.firstName || '') + ' ' + (owner.lastName || '')).trim() : (resolvedTargetName || 'Unknown');
+    resolvedTargetRole = 'owner';
+  }
+
+  // Owner → minder reports: if targetUserId is provided, validate it points
+  // at an actual minder account.
+  if (reporter.role === 'owner' && resolvedTargetId != null) {
+    const target = db.get('users').find({ id: resolvedTargetId }).value();
+    if (!target) {
+      return res.status(404).json({ error: 'Reported user not found' });
+    }
+    if (target.role !== 'minder') {
+      return res.status(400).json({ error: 'Pet owners can only report pet minders' });
+    }
+    resolvedTargetName = ((target.firstName || '') + ' ' + (target.lastName || '')).trim() || resolvedTargetName;
+    resolvedTargetRole = 'minder';
+  }
+
   const dispute = {
-    id:     nextDisputeId(),
-    status: 'Open',
-    date:   new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
-    from:   reporter ? (reporter.firstName + ' ' + reporter.lastName) : 'Unknown',
-    against: against || 'Unknown',
-    reason:  reason.trim(),
-    createdAt: new Date().toISOString()
+    id:            nextDisputeId(),
+    status:        'Open',
+    date:          new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+    // Legacy fields (kept for backward compatibility with existing admin UI)
+    from:          reporterName,
+    against:       resolvedTargetName,
+    reason:        String(reason).trim(),
+    // New structured fields
+    reporterId:    reporter.id,
+    reporterRole:  reporter.role,
+    targetUserId:  resolvedTargetId,
+    targetRole:    resolvedTargetRole,
+    context:       resolvedContext,
+    bookingId:     resolvedBookingId,
+    createdAt:     new Date().toISOString()
   };
   db.get('disputes').push(dispute).write();
   res.status(201).json(dispute);

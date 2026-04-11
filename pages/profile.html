@@ -45,8 +45,9 @@
       <div class="menu-section-title">Account</div>
       <div class="menu-item" onclick="openEditProfileModal()"><span class="menu-icon">✏️</span><span class="menu-label">Edit Profile</span><span class="menu-arrow">›</span></div>
       <div class="menu-item" onclick="showToast('Payment settings coming soon!')"><span class="menu-icon">💳</span><span class="menu-label">Payment Methods</span><span class="menu-arrow">›</span></div>
-      <div class="menu-item" onclick="showToast('Notifications coming soon!')"><span class="menu-icon">🔔</span><span class="menu-label">Notifications</span><span class="menu-arrow">›</span></div>
+      <div class="menu-item" onclick="openNotifications()"><span class="menu-icon">🔔</span><span class="menu-label">Notifications<span id="notif-badge" class="notif-badge" style="display:none">0</span></span><span class="menu-arrow">›</span></div>
       <div class="menu-item" onclick="openProfileReviews()"><span class="menu-icon">⭐</span><span class="menu-label">Reviews</span><span class="menu-arrow">›</span></div>
+      <div class="menu-item" onclick="openBecomeMinder()"><span class="menu-icon">🐾❤️</span><span class="menu-label">Become a Minder</span><span class="menu-arrow">›</span></div>
       <div class="menu-section-title">Support</div>
       <div class="menu-item" onclick="openHelpCentre()"><span class="menu-icon">❓</span><span class="menu-label">Help Centre</span><span class="menu-arrow">›</span></div>
       <div class="menu-item" onclick="showToast('Terms coming soon!')"><span class="menu-icon">📄</span><span class="menu-label">Terms & Privacy</span><span class="menu-arrow">›</span></div>
@@ -58,19 +59,24 @@
 
 <!-- PROFILE REVIEWS -->
 <div class="screen" id="screen-profile-reviews">
-  <div class="page-content"><div style="padding:24px"><button class="back-btn" style="position:static;background:var(--sand-light);color:var(--bark);margin-bottom:16px" onclick="goBack()">←</button><h1 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--bark);margin-bottom:6px">My Reviews</h1><p style="font-size:13px;color:var(--bark-light);margin-bottom:20px">Leave reviews for minders you've previously booked</p><div id="profile-reviews-minder-list"></div></div></div>
+  <div class="page-content"><div class="profile-sub-header"><button class="back-btn" style="position:static;background:var(--sand-light);color:var(--bark);margin-bottom:16px" onclick="goBack()">←</button><h1 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--bark);margin-bottom:6px">My Reviews</h1><p style="font-size:13px;color:var(--bark-light);margin-bottom:20px">Leave reviews for minders you've previously booked</p></div><div style="padding:0 24px 24px"><div id="profile-reviews-minder-list"></div></div></div>
 </div>
 
 <!-- WRITE REVIEW -->
 <div class="screen" id="screen-write-review">
-  <div class="page-content"><div style="padding:24px"><button class="back-btn" style="position:static;background:var(--sand-light);color:var(--bark);margin-bottom:16px" onclick="goBack()">←</button><h1 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--bark);margin-bottom:4px" id="write-review-title">Review Sarah K.</h1><p style="font-size:13px;color:var(--bark-light);margin-bottom:20px">Rate your experience and leave a message</p>
+  <div class="page-content"><div class="profile-sub-header"><button class="back-btn" style="position:static;background:var(--sand-light);color:var(--bark);margin-bottom:16px" onclick="goBack()">←</button><h1 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--bark);margin-bottom:4px" id="write-review-title">Review Sarah K.</h1><p style="font-size:13px;color:var(--bark-light);margin-bottom:20px">Rate your experience and leave a message</p></div><div style="padding:0 24px 24px">
   <div style="background:white;border-radius:var(--radius);padding:20px;box-shadow:0 2px 12px var(--shadow)"><p style="font-size:14px;font-weight:600;color:var(--bark);margin-bottom:12px">Your Rating</p><div class="star-rating-input" id="profile-review-stars"><span class="star-btn" onclick="setProfileReviewStars(1)">★</span><span class="star-btn" onclick="setProfileReviewStars(2)">★</span><span class="star-btn" onclick="setProfileReviewStars(3)">★</span><span class="star-btn" onclick="setProfileReviewStars(4)">★</span><span class="star-btn" onclick="setProfileReviewStars(5)">★</span></div><textarea id="profile-review-text" placeholder="Write your review..." style="width:100%;padding:12px 14px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);resize:vertical;min-height:100px;outline:none;margin-top:14px"></textarea><button class="btn-primary" style="width:100%;margin-top:14px;padding:14px" onclick="submitProfileReview()">Submit Review</button></div><div id="profile-review-submitted" style="margin-top:16px"></div></div></div>
 </div>
 
 <!-- HELP CENTRE -->
 <div class="screen" id="screen-help">
-  <div class="page-content"><div style="padding:24px"><button class="back-btn" style="position:static;background:var(--sand-light);color:var(--bark);margin-bottom:16px" onclick="goBack()">←</button><h1 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--bark);margin-bottom:6px">Help Centre</h1><p style="font-size:13px;color:var(--bark-light);margin-bottom:20px">Report an account that violates our community guidelines</p>
+  <div class="page-content"><div class="profile-sub-header"><button class="back-btn" style="position:static;background:var(--sand-light);color:var(--bark);margin-bottom:16px" onclick="goBack()">←</button><h1 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--bark);margin-bottom:6px">Help Centre</h1><p style="font-size:13px;color:var(--bark-light);margin-bottom:20px">Report an account that violates our community guidelines</p></div><div style="padding:0 24px 24px">
   <div style="background:white;border-radius:var(--radius);padding:20px;box-shadow:0 2px 12px var(--shadow)"><p style="font-size:14px;font-weight:600;color:var(--bark);margin-bottom:10px">🚨 Report a User</p><div class="field-group" style="margin-bottom:12px;position:relative"><label>Search User</label><input type="text" id="report-search-input" placeholder="Type a name..." oninput="searchReportUsers()" autocomplete="off"><div id="report-search-results" class="report-search-results"></div></div><div id="report-selected-user" style="display:none;background:var(--sand-light);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px"><div style="display:flex;align-items:center;justify-content:space-between"><span id="report-selected-name" style="font-weight:600;font-size:14px;color:var(--bark)"></span><button style="background:none;border:none;color:#e53935;font-size:12px;cursor:pointer" onclick="clearReportSelection()">✕ Remove</button></div></div><div class="field-group" style="margin-bottom:14px"><label>Reason for Report</label><textarea id="report-reason" placeholder="Explain why this user should be reported..." style="width:100%;padding:12px 14px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);resize:vertical;min-height:100px;outline:none"></textarea></div><button class="btn-primary" style="width:100%;padding:14px;background:#e53935" onclick="submitReport()">Submit Report</button></div></div></div>
+</div>
+
+<!-- NOTIFICATIONS -->
+<div class="screen" id="screen-notifications">
+  <div class="page-content"><div class="profile-sub-header"><button class="back-btn" style="position:static;background:var(--sand-light);color:var(--bark);margin-bottom:16px" onclick="goBack()">←</button><h1 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--bark);margin-bottom:6px">Notifications</h1><p style="font-size:13px;color:var(--bark-light);margin-bottom:20px">Your latest booking request updates</p></div><div style="padding:0 24px 24px"><div id="notif-list"></div></div></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -79,18 +85,66 @@
 <div class="confirm-modal-overlay" id="confirm-modal" onclick="if(event.target===this)closeConfirmModal()"><div class="confirm-modal"><div class="confirm-modal-icon" id="confirm-modal-icon">⚠️</div><h3 id="confirm-modal-title">Are you sure?</h3><p id="confirm-modal-message">This action cannot be undone.</p><div class="confirm-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:12px" onclick="closeConfirmModal()">Cancel</button><button class="btn-primary" style="flex:1;padding:12px" id="confirm-modal-btn">Confirm</button></div></div></div>
 
 <!-- PET MODAL -->
-<div class="pet-modal-overlay" id="pet-modal" onclick="if(event.target===this)closePetModal()"><div class="pet-modal"><h3 id="pet-modal-title">Edit Pet</h3><div class="field-group"><label>Pet Name</label><input type="text" id="pet-name-input" placeholder="e.g. Buddy"></div><div class="field-group"><label>Pet Type</label><select id="pet-type-input"><option>Dog</option><option>Cat</option><option>Rabbit</option><option>Bird</option><option>Other</option></select></div><div class="field-group"><label>Breed</label><input type="text" id="pet-breed-input" placeholder="e.g. Golden Retriever"></div><div class="field-group"><label>Age</label><input type="text" id="pet-age-input" placeholder="e.g. 3 years"></div><div class="field-group"><label>Medical Notes</label><textarea id="pet-medical-input" placeholder="Allergies, medications, health conditions..."></textarea></div><div class="field-group"><label>Special Care Instructions</label><textarea id="pet-care-input" placeholder="Feeding schedule, walking routes, behavioural notes..."></textarea></div><input type="hidden" id="pet-edit-id" value=""><div class="pet-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="closePetModal()">Cancel</button><button class="btn-primary" style="flex:2;padding:14px" id="pet-save-btn" onclick="savePet()">Save Pet</button></div><div id="pet-delete-row" style="text-align:center;margin-top:14px;display:none"><button style="background:none;border:none;color:#e53935;font-size:14px;cursor:pointer;font-family:'DM Sans',sans-serif" onclick="confirmRemovePet()">Remove this pet</button></div></div></div>
+<div class="pet-modal-overlay" id="pet-modal" onclick="if(event.target===this)closePetModal()"><div class="pet-modal"><h3 id="pet-modal-title">Edit Pet</h3><div class="field-group"><label>Pet Name</label><input type="text" id="pet-name-input" placeholder="e.g. Buddy"></div><div class="field-group"><label>Pet Type</label><select id="pet-type-input"><option>Dog</option><option>Cat</option><option>Rabbit</option><option>Bird</option><option>Other</option></select></div><div class="field-group"><label>Breed</label><input type="text" id="pet-breed-input" placeholder="e.g. Golden Retriever"></div><div class="field-group"><label>Age</label><select id="pet-age-input" required><option value="" disabled selected>Select age</option></select></div><div class="field-group"><label>Medical Notes</label><textarea id="pet-medical-input" placeholder="Allergies, medications, health conditions..."></textarea></div><div class="field-group"><label>Special Care Instructions</label><textarea id="pet-care-input" placeholder="Feeding schedule, walking routes, behavioural notes..."></textarea></div><input type="hidden" id="pet-edit-id" value=""><div class="pet-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="closePetModal()">Cancel</button><button class="btn-primary" style="flex:2;padding:14px" id="pet-save-btn" onclick="savePet()">Save Pet</button></div><div id="pet-delete-row" style="text-align:center;margin-top:14px;display:none"><button style="background:none;border:none;color:#e53935;font-size:14px;cursor:pointer;font-family:'DM Sans',sans-serif" onclick="confirmRemovePet()">Remove this pet</button></div></div></div>
 
 <!-- EDIT PROFILE MODAL -->
 <div class="pet-modal-overlay" id="edit-profile-modal" onclick="if(event.target===this)closeEditProfileModal()"><div class="pet-modal"><h3>Edit Profile</h3><div class="field-group"><label>First Name</label><input type="text" id="edit-first-name" placeholder="First name"></div><div class="field-group"><label>Last Name</label><input type="text" id="edit-last-name" placeholder="Last name"></div><div class="field-group"><label>Email</label><input type="email" id="edit-email" placeholder="Email address"></div><div class="field-group"><label>Phone</label><input type="tel" id="edit-phone" placeholder="Phone number"></div><div class="field-group"><label>Location</label><input type="text" id="edit-location" placeholder="e.g. Shoreditch, London"></div><div class="field-group"><label>Bio</label><textarea id="edit-bio" placeholder="Tell us about yourself..." style="width:100%;padding:12px 14px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);resize:vertical;min-height:70px;outline:none"></textarea></div>
 <!-- Minder-specific fields (hidden for pet owners) -->
 <div id="minder-fields" style="display:none">
   <div style="margin:16px 0 8px;font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px">Pet Minder Details</div>
+
   <div class="field-group"><label>Service Area</label><input type="text" id="edit-service-area" placeholder="e.g. Mile End, Shoreditch"></div>
-  <div class="field-group"><label>Pets Cared For</label><input type="text" id="edit-pets-cared" placeholder="e.g. Dogs, Cats, Rabbits"></div>
-  <div class="field-group"><label>Services Offered</label><input type="text" id="edit-services" placeholder="e.g. Walking, Home Visit, Grooming"></div>
-  <div class="field-group"><label>Rate</label><input type="text" id="edit-rate" placeholder="e.g. £15/hr"></div>
+
+  <div class="field-group"><label>Pet Type</label>
+    <div class="chip-group" id="edit-pet-type-chips">
+      <button type="button" class="chip-btn" data-value="Dogs">🐕 Dogs</button>
+      <button type="button" class="chip-btn" data-value="Cats">🐈 Cats</button>
+      <button type="button" class="chip-btn" data-value="Small Pets">🐇 Small Pets</button>
+      <button type="button" class="chip-btn" data-value="Birds">🐦 Birds</button>
+    </div>
+  </div>
+
+  <div class="field-group"><label>Service Type</label>
+    <div class="chip-group" id="edit-service-type-chips">
+      <button type="button" class="chip-btn" data-value="Walking">🚶 Walking</button>
+      <button type="button" class="chip-btn" data-value="Home Visit">🏠 Home Visit</button>
+      <button type="button" class="chip-btn" data-value="Grooming">🛁 Grooming</button>
+      <button type="button" class="chip-btn" data-value="Vet">🏥 Vet</button>
+      <button type="button" class="chip-btn" data-value="Training">🎓 Training</button>
+    </div>
+  </div>
+
+  <div class="field-group"><label>Price Range (£ per hour)</label>
+    <div class="price-range-row">
+      <div class="price-input-wrap"><span class="price-prefix">£</span><input type="number" id="edit-price-min" min="0" max="50" value="0" placeholder="0"></div>
+      <span class="price-sep">to</span>
+      <div class="price-input-wrap"><span class="price-prefix">£</span><input type="number" id="edit-price-max" min="0" max="50" value="50" placeholder="50"></div>
+    </div>
+  </div>
+
   <div class="field-group"><label>Experience</label><input type="text" id="edit-experience" placeholder="e.g. 3 years"></div>
+
+  <div class="field-group"><label>Available Days</label>
+    <div class="chip-group" id="edit-avail-days-chips">
+      <button type="button" class="chip-btn" data-value="mon">Mon</button>
+      <button type="button" class="chip-btn" data-value="tue">Tue</button>
+      <button type="button" class="chip-btn" data-value="wed">Wed</button>
+      <button type="button" class="chip-btn" data-value="thu">Thu</button>
+      <button type="button" class="chip-btn" data-value="fri">Fri</button>
+      <button type="button" class="chip-btn" data-value="sat">Sat</button>
+      <button type="button" class="chip-btn" data-value="sun">Sun</button>
+    </div>
+  </div>
+
+  <div class="field-group"><label>Available Times</label>
+    <div class="chip-group" id="edit-avail-slots-chips">
+      <button type="button" class="chip-btn" data-value="morning">🌅 Morning</button>
+      <button type="button" class="chip-btn" data-value="afternoon">☀️ Afternoon</button>
+      <button type="button" class="chip-btn" data-value="evening">🌙 Evening</button>
+    </div>
+  </div>
+
+  <div class="field-group"><label>Certifications &amp; Qualifications</label><textarea id="edit-certifications" placeholder="e.g. Pet First Aid Certified, DBS Checked, Canine Care Level 2..." style="width:100%;padding:12px 14px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);resize:vertical;min-height:70px;outline:none"></textarea></div>
 </div>
 <div class="pet-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="closeEditProfileModal()">Cancel</button><button class="btn-primary" style="flex:2;padding:14px" onclick="saveProfile()">Save Changes</button></div></div></div>
 

@@ -25,14 +25,24 @@ function userDTO(u) {
     phone:        u.phone     || '',
     bio:          u.bio       || '',
     profileImage: u.profileImage || '',
-    // Minder-specific (empty strings for owners — frontend ignores them)
+    // Minder-specific (empty/zero for owners — frontend ignores them)
     serviceArea:  u.serviceArea  || '',
     petsCaredFor: u.petsCaredFor || '',
     services:     u.services     || '',
     rate:         u.rate         || '',
-    experience:   u.experience   || ''
+    experience:   u.experience   || '',
+    priceMin:     u.priceMin != null ? u.priceMin : 0,
+    priceMax:     u.priceMax != null ? u.priceMax : 50,
+    // Availability + qualifications (minder-specific; empty for owners)
+    availableDays:  Array.isArray(u.availableDays)  ? u.availableDays  : [],
+    availableSlots: Array.isArray(u.availableSlots) ? u.availableSlots : [],
+    certifications: u.certifications || ''
   };
 }
+
+// Whitelists for availability validation
+const VALID_DAYS  = ['mon','tue','wed','thu','fri','sat','sun'];
+const VALID_SLOTS = ['morning','afternoon','evening'];
 
 // ── Avatar upload limits (easy to tune) ───────────────────────────────
 const AVATAR_MAX_BYTES  = 2 * 1024 * 1024; // 2 MB encoded (data-URI)
@@ -68,6 +78,8 @@ router.post('/signup', async (req, res) => {
       location:  'London',
       createdAt: new Date().toISOString()
     };
+    user.online     = true;
+    user.lastSeenAt = new Date().toISOString();
     db.get('users').push(user).write();
 
     const token = jwt.sign({ userId: id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
@@ -96,14 +108,26 @@ router.post('/login', async (req, res) => {
   }
 
   const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+  // Mark the account online + stamp lastSeenAt for the presence window.
+  db.get('users').find({ id: user.id }).assign({ online: true, lastSeenAt: new Date().toISOString() }).write();
   res.json({ token, user: userDTO(user) });
 });
 
-// GET /api/auth/me
+// POST /api/auth/logout — flip online flag off. The JWT itself is stateless,
+// so "logging out" just marks the user offline for presence display.
+router.post('/logout', requireAuth, (req, res) => {
+  db.get('users').find({ id: req.user.userId }).assign({ online: false, lastSeenAt: new Date().toISOString() }).write();
+  res.json({ ok: true });
+});
+
+// GET /api/auth/me — also doubles as a presence heartbeat. Every page load
+// refreshes lastSeenAt so a user who closed the tab naturally ages out of
+// "online" after ~2 minutes without needing an explicit logout.
 router.get('/me', requireAuth, (req, res) => {
-  const user = db.get('users').find({ id: req.user.userId }).value();
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json(userDTO(user));
+  const user = db.get('users').find({ id: req.user.userId });
+  if (!user.value()) return res.status(404).json({ error: 'User not found' });
+  user.assign({ online: true, lastSeenAt: new Date().toISOString() }).write();
+  res.json(userDTO(user.value()));
 });
 
 // PATCH /api/auth/me — update profile fields
@@ -112,7 +136,9 @@ router.patch('/me', requireAuth, (req, res) => {
   if (!user.value()) return res.status(404).json({ error: 'User not found' });
 
   const { firstName, lastName, email, phone, location, bio,
-          serviceArea, petsCaredFor, services, rate, experience } = req.body;
+          serviceArea, petsCaredFor, services, rate, experience,
+          priceMin, priceMax,
+          availableDays, availableSlots, certifications } = req.body;
   const updates = {};
   if (typeof firstName    === 'string' && firstName.trim()) updates.firstName    = firstName.trim();
   if (typeof lastName     === 'string') updates.lastName     = lastName.trim();
@@ -125,6 +151,18 @@ router.patch('/me', requireAuth, (req, res) => {
   if (typeof services     === 'string') updates.services     = services.trim();
   if (typeof rate         === 'string') updates.rate         = rate.trim();
   if (typeof experience   === 'string') updates.experience   = experience.trim();
+  // Price range (clamped 0–50)
+  if (priceMin != null) updates.priceMin = Math.max(0, Math.min(50, Number(priceMin) || 0));
+  if (priceMax != null) updates.priceMax = Math.max(0, Math.min(50, Number(priceMax) || 50));
+  // Availability: filter to known day/slot codes and de-duplicate
+  if (Array.isArray(availableDays)) {
+    updates.availableDays = [...new Set(availableDays.map(d => String(d).toLowerCase()).filter(d => VALID_DAYS.includes(d)))];
+  }
+  if (Array.isArray(availableSlots)) {
+    updates.availableSlots = [...new Set(availableSlots.map(s => String(s).toLowerCase()).filter(s => VALID_SLOTS.includes(s)))];
+  }
+  // Certifications free-text (capped to avoid runaway payloads)
+  if (typeof certifications === 'string') updates.certifications = certifications.trim().slice(0, 2000);
 
   // Email changes need a uniqueness check
   if (typeof email === 'string' && email.trim()) {
@@ -221,6 +259,41 @@ function readImageDimensions(buf, mime) {
   return null;
 }
 
+// POST /api/auth/forgot-password — generate a 6-digit reset code for the account
+router.post('/forgot-password', (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email is required' });
+
+  const user = db.get('users').find({ email: email.toLowerCase().trim() });
+  if (!user.value()) return res.status(404).json({ error: 'No account found with that email' });
+
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  user.assign({ resetCode: code, resetCodeExpires: Date.now() + 10 * 60 * 1000 }).write();
+  // In production this would be emailed — here we return it for the UI to display
+  res.json({ code, email: user.value().email });
+});
+
+// POST /api/auth/reset-password — verify code and set new password
+router.post('/reset-password', async (req, res) => {
+  const { email, code, newPassword } = req.body;
+  if (!email || !code || !newPassword) return res.status(400).json({ error: 'All fields are required' });
+  if (newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+
+  const user = db.get('users').find({ email: email.toLowerCase().trim() });
+  const u = user.value();
+  if (!u) return res.status(404).json({ error: 'No account found with that email' });
+  if (!u.resetCode || u.resetCode !== code) return res.status(400).json({ error: 'Invalid verification code' });
+  if (u.resetCodeExpires && Date.now() > u.resetCodeExpires) return res.status(400).json({ error: 'Verification code has expired' });
+
+  try {
+    const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    user.assign({ passwordHash, resetCode: null, resetCodeExpires: null }).write();
+    res.json({ message: 'Password reset successfully' });
+  } catch {
+    res.status(500).json({ error: 'Server error, please try again' });
+  }
+});
+
 // GET /api/minders — list all active petminder accounts (public, no auth required)
 router.get('/minders', (req, res) => {
   const minders = db.get('users')
@@ -235,7 +308,12 @@ router.get('/minders', (req, res) => {
       petsCaredFor: u.petsCaredFor || '',
       services:     u.services     || '',
       rate:         u.rate         || '',
-      experience:   u.experience   || ''
+      experience:   u.experience   || '',
+      priceMin:     u.priceMin != null ? u.priceMin : 0,
+      priceMax:     u.priceMax != null ? u.priceMax : 50,
+      availableDays:  Array.isArray(u.availableDays)  ? u.availableDays  : [],
+      availableSlots: Array.isArray(u.availableSlots) ? u.availableSlots : [],
+      certifications: u.certifications || ''
     }));
   res.json(minders);
 });

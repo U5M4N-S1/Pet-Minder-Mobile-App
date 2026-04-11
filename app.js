@@ -107,7 +107,9 @@ const api = {
   deleteAvatar()            { return this._req('DELETE', '/auth/avatar'); },
   // Minders (public)
   getMinders()              { return this._req('GET',    '/minders'); },
-  // Admin
+  getNotifications()        { return this._req('GET',    '/auth/notifications'); },
+  markNotificationsRead()   { return this._req('PATCH',  '/auth/notifications/read-all'); },
+  //Admin 
   getAdminUsers()           { return this._req('GET',    '/admin/users'); },
   updateAdminUser(id, data) { return this._req('PATCH',  '/admin/users/' + id, data); },
   deleteAdminUser(id)       { return this._req('DELETE', '/admin/users/' + id); },
@@ -280,16 +282,45 @@ let notifCount = 0;
 let notifRequests = []; // cached for rendering the list
 
 async function loadNotificationCount() {
-  if (userProfile.role !== 'minder') return;
   try {
-    notifRequests = await api.getBookingRequests();
-    notifCount = notifRequests.filter(b => b.status === 'pending').length;
+    const notifs = await api.getNotifications();
+    const unread  = notifs.filter(n => !n.read);
+    notifCount    = unread.length;
+
+    // Update badge on the bell icon in profile.html
     const badge = document.getElementById('notif-badge');
     if (badge) {
-      badge.textContent = notifCount;
+      badge.textContent  = notifCount > 9 ? '9+' : String(notifCount);
       badge.style.display = notifCount > 0 ? 'inline-flex' : 'none';
     }
-  } catch { /* silent */ }
+
+    // If the notifications list container exists on this page, render it
+    const list = document.getElementById('notif-list');
+    if (list) {
+      if (notifs.length === 0) {
+        list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No notifications yet.</div>';
+      } else {
+        list.innerHTML = notifs.map(n => {
+          const isUnread = !n.read;
+          return `<div class="menu-item" style="${isUnread ? 'border-left:3px solid var(--terra);border-radius:0;' : 'opacity:0.65;'}">
+            <span class="menu-icon" style="font-size:18px">${n.title.charAt(0)}</span>
+            <span class="menu-label" style="display:flex;flex-direction:column;gap:3px">
+              <span style="font-weight:${isUnread ? '600' : '400'};font-size:14px;color:var(--bark)">${n.title}</span>
+              <span style="font-size:12px;color:var(--bark-light);line-height:1.4">${n.message}</span>
+              <span style="font-size:11px;color:var(--bark-light);opacity:0.7">${new Date(n.createdAt).toLocaleDateString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}</span>
+            </span>
+          </div>`;
+        }).join('');
+
+        // Mark all as read now that the user has opened the list
+        api.markNotificationsRead().catch(() => {});
+        notifCount = 0;
+        if (badge) badge.style.display = 'none';
+      }
+    }
+  } catch (err) {
+    console.error('[PawPal] Could not load notifications:', err.message);
+  }
 }
 
 function openNotifications() {

@@ -29,3 +29,29 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`PawPal running → http://localhost:${PORT}`);
 });
+
+// Run every hour, check for bookings happening in ~24h
+setInterval(async () => {
+  const tomorrow = new Date();
+  tomorrow.setHours(tomorrow.getHours() + 24);
+  const dateStr = tomorrow.toISOString().split('T')[0]; // YYYY-MM-DD
+
+  const upcoming = db.get('bookings')
+    .filter(b => b.bookingDate === dateStr && b.status === 'confirmed')
+    .value();
+
+  for (const booking of upcoming) {
+    // Only send reminder if not already sent today
+    const alreadySent = db.get('notifications')
+      .find(n => n.bookingId === booking.id && n.title.includes('reminder'))
+      .value();
+    if (alreadySent) continue;
+
+    notifier.saveNotification(booking.ownerId,
+      '⏰ Booking reminder',
+      `Your ${booking.service} with ${booking.minderName} is tomorrow at ${booking.bookingTime}`,
+      booking.id
+    );
+    // email reminder too — call sendEmail directly or add a notifyReminder() function
+  }
+}, 60 * 60 * 1000); // every hour

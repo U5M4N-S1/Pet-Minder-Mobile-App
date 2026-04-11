@@ -5,11 +5,10 @@ const path     = require('path');
 const adapter = new FileSync(path.join(__dirname, 'pawpal.json'));
 const db      = low(adapter);
 
-// Seed the schema with empty collections if the file is brand new
-db.defaults({ users: [], bookings: [], pets: [], disputes: [] }).write();
+// FIX: notifications: [] added — without this db.get('notifications') returns
+// undefined and every notifier.js call throws a crash.
+db.defaults({ users: [], bookings: [], pets: [], disputes: [], notifications: [] }).write();
 
-// Seed a default admin account if none exists.
-// The admin can log in via the normal auth flow with role 'admin'.
 const bcrypt = require('bcrypt');
 (function seedAdmin() {
   const exists = db.get('users').find({ role: 'admin' }).value();

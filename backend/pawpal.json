@@ -97,8 +97,8 @@
       "priceMax": 30,
       "resetCode": null,
       "resetCodeExpires": null,
-      "online": false,
-      "lastSeenAt": "2026-04-11T19:21:37.407Z",
+      "online": true,
+      "lastSeenAt": "2026-04-11T19:25:26.737Z",
       "availableDays": [
         "tue",
         "wed",

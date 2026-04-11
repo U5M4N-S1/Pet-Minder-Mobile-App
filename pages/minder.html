@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PawPal – Minder Profile</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Caveat:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<link rel="stylesheet" href="../css/search.css">
+<link rel="stylesheet" href="../css/minder.css">
+<link rel="stylesheet" href="../css/responsive.css">
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="app-nav" id="app-nav">
+  <div class="nav-logo" onclick="window.location.href='home.html'"><span>🐾</span> <span class="logo-paw">Paw</span><span class="logo-pal">Pal</span></div>
+  <div class="nav-links">
+    <button class="nav-link" id="nav-home" onclick="window.location.href='home.html'">🏠 Home</button>
+    <button class="nav-link active" id="nav-search" onclick="window.location.href='search.html'">🔍 Find Minders</button>
+    <button class="nav-link" id="nav-bookings" onclick="window.location.href='bookings.html'">📅 Bookings</button>
+    <button class="nav-link" id="nav-messages" onclick="window.location.href='messages.html'">💬 Messages</button>
+    <button class="nav-link" id="nav-profile" onclick="window.location.href='profile.html'">👤 Profile</button>
+  </div>
+</nav>
+<div class="mobile-header" id="mobile-header"><span class="mobile-header-paw">🐾</span><span class="logo-paw">Paw</span><span class="logo-pal">Pal</span></div>
+
+<!-- MINDER PROFILE -->
+<div class="screen active" id="screen-minder-profile">
+  <div class="page-content">
+    <div class="profile-hero">
+      <button class="back-btn" onclick="window.location.href='search.html'">←</button>
+      <button class="mp-report-btn" id="mp-report-btn" onclick="openReportMinderModal()" style="display:none">🚩 Report</button>
+      <div class="profile-big-avatar" id="mp-avatar">👤</div>
+      <div class="profile-name-lg" id="mp-name">Loading…</div>
+      <div class="profile-loc-sm" id="mp-loc"></div>
+      <div class="profile-stars-lg" id="mp-stars">☆☆☆☆☆ <span style="font-size:13px;opacity:0.8">(no reviews yet)</span></div>
+      <div style="display:flex;gap:10px;margin-top:14px;justify-content:center">
+        <button class="btn-primary" id="mp-msg-btn" style="padding:10px 20px;font-size:14px">💬 Message</button>
+        <button class="btn-primary" id="mp-book-btn" style="padding:10px 20px;font-size:14px">📅 Book Now</button>
+      </div>
+    </div>
+
+    <div class="profile-tabs">
+      <button class="profile-tab active" onclick="switchProfileTab(this,'tab-about')">About</button>
+      <button class="profile-tab" onclick="switchProfileTab(this,'tab-availability')">Availability</button>
+      <button class="profile-tab" onclick="switchProfileTab(this,'tab-reviews')">Reviews</button>
+    </div>
+
+    <div id="tab-about" class="profile-section">
+      <div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow);margin-bottom:16px">
+        <p style="font-size:14px;line-height:1.7;color:var(--bark-light)" id="mp-bio"></p>
+      </div>
+      <div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)" id="mp-details"></div>
+    </div>
+
+    <div id="tab-availability" class="profile-section hidden">
+      <div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)">
+        <p style="font-size:13px;color:var(--bark-light);margin-bottom:12px">Available days this week</p>
+        <div class="avail-grid" id="mp-avail-grid"></div>
+        <div style="margin-top:16px" id="mp-avail-slots"></div>
+      </div>
+    </div>
+
+    <div id="tab-reviews" class="profile-section hidden">
+      <div style="display:flex;flex-direction:column;gap:12px" id="minder-reviews-list">
+        <div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow);text-align:center;color:var(--bark-light);font-size:13px">Loading reviews…</div>
+      </div>
+      <div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow);margin-top:12px">
+        <p style="font-family:'Playfair Display',serif;font-size:15px;font-weight:600;color:var(--bark);margin-bottom:12px">Leave a Review</p>
+        <div class="star-rating-input" id="review-stars">
+          <span class="star-btn" onclick="setReviewStars(1)">★</span>
+          <span class="star-btn" onclick="setReviewStars(2)">★</span>
+          <span class="star-btn" onclick="setReviewStars(3)">★</span>
+          <span class="star-btn" onclick="setReviewStars(4)">★</span>
+          <span class="star-btn" onclick="setReviewStars(5)">★</span>
+        </div>
+        <textarea id="review-text-input" placeholder="Write your review..." style="width:100%;padding:12px 14px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);resize:vertical;min-height:70px;outline:none;margin-top:10px"></textarea>
+        <button class="btn-primary" style="width:100%;margin-top:10px;padding:12px" onclick="submitReview()">Submit Review</button>
+      </div>
+    </div>
+  </div>
+  <nav class="bottom-nav"><button class="bottom-nav-item" onclick="window.location.href='home.html'"><span>🏠</span><span>Home</span></button><button class="bottom-nav-item active" onclick="window.location.href='search.html'"><span>🔍</span><span>Search</span></button><button class="bottom-nav-item" onclick="window.location.href='bookings.html'"><span>📅</span><span>Bookings</span></button><button class="bottom-nav-item" onclick="window.location.href='messages.html'"><span>💬</span><span>Messages</span></button><button class="bottom-nav-item" onclick="window.location.href='profile.html'"><span>👤</span><span>Profile</span></button></nav>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- REPORT USER MODAL (shared) -->
+<div class="report-modal-overlay" id="report-modal" onclick="if(event.target===this)closeReportModal()">
+  <div class="report-modal">
+    <div class="report-modal-header">
+      <h3 id="report-modal-title">🚩 Report User</h3>
+      <button class="report-modal-close" onclick="closeReportModal()" aria-label="Close">×</button>
+    </div>
+    <p class="report-modal-target" id="report-modal-target">Reporting: —</p>
+    <div class="field-group"><label>Category</label><select id="report-modal-category">
+      <option>Inappropriate behaviour</option>
+      <option>Harassment or abuse</option>
+      <option>Scam or fraud</option>
+      <option>Unsafe pet care</option>
+      <option>No-show / missed booking</option>
+      <option>Other</option>
+    </select></div>
+    <div class="field-group"><label>What happened?</label><textarea id="report-modal-reason" placeholder="Please describe the issue in detail..." rows="5"></textarea></div>
+    <div class="report-modal-actions">
+      <button class="btn-outline" onclick="closeReportModal()">Cancel</button>
+      <button class="btn-primary" onclick="submitReportModal()">Submit Report</button>
+    </div>
+  </div>
+</div>
+
+<script src="../app.js"></script>
+<script>
+(async () => {
+  await initMinderPage();
+})();
+</script>
+</body>
+</html>

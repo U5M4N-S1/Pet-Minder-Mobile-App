@@ -130,6 +130,9 @@ const api = {
   getChatMessages(id)       { return this._req('GET',    '/chats/' + id + '/messages'); },
   sendChatMessage(id, text) { return this._req('POST',   '/chats/' + id + '/messages', { text }); },
   createChat(otherUserId)   { return this._req('POST',   '/chats', { otherUserId }); },
+  // Reviews
+  getMinderReviews(minderId) { return this._req('GET',  '/reviews/' + minderId); },
+  createReview(data)         { return this._req('POST', '/reviews', data); },
 };
 
 // Hydrate userProfile from localStorage immediately (sync) so pages render
@@ -1061,15 +1064,20 @@ async function loadMinders() {
   }
 }
 
+// Minder profiles now live on a dedicated page (pages/minder.html). Anywhere
+// in the app that calls openMinderProfile(id) just navigates there with the
+// id in the query string — the standalone page reads it and hydrates itself
+// from /api/minders, so refreshing keeps you on the right profile.
 function openMinderProfile(minderId) {
-  previousScreen = currentScreen;
-  // Try real minder data first, fall back to legacy hardcoded data
-  const minder = loadedMinders.find(m => m.id === minderId) || minderData[minderId];
+  if (minderId == null) return;
+  window.location.href = 'minder.html?id=' + encodeURIComponent(minderId);
+}
+
+// Hydrate the standalone minder profile page from a fetched minder object.
+// Shared between openMinderProfile (legacy inline) and the minder.html page.
+function renderMinderProfileInto(minder) {
   // Stash the currently-viewed minder as the default report target so the
   // "🚩 Report" button in the hero can pick it up without extra state plumbing.
-  // Only real backend minders (numeric id) can be reported — legacy hardcoded
-  // demo profiles aren't real users so we leave the target null and hide the
-  // button.
   const canReport = minder && typeof minder.id === 'number' && userProfile.role === 'owner';
   currentReportTarget = canReport ? {
     targetUserId: minder.id,
@@ -1079,46 +1087,125 @@ function openMinderProfile(minderId) {
   } : null;
   const reportBtn = document.getElementById('mp-report-btn');
   if (reportBtn) reportBtn.style.display = canReport ? 'inline-block' : 'none';
-  if (minder) {
-    const mpAvatar = document.getElementById('mp-avatar');
+  if (!minder) return;
+  const mpAvatar = document.getElementById('mp-avatar');
+  if (mpAvatar) {
     if (minder.profileImage) {
       mpAvatar.innerHTML = '<img src="' + minder.profileImage + '" alt="avatar" class="avatar-img" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
     } else {
       mpAvatar.textContent = minder.avatar || '👤';
     }
-    document.getElementById('mp-name').textContent = minder.name;
-    document.getElementById('mp-loc').textContent = minder.location ? '📍 ' + minder.location : (minder.loc || '');
-    document.getElementById('mp-bio').textContent = minder.bio || '';
-    // Update the detail section with real data. For real backend minders
-    // (numeric id) we always overwrite so stale hardcoded rows from the
-    // template ("Pet First Aid ✅" etc.) can't leak through when a minder
-    // hasn't filled in their details yet.
-    const details = document.getElementById('mp-details');
-    const isRealMinder = typeof minder.id === 'number';
-    if (details && (isRealMinder || minder.experience || minder.petsCaredFor || minder.services || minder.rate || minder.priceMin != null)) {
-      let html = '';
-      if (minder.experience)   html += '<div class="info-row"><span class="info-label">Experience</span><span class="info-value">' + escapeHTML(minder.experience) + '</span></div>';
-      if (minder.petsCaredFor) html += '<div class="info-row"><span class="info-label">Pets accepted</span><span class="info-value">' + escapeHTML(minder.petsCaredFor) + '</span></div>';
-      if (minder.services)     html += '<div class="info-row"><span class="info-label">Services</span><span class="info-value">' + escapeHTML(minder.services) + '</span></div>';
-      const priceStr = (minder.priceMin != null && minder.priceMax != null) ? '£' + minder.priceMin + ' – £' + minder.priceMax + '/hr' : (minder.rate || '');
-      if (priceStr) html += '<div class="info-row"><span class="info-label">Rate</span><span class="info-value">' + escapeHTML(priceStr) + '</span></div>';
-      if (minder.certifications) html += '<div class="info-row"><span class="info-label">Certifications</span><span class="info-value" style="white-space:pre-wrap;text-align:right;max-width:60%">' + escapeHTML(minder.certifications) + '</span></div>';
-      if (!html && isRealMinder) html = '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:8px 0">This minder hasn\'t added service details yet.</p>';
-      details.innerHTML = html;
-    }
-    // Availability tab — render day grid + time-of-day slots from saved data
-    renderMinderAvailability(minder);
-    // Hide stars for real minders (no review system wired to them yet)
-    const starsEl = document.getElementById('mp-stars');
-    if (starsEl) starsEl.innerHTML = minder.stars ? minder.stars + ' <span style="font-size:13px;opacity:0.8">(' + (minder.reviews || 0) + ' reviews)</span>' : '';
   }
-  // Reset to About tab
-  document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
-  document.querySelector('.profile-tab').classList.add('active');
-  document.querySelectorAll('[id^="tab-"]').forEach(t => t.classList.add('hidden'));
-  document.getElementById('tab-about').classList.remove('hidden');
-  show('minder-profile');
-  currentScreen = 'minder-profile';
+  const nameEl = document.getElementById('mp-name'); if (nameEl) nameEl.textContent = minder.name;
+  const locEl  = document.getElementById('mp-loc');  if (locEl)  locEl.textContent  = minder.location ? '📍 ' + minder.location : (minder.loc || '');
+  const bioEl  = document.getElementById('mp-bio');  if (bioEl)  bioEl.textContent  = minder.bio || '';
+
+  const details = document.getElementById('mp-details');
+  const isRealMinder = typeof minder.id === 'number';
+  if (details && (isRealMinder || minder.experience || minder.petsCaredFor || minder.services || minder.rate || minder.priceMin != null)) {
+    let html = '';
+    if (minder.experience)   html += '<div class="info-row"><span class="info-label">Experience</span><span class="info-value">' + escapeHTML(minder.experience) + '</span></div>';
+    if (minder.petsCaredFor) html += '<div class="info-row"><span class="info-label">Pets accepted</span><span class="info-value">' + escapeHTML(minder.petsCaredFor) + '</span></div>';
+    if (minder.services)     html += '<div class="info-row"><span class="info-label">Services</span><span class="info-value">' + escapeHTML(minder.services) + '</span></div>';
+    const priceStr = (minder.priceMin != null && minder.priceMax != null) ? '£' + minder.priceMin + ' – £' + minder.priceMax + '/hr' : (minder.rate || '');
+    if (priceStr) html += '<div class="info-row"><span class="info-label">Rate</span><span class="info-value">' + escapeHTML(priceStr) + '</span></div>';
+    if (minder.certifications) html += '<div class="info-row"><span class="info-label">Certifications</span><span class="info-value" style="white-space:pre-wrap;text-align:right;max-width:60%">' + escapeHTML(minder.certifications) + '</span></div>';
+    if (!html && isRealMinder) html = '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:8px 0">This minder hasn\'t added service details yet.</p>';
+    details.innerHTML = html;
+  }
+  renderMinderAvailability(minder);
+}
+
+// Tracks which minder is currently being viewed on minder.html so submitReview
+// knows where to attach the review the user just wrote.
+let currentMinderId = null;
+
+// Bootstraps the standalone minder.html page from ?id=<n> in the URL.
+async function initMinderPage() {
+  const params = new URLSearchParams(window.location.search);
+  const raw    = params.get('id');
+  if (!raw) {
+    document.getElementById('mp-name').textContent = 'Minder not found';
+    return;
+  }
+  const numericId = Number(raw);
+  let minder = null;
+  try {
+    if (!loadedMinders.length) loadedMinders = await api.getMinders();
+    if (!Number.isNaN(numericId)) {
+      minder = loadedMinders.find(m => m.id === numericId) || null;
+    }
+    // Fall back to legacy hardcoded demo data (sarah/james/emma/priya)
+    if (!minder && minderData[raw]) minder = minderData[raw];
+  } catch {
+    if (minderData[raw]) minder = minderData[raw];
+  }
+  if (!minder) {
+    document.getElementById('mp-name').textContent = 'Minder not found';
+    return;
+  }
+  currentMinderId = minder.id;
+  renderMinderProfileInto(minder);
+  // Wire the Book Now button now that we know the id
+  const bookBtn = document.getElementById('mp-book-btn');
+  if (bookBtn && typeof minder.id === 'number') {
+    bookBtn.onclick = function () { window.location.href = 'active-booking.html?minder=' + minder.id; };
+  }
+  // Wire the Message button
+  const msgBtn = document.getElementById('mp-msg-btn');
+  if (msgBtn && typeof minder.id === 'number') {
+    msgBtn.onclick = function () { messageMinder(minder.id); };
+  }
+  await loadMinderReviews(minder.id);
+}
+
+async function loadMinderReviews(minderId) {
+  const list = document.getElementById('minder-reviews-list');
+  if (!list) return;
+  if (typeof minderId !== 'number') {
+    list.innerHTML = '<div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow);text-align:center;color:var(--bark-light);font-size:13px">Reviews are only available for verified minders.</div>';
+    updateMinderStarsSummary([]);
+    return;
+  }
+  try {
+    const reviews = await api.getMinderReviews(minderId);
+    renderMinderReviews(reviews);
+    updateMinderStarsSummary(reviews);
+  } catch {
+    list.innerHTML = '<div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow);text-align:center;color:var(--bark-light);font-size:13px">Could not load reviews.</div>';
+  }
+}
+
+function renderMinderReviews(reviews) {
+  const list = document.getElementById('minder-reviews-list');
+  if (!list) return;
+  if (!reviews.length) {
+    list.innerHTML = '<div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow);text-align:center;color:var(--bark-light);font-size:13px">No reviews yet. Be the first to leave one!</div>';
+    return;
+  }
+  list.innerHTML = reviews.map(r => {
+    const stars = '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating);
+    const when  = formatChatTime(r.createdAt);
+    return '<div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)">'
+      + '<div style="display:flex;justify-content:space-between;margin-bottom:8px">'
+      + '<strong style="font-size:14px">' + escapeHTML(r.authorName || 'User') + '</strong>'
+      + '<span style="color:#f5a623">' + stars + '</span></div>'
+      + '<p style="font-size:13px;color:var(--bark-light);line-height:1.6">"' + escapeHTML(r.text) + '"</p>'
+      + '<p style="font-size:11px;color:var(--bark-light);margin-top:8px">' + when + '</p></div>';
+  }).join('');
+}
+
+function updateMinderStarsSummary(reviews) {
+  const starsEl = document.getElementById('mp-stars');
+  if (!starsEl) return;
+  if (!reviews || !reviews.length) {
+    starsEl.innerHTML = '☆☆☆☆☆ <span style="font-size:13px;opacity:0.8">(no reviews yet)</span>';
+    return;
+  }
+  const avg = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+  const rounded = Math.round(avg);
+  const stars = '★'.repeat(rounded) + '☆'.repeat(5 - rounded);
+  starsEl.innerHTML = stars + ' <span style="font-size:13px;opacity:0.8">(' + reviews.length + ' review' + (reviews.length === 1 ? '' : 's') + ')</span>';
 }
 
 // Render the minder's availability tab from their saved arrays. Falls back
@@ -1783,19 +1870,24 @@ function setReviewStars(n) {
   reviewStars = n;
   document.querySelectorAll('#review-stars .star-btn').forEach((s, i) => s.classList.toggle('active', i < n));
 }
-function submitReview() {
+async function submitReview() {
   const text = document.getElementById('review-text-input').value.trim();
   if (!text) { showToast('❌ Please write a review'); return; }
   if (reviewStars === 0) { showToast('❌ Please select a star rating'); return; }
-  const container = document.getElementById('user-reviews-container');
-  const starStr = '★'.repeat(reviewStars) + '☆'.repeat(5 - reviewStars);
-  const review = document.createElement('div');
-  review.style.cssText = 'background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)';
-  review.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><strong style="font-size:14px">' + userProfile.firstName + ' ' + userProfile.lastName.charAt(0) + '.</strong><span style="color:#f5a623">' + starStr + '</span></div><p style="font-size:13px;color:var(--bark-light);line-height:1.6">"' + text + '"</p><p style="font-size:11px;color:var(--bark-light);margin-top:8px">Just now</p>';
-  container.appendChild(review);
-  document.getElementById('review-text-input').value = '';
-  setReviewStars(0);
-  showToast('✅ Review submitted!');
+  if (typeof currentMinderId !== 'number') {
+    showToast('❌ Reviews are only available for verified minders');
+    return;
+  }
+  try {
+    await api.createReview({ minderId: currentMinderId, rating: reviewStars, text });
+    document.getElementById('review-text-input').value = '';
+    setReviewStars(0);
+    showToast('✅ Review submitted!');
+    // Re-fetch so the new review appears immediately and the star summary updates
+    await loadMinderReviews(currentMinderId);
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Failed to submit review'));
+  }
 }
 
 // ===== BECOME MINDER =====

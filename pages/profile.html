@@ -44,10 +44,10 @@
       <div class="menu-item" onclick="openPetModal('new')"><span class="menu-icon">＋</span><span class="menu-label">Add a pet</span><span class="menu-arrow">›</span></div>
       <div class="menu-section-title">Account</div>
       <div class="menu-item" onclick="openEditProfileModal()"><span class="menu-icon">✏️</span><span class="menu-label">Edit Profile</span><span class="menu-arrow">›</span></div>
+      <div class="menu-item" id="become-minder-item" onclick="openBecomeMinder()" style="display:none"><span class="menu-icon">🐾❤️</span><span class="menu-label">Become a Minder</span><span class="menu-arrow">›</span></div>
       <div class="menu-item" onclick="showToast('Payment settings coming soon!')"><span class="menu-icon">💳</span><span class="menu-label">Payment Methods</span><span class="menu-arrow">›</span></div>
       <div class="menu-item" onclick="openNotifications()"><span class="menu-icon">🔔</span><span class="menu-label">Notifications<span id="notif-badge" class="notif-badge" style="display:none">0</span></span><span class="menu-arrow">›</span></div>
       <div class="menu-item" onclick="openProfileReviews()"><span class="menu-icon">⭐</span><span class="menu-label">Reviews</span><span class="menu-arrow">›</span></div>
-      <div class="menu-item" onclick="openBecomeMinder()"><span class="menu-icon">🐾❤️</span><span class="menu-label">Become a Minder</span><span class="menu-arrow">›</span></div>
       <div class="menu-section-title">Support</div>
       <div class="menu-item" onclick="openHelpCentre()"><span class="menu-icon">❓</span><span class="menu-label">Help Centre</span><span class="menu-arrow">›</span></div>
       <div class="menu-item" onclick="showToast('Terms coming soon!')"><span class="menu-icon">📄</span><span class="menu-label">Terms & Privacy</span><span class="menu-arrow">›</span></div>
@@ -125,6 +125,48 @@
   <div class="field-group"><label>Experience</label><input type="text" id="edit-experience" placeholder="e.g. 3 years"></div>
 </div>
 <div class="pet-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="closeEditProfileModal()">Cancel</button><button class="btn-primary" style="flex:2;padding:14px" onclick="saveProfile()">Save Changes</button></div></div></div>
+
+<!-- BECOME A MINDER MODAL -->
+<div class="pet-modal-overlay" id="become-minder-modal" onclick="if(event.target===this)closeBecomeMinder()">
+  <div class="pet-modal">
+
+    <!-- Step 1: qualifications question -->
+    <div id="bm-step-1">
+      <h3>🐾 Become a Minder</h3>
+      <p style="font-size:14px;color:var(--bark-light);margin-bottom:20px;line-height:1.6">You can offer basic pet care services to other pet owners. Do you have any pet care qualifications or certifications?</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button class="btn-primary" style="padding:14px" onclick="bmShowStep2(true)">✅ Yes, I have qualifications</button>
+        <button class="btn-outline" style="color:var(--bark);border-color:var(--sand);padding:14px" onclick="bmShowStep2(false)">➡️ No, skip to services</button>
+      </div>
+      <button style="background:none;border:none;color:var(--bark-light);font-size:13px;margin-top:16px;cursor:pointer;width:100%;text-align:center" onclick="closeBecomeMinder()">Cancel</button>
+    </div>
+
+    <!-- Step 2a: upload qualifications (shown only if they clicked Yes) -->
+    <div id="bm-step-quals" style="display:none">
+      <h3>📜 Upload Qualifications</h3>
+      <p style="font-size:13px;color:var(--bark-light);margin-bottom:16px">Upload any certifications or proof of training (PDF, JPG or PNG).</p>
+      <div class="reg-extras-box" style="margin-bottom:16px">
+        <label class="file-upload-label">
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple id="bm-cert-input" onchange="bmHandleCerts()" style="display:none">
+          📎 Choose Files
+        </label>
+        <div id="bm-cert-names" style="margin-top:8px;font-size:12px;color:var(--moss)"></div>
+      </div>
+      <button class="btn-primary" style="width:100%;padding:14px" onclick="bmShowStep3()">Next →</button>
+      <button style="background:none;border:none;color:var(--bark-light);font-size:13px;margin-top:12px;cursor:pointer;width:100%;text-align:center" onclick="bmShowStep2(false)">← Back</button>
+    </div>
+
+    <!-- Step 2b / 3: choose services -->
+    <div id="bm-step-services" style="display:none">
+      <h3>🛎 Choose Your Services</h3>
+      <p style="font-size:13px;color:var(--bark-light);margin-bottom:16px" id="bm-services-hint">Select the services you'd like to offer.</p>
+      <div style="display:flex;flex-direction:column;gap:10px" id="bm-service-options"></div>
+      <button class="btn-primary" style="width:100%;padding:14px;margin-top:20px" onclick="bmConfirm()">✅ Become a Minder</button>
+      <button style="background:none;border:none;color:var(--bark-light);font-size:13px;margin-top:12px;cursor:pointer;width:100%;text-align:center" onclick="closeBecomeMinder()">Cancel</button>
+    </div>
+
+  </div>
+</div>
 
 <script src="../app.js"></script>
 </body>

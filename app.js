@@ -6,18 +6,17 @@ let selectedRole = 'owner';
 let reviewStars = 0;
 let profileReviewStars = 0;
 let currentEditPetId = null;
-let regPendingPets = []; // pets added during registration (before account exists)
-let regPetNextId = 1;    // local counter for pending pet IDs
 let currentReviewMinder = null;
 let reportSelectedUser = null;
 
 // User profile — populated from the session cache or API on page load
 let userProfile = {
   firstName: '', lastName: '', email: '', phone: '', location: '', bio: '',
-  role: 'owner', profileImage: '',
+  role: ['owner'], profileImage: '',
   // Minder-specific (blank for owners)
   serviceArea: '', petsCaredFor: '', services: '', rate: '', experience: '',
-  priceMin: 0, priceMax: 50
+  priceMin: 0, priceMax: 50,
+  minderServices: []
 };
 
 // ===== LOCAL STORE =====
@@ -130,7 +129,7 @@ function hydrateUserProfile(u) {
   userProfile.phone        = u.phone        || '';
   userProfile.location     = u.location     || '';
   userProfile.bio          = u.bio          || '';
-  userProfile.role         = u.role         || 'owner';
+  userProfile.role         = Array.isArray(u.role) ? u.role : [u.role || 'owner'];
   userProfile.profileImage = u.profileImage || '';
   userProfile.serviceArea  = u.serviceArea  || '';
   userProfile.petsCaredFor = u.petsCaredFor || '';
@@ -139,6 +138,7 @@ function hydrateUserProfile(u) {
   userProfile.experience   = u.experience   || '';
   userProfile.priceMin     = u.priceMin != null ? u.priceMin : 0;
   userProfile.priceMax     = u.priceMax != null ? u.priceMax : 50;
+  userProfile.minderServices = Array.isArray(u.minderServices) ? u.minderServices : [];
 }
 (function initUserFromCache() { hydrateUserProfile(store.getUser()); }());
 
@@ -700,7 +700,7 @@ async function handleLogin() {
     // page load (so they follow the user across devices). We still reset
     // the in-memory object here in case any pre-redirect render fires.
     petData = {};
-    isAdmin = user.role === 'admin';
+    isAdmin = Array.isArray(user.role) ? user.role.includes('admin') : user.role === 'admin';
     if (isAdmin) { window.location.href = 'admin.html'; } else { goToHome(); }
   } catch (err) {
     showToast('❌ ' + err.message);
@@ -713,7 +713,8 @@ async function handleAdminLogin() {
   if (!email || !pwd) { showToast('❌ Enter admin credentials'); return; }
   try {
     const { token, user } = await api.login(email, pwd);
-    if (user.role !== 'admin') { showToast('❌ This account is not an admin'); return; }
+    const roles = Array.isArray(user.role) ? user.role : [user.role];
+    if (!roles.includes('admin')) { showToast('❌ This account is not an admin'); return; }
     api.setToken(token);
     store.setUser(user);
     isAdmin = true;
@@ -825,27 +826,15 @@ async function handleRegister() {
     return;
   }
   document.getElementById('reg-confirm-password').style.borderColor = 'var(--sand)';
-  if (selectedRole === 'owner' && regPendingPets.length === 0) {
-    showToast('❌ Please add at least one pet before creating your account');
-    return;
-  }
 
   try {
     const { token, user } = await api.signup({ firstName, lastName, email, password: pwd, role: selectedRole });
     api.setToken(token);
     store.setUser(user);
     hydrateUserProfile(user);
-
-    // Now create any pets that were added during registration
+    // Brand-new accounts always start with an empty pet list.
     petData = {};
-    for (const pending of regPendingPets) {
-      try {
-        const pet = await api.createPet({ name: pending.name, type: pending.type, breed: pending.breed, age: pending.age, medical: pending.medical, care: pending.care, emoji: pending.emoji });
-        petData[pet.id] = pet;
-      } catch { /* pet creation failed — continue with account */ }
-    }
     store.setPets(petData);
-    regPendingPets = [];
     goToHome();
   } catch (err) {
     showToast('❌ ' + err.message);
@@ -861,18 +850,162 @@ function switchAuthTab(tab) {
   document.getElementById('form-register').classList.toggle('hidden', tab === 'login');
 }
 
-// user can be both
 function selectRole(el, role) {
   document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('selected'));
   el.classList.add('selected');
   selectedRole = role;
-  document.getElementById('reg-owner-extras').style.display = role === 'owner' ? 'block' : 'none';
-  document.getElementById('reg-minder-extras').style.display = role === 'minder' ? 'block' : 'none';
 }
 
 function handleCertUpload() {
   const input = document.getElementById('cert-upload-input');
   document.getElementById('cert-file-names').textContent = '✅ ' + Array.from(input.files).map(f => f.name).join(', ');
+}
+
+// ===== BECOME A MINDER =====
+const BM_ALL_SERVICES = [
+  { name: 'Dog Walking',  icon: '🚶', desc: '1 hour walk with GPS tracking',   basic: true  },
+  { name: 'Home Visit',   icon: '🏠', desc: '30 min check-in at your home',     basic: true  },
+  { name: 'Grooming',     icon: '🛁', desc: 'Full wash, dry & brush',           basic: false },
+  { name: 'Vet Escort',   icon: '🏥', desc: 'Take pet to & from the vet',       basic: false },
+  { name: 'Training',     icon: '🎓', desc: 'Basic obedience training sessions', basic: false },
+];
+let _bmHasQuals = false;
+let _bmSelected = [];
+
+function openBecomeMinder() {
+  _bmHasQuals = false;
+  _bmSelected = [];
+  document.getElementById('bm-step-1').style.display       = 'block';
+  document.getElementById('bm-step-quals').style.display   = 'none';
+  document.getElementById('bm-step-services').style.display = 'none';
+  document.getElementById('become-minder-modal').classList.add('open');
+}
+function closeBecomeMinder() {
+  document.getElementById('become-minder-modal').classList.remove('open');
+}
+
+function bmShowStep2(hasQuals) {
+  _bmHasQuals = hasQuals;
+  document.getElementById('bm-step-1').style.display = 'none';
+  if (hasQuals) {
+    document.getElementById('bm-cert-names').textContent = '';
+    document.getElementById('bm-cert-input').value = '';
+    document.getElementById('bm-step-quals').style.display   = 'block';
+    document.getElementById('bm-step-services').style.display = 'none';
+  } else {
+    bmShowStep3();
+  }
+}
+
+function bmHandleCerts() {
+  const input = document.getElementById('bm-cert-input');
+  if (input.files.length) {
+    document.getElementById('bm-cert-names').textContent = '✅ ' + Array.from(input.files).map(f => f.name).join(', ');
+  }
+}
+
+function bmShowStep3() {
+  document.getElementById('bm-step-quals').style.display    = 'none';
+  document.getElementById('bm-step-services').style.display = 'block';
+
+  // Show all services if qualified, basic-only otherwise
+  const available = _bmHasQuals ? BM_ALL_SERVICES : BM_ALL_SERVICES.filter(s => s.basic);
+  const hint = document.getElementById('bm-services-hint');
+  hint.textContent = _bmHasQuals
+    ? 'Select all services you can offer.'
+    : 'Without qualifications you can offer basic services. Upload qualifications later to unlock more.';
+
+  _bmSelected = available.map(s => s.name); // pre-select all available
+  const container = document.getElementById('bm-service-options');
+  container.innerHTML = '';
+  available.forEach(s => {
+    const opt = document.createElement('div');
+    opt.className = 'service-option selected';
+    opt.style.cursor = 'pointer';
+    opt.dataset.service = s.name;
+    opt.innerHTML =
+      '<span class="service-icon">' + s.icon + '</span>' +
+      '<div class="service-info"><div class="service-name">' + s.name + '</div><div class="service-desc">' + s.desc + '</div></div>' +
+      '<span style="font-size:18px" class="bm-check">✓</span>';
+    opt.onclick = function() { bmToggleService(this, s.name); };
+    container.appendChild(opt);
+  });
+}
+
+function bmToggleService(el, name) {
+  const isSelected = el.classList.contains('selected');
+  if (isSelected && _bmSelected.length === 1) {
+    showToast('⚠️ Select at least one service'); return;
+  }
+  el.classList.toggle('selected');
+  el.querySelector('.bm-check').style.opacity = el.classList.contains('selected') ? '1' : '0.2';
+  if (el.classList.contains('selected')) { if (!_bmSelected.includes(name)) _bmSelected.push(name); }
+  else { _bmSelected = _bmSelected.filter(n => n !== name); }
+}
+
+async function bmConfirm() {
+  if (_bmSelected.length === 0) { showToast('❌ Please select at least one service'); return; }
+  try {
+    const saved = await api.updateMe({ addMinderRole: true, minderServices: _bmSelected });
+    hydrateUserProfile(saved);
+    store.setUser(userProfile);
+    closeBecomeMinder();
+    renderProfileAvatar();
+    refreshPetsUI();
+    showToast('🎉 You are now a Pet Minder!');
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Something went wrong'));
+  }
+}
+
+// Renders the minderServices list with trash icons inside the edit profile modal
+function renderMinderServicesList() {
+  // Show trash icons only for dual-role users (owner + minder)
+  const roles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role];
+  if (!roles.includes('owner') || !roles.includes('minder')) return;
+  let container = document.getElementById('minder-services-list');
+  if (!container) {
+    // Insert above the service area field
+    const saField = document.getElementById('edit-service-area');
+    if (!saField) return;
+    const wrapper = document.createElement('div');
+    wrapper.id = 'minder-services-list';
+    wrapper.style.cssText = 'margin-bottom:14px';
+    saField.closest('.field-group').parentNode.insertBefore(wrapper, saField.closest('.field-group'));
+    container = wrapper;
+  }
+  const services = userProfile.minderServices || [];
+  if (services.length === 0) { container.innerHTML = ''; return; }
+  container.innerHTML = '<div style="font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Your Minder Services</div>';
+  services.forEach(svc => {
+    const svcData = BM_ALL_SERVICES.find(s => s.name === svc) || { icon: '🐾', desc: '' };
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:12px;background:white;border:1.5px solid var(--sand-light);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px';
+    row.innerHTML =
+      '<span style="font-size:20px">' + svcData.icon + '</span>' +
+      '<div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--bark)">' + svc + '</div>' +
+      '<div style="font-size:12px;color:var(--bark-light)">' + svcData.desc + '</div></div>' +
+      '<button style="background:none;border:none;font-size:18px;cursor:pointer;color:#e53935;padding:4px" title="Remove service" onclick="bmRemoveService(\'' + svc + '\', this)">🗑</button>';
+    container.appendChild(row);
+  });
+}
+
+async function bmRemoveService(serviceName, btn) {
+  const updated = (userProfile.minderServices || []).filter(s => s !== serviceName);
+  if (updated.length === 0) { showToast('⚠️ You must keep at least one service'); return; }
+  // Optimistic UI
+  const row = btn.closest('div[style]');
+  if (row) row.remove();
+  userProfile.minderServices = updated;
+  store.setUser(userProfile);
+  try {
+    const saved = await api.updateMe({ minderServices: updated });
+    hydrateUserProfile(saved);
+    store.setUser(userProfile);
+    showToast('🗑 Service removed');
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Failed to remove service'));
+  }
 }
 
 // ===== NAVIGATION =====
@@ -916,11 +1049,21 @@ function renderProfileAvatar() {
   } else {
     el.textContent = '👤';
   }
-  // Also update the role line
+  // Update the role line
+  const roles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role];
+  const isMinder = roles.includes('minder');
+  const isOwner  = roles.includes('owner');
   const roleEl = document.getElementById('profile-display-role');
   if (roleEl) {
-    const label = userProfile.role === 'minder' ? 'Pet Minder' : 'Pet Owner';
+    let label = 'Pet Owner';
+    if (isMinder && isOwner) label = 'Pet Owner & Minder';
+    else if (isMinder)       label = 'Pet Minder';
     roleEl.textContent = label;
+  }
+  // Show "Become a Minder" only for owners who aren't yet minders
+  const bmItem = document.getElementById('become-minder-item');
+  if (bmItem) {
+    bmItem.style.display = (isOwner && !isMinder) ? 'flex' : 'none';
   }
 }
 
@@ -984,7 +1127,37 @@ async function loadMinders() {
       list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No pet minders have signed up yet.</div>';
       return;
     }
-    renderMinders(loadedMinders);
+    list.innerHTML = '';
+    loadedMinders.forEach(m => {
+      const avatar = m.profileImage
+        ? '<img src="' + m.profileImage + '" alt="' + m.name + '" class="avatar-img" style="width:100%;height:100%;object-fit:cover;border-radius:14px">'
+        : '👤';
+      const loc  = m.location ? '📍 ' + m.location : '';
+      const price = (m.priceMin != null && m.priceMax != null) ? '£' + m.priceMin + ' – £' + m.priceMax + '/hr' : (m.rate || '');
+      const tags = [];
+      if (m.services) m.services.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
+      if (m.petsCaredFor) m.petsCaredFor.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
+
+      const card = document.createElement('div');
+      card.className = 'minder-list-card';
+      card.style.cursor = 'pointer';
+      card.onclick = function() { openMinderProfile(m.id); };
+      card.innerHTML =
+        '<div class="minder-list-avatar">' + avatar + '</div>' +
+        '<div class="minder-list-info">' +
+          '<div class="minder-list-name">' + m.name + '</div>' +
+          (loc ? '<div class="minder-list-loc">' + loc + '</div>' : '') +
+          (tags.length ? '<div class="minder-list-tags">' + tags.join('') + '</div>' : '') +
+          (price ? '<div class="minder-list-rate">' + price + '</div>' : '') +
+          '<div class="minder-btns">' +
+            '<button class="btn-msg-minder" onclick="event.stopPropagation();showToast(\'Chat coming soon!\')">💬 Message</button>' +
+            (String(m.id) !== String(store.currentUserId())
+              ? '<button class="btn-book-sm" onclick="event.stopPropagation();window.location.href=\'active-booking.html?minder=' + m.id + '\'">Book Now</button>'
+              : '<span style="font-size:12px;color:var(--bark-light);padding:10px 12px">Your listing</span>') +
+          '</div>' +
+        '</div>';
+      list.appendChild(card);
+    });
   } catch {
     list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">Could not load minders. Try refreshing.</div>';
   }
@@ -1258,8 +1431,7 @@ function openPetModal(petId) {
     ['pet-name-input','pet-breed-input','pet-age-input','pet-medical-input','pet-care-input'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('pet-type-input').value = 'Dog';
   } else {
-    const pet = petData[petId] || regPendingPets.find(p => p.id === petId);
-    if (!pet) { showToast('Pet not found'); return; }
+    const pet = petData[petId]; if (!pet) { showToast('Pet not found'); return; }
     title.textContent = 'Edit ' + pet.name; del.style.display = 'block'; saveBtn.textContent = 'Save Changes';
     document.getElementById('pet-name-input').value = pet.name;
     document.getElementById('pet-type-input').value = pet.type;
@@ -1414,8 +1586,7 @@ function refreshPetsUI() {
   }
 }
 
-// Show pets on registration page — uses regPendingPets (local) before signup,
-// and petData (server-backed) after.
+// Show pets on registration page
 function refreshRegPets() {
   const grid = document.getElementById('reg-pets-grid');
   if (!grid) return;
@@ -1559,13 +1730,6 @@ function submitReview() {
   showToast('✅ Review submitted!');
 }
 
-// ===== BECOME MINDER =====
-function openBecomeMinder(){
-  //ask for any qualifications 
-    // if yes ask for pictures (something like auth.html lines 62-69)
-    // if no dont ask for pictures (can still provide basic services like feeding or walking)
-}
-
 // ===== REVIEWS (from profile section) =====
 function openProfileReviews() {
   previousScreen = currentScreen;
@@ -1705,17 +1869,20 @@ function openEditProfileModal() {
   document.getElementById('edit-phone').value = userProfile.phone;
   document.getElementById('edit-location').value = userProfile.location;
   document.getElementById('edit-bio').value = userProfile.bio;
-  // Show minder fields only for minder accounts
+  // Show minder fields for minder role OR owners who have become minders
+  const isMinderProfile = (Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role]).includes('minder');
   const minderFields = document.getElementById('minder-fields');
   if (minderFields) {
-    minderFields.style.display = userProfile.role === 'minder' ? 'block' : 'none';
-    if (userProfile.role === 'minder') {
+    minderFields.style.display = isMinderProfile ? 'block' : 'none';
+    if (isMinderProfile) {
       document.getElementById('edit-service-area').value = userProfile.serviceArea || '';
       setSelectedChips('edit-pet-type-chips', userProfile.petsCaredFor || '');
       setSelectedChips('edit-service-type-chips', userProfile.services || '');
       document.getElementById('edit-price-min').value = userProfile.priceMin != null ? userProfile.priceMin : 0;
       document.getElementById('edit-price-max').value = userProfile.priceMax != null ? userProfile.priceMax : 50;
       document.getElementById('edit-experience').value = userProfile.experience || '';
+      // Render minderServices list with trash icons (for dual-role owners)
+      renderMinderServicesList();
     }
   }
   document.getElementById('edit-profile-modal').classList.add('open');
@@ -1734,8 +1901,8 @@ function saveProfile() {
       location:  document.getElementById('edit-location').value.trim(),
       bio:       document.getElementById('edit-bio').value.trim(),
     };
-    // Include minder-specific fields if user is a minder
-    if (userProfile.role === 'minder') {
+    // Include minder-specific fields if user is a minder (by role or isMinder)
+    if ((Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role]).includes('minder')) {
       updates.serviceArea  = (document.getElementById('edit-service-area') || {}).value || '';
       updates.petsCaredFor = getSelectedChips('edit-pet-type-chips');
       updates.services     = getSelectedChips('edit-service-type-chips');
@@ -1815,7 +1982,7 @@ function renderAdminPanels() {
     adminUsers.forEach(u => {
       const card = document.createElement('div'); card.className = 'admin-user-card'; card.id = 'admin-card-' + u.id;
       const statusBadge = u.status === 'Active' ? '' : ' <span style="color:#e53935;font-size:11px">(' + u.status + ')</span>';
-      card.innerHTML = '<div class="admin-user-avatar">' + (u.avatar || '👤') + '</div><div class="admin-user-info"><div class="admin-user-name">' + u.name + statusBadge + '</div><div class="admin-user-role">' + u.role + ' · ' + u.email + '</div></div><div class="admin-user-actions"><button class="admin-btn edit" onclick="openAdminEditUser(' + u.id + ')">✏️ Edit</button><button class="admin-btn suspend" onclick="adminSuspendUser(' + u.id + ')">⏸ Suspend</button><button class="admin-btn remove" onclick="adminRemoveUser(' + u.id + ')">🗑 Remove</button></div>';
+      card.innerHTML = '<div class="admin-user-avatar">' + (u.avatar || '👤') + '</div><div class="admin-user-info"><div class="admin-user-name">' + u.name + statusBadge + '</div><div class="admin-user-role">' + (Array.isArray(u.role) ? u.role.join(' & ') : u.role) + ' · ' + u.email + '</div></div><div class="admin-user-actions"><button class="admin-btn edit" onclick="openAdminEditUser(' + u.id + ')">✏️ Edit</button><button class="admin-btn suspend" onclick="adminSuspendUser(' + u.id + ')">⏸ Suspend</button><button class="admin-btn remove" onclick="adminRemoveUser(' + u.id + ')">🗑 Remove</button></div>';
       usersPanel.appendChild(card);
     });
   }

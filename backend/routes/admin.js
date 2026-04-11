@@ -4,10 +4,11 @@ const { requireAuth } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// Middleware: only users with role === 'admin' may access these endpoints.
+// Middleware: only users with role array containing 'admin' may access these endpoints.
 function requireAdmin(req, res, next) {
   const user = db.get('users').find({ id: req.user.userId }).value();
-  if (!user || user.role !== 'admin') {
+  const roles = user && (Array.isArray(user.role) ? user.role : [user.role]);
+  if (!roles || !roles.includes('admin')) {
     return res.status(403).json({ error: 'Admin access required' });
   }
   next();
@@ -15,9 +16,15 @@ function requireAdmin(req, res, next) {
 
 // Map internal role keys to display labels and vice-versa
 const ROLE_LABELS = { owner: 'Pet Owner', minder: 'Pet Minder', admin: 'Admin' };
-const ROLE_KEYS   = { 'pet owner': 'owner', 'pet minder': 'minder', 'admin': 'admin' };
-function roleLabel(key)   { return ROLE_LABELS[key] || key; }
-function roleKey(label)   { return ROLE_KEYS[label.toLowerCase()] || label; }
+function roleLabel(roleArr) {
+  if (!Array.isArray(roleArr)) roleArr = [roleArr];
+  return roleArr.map(r => ROLE_LABELS[r] || r).join(' & ');
+}
+function roleKey(label) {
+  // Accept a display label like "Pet Owner" or "Pet Minder" and return the key
+  const map = { 'pet owner': 'owner', 'pet minder': 'minder', 'admin': 'admin' };
+  return map[label.toLowerCase().trim()] || label.toLowerCase().trim();
+}
 
 // ─── USERS ───────────────────────────────────────────────────────────
 // GET /api/admin/users — list every registered account
@@ -26,7 +33,7 @@ router.get('/users', requireAuth, requireAdmin, (_req, res) => {
     id:     u.id,
     name:   ((u.firstName || '') + ' ' + (u.lastName || '')).trim(),
     email:  u.email,
-    role:   roleLabel(u.role || 'owner'),
+    role:   roleLabel(Array.isArray(u.role) ? u.role : [u.role || 'owner']),
     status: u.status || 'Active',
     avatar: '👤'
   }));
@@ -47,7 +54,7 @@ router.patch('/users/:id', requireAuth, requireAdmin, (req, res) => {
     updates.lastName  = parts.slice(1).join(' ');
   }
   if (typeof email  === 'string' && email.trim())  updates.email  = email.trim().toLowerCase();
-  if (typeof role   === 'string' && role.trim())    updates.role   = roleKey(role.trim());
+  if (typeof role   === 'string' && role.trim())    updates.role   = [roleKey(role.trim())];
   if (typeof status === 'string' && status.trim())  updates.status = status.trim();
 
   row.assign(updates).write();
@@ -56,7 +63,7 @@ router.patch('/users/:id', requireAuth, requireAdmin, (req, res) => {
     id:     u.id,
     name:   ((u.firstName || '') + ' ' + (u.lastName || '')).trim(),
     email:  u.email,
-    role:   roleLabel(u.role),
+    role:   roleLabel(Array.isArray(u.role) ? u.role : [u.role || 'owner']),
     status: u.status || 'Active',
     avatar: '👤'
   });

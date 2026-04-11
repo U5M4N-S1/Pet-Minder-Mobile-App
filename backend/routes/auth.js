@@ -20,19 +20,20 @@ function userDTO(u) {
     firstName:    u.firstName,
     lastName:     u.lastName,
     email:        u.email,
-    role:         u.role,
+    role:         Array.isArray(u.role) ? u.role : [u.role || 'owner'],
     location:     u.location  || '',
     phone:        u.phone     || '',
     bio:          u.bio       || '',
     profileImage: u.profileImage || '',
     // Minder-specific (empty/zero for owners — frontend ignores them)
-    serviceArea:  u.serviceArea  || '',
-    petsCaredFor: u.petsCaredFor || '',
-    services:     u.services     || '',
-    rate:         u.rate         || '',
-    experience:   u.experience   || '',
-    priceMin:     u.priceMin != null ? u.priceMin : 0,
-    priceMax:     u.priceMax != null ? u.priceMax : 50
+    serviceArea:     u.serviceArea     || '',
+    petsCaredFor:    u.petsCaredFor    || '',
+    services:        u.services        || '',
+    rate:            u.rate            || '',
+    experience:      u.experience      || '',
+    priceMin:        u.priceMin != null ? u.priceMin : 0,
+    priceMax:        u.priceMax != null ? u.priceMax : 50,
+    minderServices:  u.minderServices  || []
   };
 }
 
@@ -60,13 +61,16 @@ router.post('/signup', async (req, res) => {
   try {
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
     const id = nextId('users');
+    const baseRole = role || 'owner';
+    const roles = baseRole === 'minder' ? ['owner', 'minder'] : [baseRole];
     const user = {
       id,
       firstName: firstName.trim(),
       lastName:  lastName.trim(),
       email:     email.toLowerCase(),
       passwordHash,
-      role:      role || 'owner',
+      role:           roles,
+      minderServices: roles.includes('minder') ? ['Walking', 'Home Visit'] : [],
       location:  'London',
       createdAt: new Date().toISOString()
     };
@@ -115,7 +119,7 @@ router.patch('/me', requireAuth, (req, res) => {
 
   const { firstName, lastName, email, phone, location, bio,
           serviceArea, petsCaredFor, services, rate, experience,
-          priceMin, priceMax } = req.body;
+          priceMin, priceMax, addMinderRole, minderServices } = req.body;
   const updates = {};
   if (typeof firstName    === 'string' && firstName.trim()) updates.firstName    = firstName.trim();
   if (typeof lastName     === 'string') updates.lastName     = lastName.trim();
@@ -131,6 +135,13 @@ router.patch('/me', requireAuth, (req, res) => {
   // Price range (clamped 0–50)
   if (priceMin != null) updates.priceMin = Math.max(0, Math.min(50, Number(priceMin) || 0));
   if (priceMax != null) updates.priceMax = Math.max(0, Math.min(50, Number(priceMax) || 50));
+  // Add minder role to the role array
+  if (addMinderRole === true) {
+    const currentRole = user.value().role;
+    const roleArr = Array.isArray(currentRole) ? currentRole : [currentRole || 'owner'];
+    if (!roleArr.includes('minder')) updates.role = [...roleArr, 'minder'];
+  }
+  if (Array.isArray(minderServices)) updates.minderServices = minderServices;
 
   // Email changes need a uniqueness check
   if (typeof email === 'string' && email.trim()) {
@@ -265,20 +276,24 @@ router.post('/reset-password', async (req, res) => {
 // GET /api/minders — list all active petminder accounts (public, no auth required)
 router.get('/minders', (req, res) => {
   const minders = db.get('users')
-    .filter(u => u.role === 'minder' && u.status !== 'Suspended' && u.status !== 'Banned')
+    .filter(u => {
+      const roles = Array.isArray(u.role) ? u.role : [u.role];
+      return roles.includes('minder') && u.status !== 'Suspended' && u.status !== 'Banned';
+    })
     .value()
     .map(u => ({
-      id:           u.id,
-      name:         ((u.firstName || '') + ' ' + (u.lastName || '')).trim(),
-      profileImage: u.profileImage || '',
-      location:     u.serviceArea || u.location || '',
-      bio:          u.bio          || '',
-      petsCaredFor: u.petsCaredFor || '',
-      services:     u.services     || '',
-      rate:         u.rate         || '',
-      experience:   u.experience   || '',
-      priceMin:     u.priceMin != null ? u.priceMin : 0,
-      priceMax:     u.priceMax != null ? u.priceMax : 50
+      id:             u.id,
+      name:           ((u.firstName || '') + ' ' + (u.lastName || '')).trim(),
+      profileImage:   u.profileImage || '',
+      location:       u.serviceArea || u.location || '',
+      bio:            u.bio          || '',
+      petsCaredFor:   u.petsCaredFor || '',
+      services:       u.services     || (u.minderServices || []).join(', '),
+      rate:           u.rate         || '',
+      experience:     u.experience   || '',
+      priceMin:       u.priceMin != null ? u.priceMin : 0,
+      priceMax:       u.priceMax != null ? u.priceMax : 50,
+      minderServices: u.minderServices || []
     }));
   res.json(minders);
 });

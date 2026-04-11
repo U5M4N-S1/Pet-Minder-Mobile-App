@@ -118,6 +118,11 @@ const api = {
   getDisputes()             { return this._req('GET',    '/admin/disputes'); },
   createDispute(data)       { return this._req('POST',   '/admin/disputes', data); },
   updateDispute(id, data)   { return this._req('PATCH',  '/admin/disputes/' + id, data); },
+  // Chats
+  getChats()                { return this._req('GET',    '/chats'); },
+  getChatMessages(id)       { return this._req('GET',    '/chats/' + id + '/messages'); },
+  sendChatMessage(id, text) { return this._req('POST',   '/chats/' + id + '/messages', { text }); },
+  createChat(otherUserId)   { return this._req('POST',   '/chats', { otherUserId }); },
 };
 
 // Hydrate userProfile from localStorage immediately (sync) so pages render
@@ -302,8 +307,15 @@ async function respondToBooking(bookingId, status, btnEl) {
   const row = btnEl.closest('.booking-request-actions');
   if (row) row.querySelectorAll('button').forEach(b => b.disabled = true);
   try {
-    await api.updateBooking(bookingId, { status });
+    const updated = await api.updateBooking(bookingId, { status });
     showToast(status === 'confirmed' ? '✅ Booking accepted!' : '❌ Booking declined');
+    // When the minder accepts, the backend creates (or reuses) a 1-on-1
+    // chat with the pet owner and returns its id. Open the messages page
+    // on that chat so the minder can message the owner immediately.
+    if (status === 'confirmed' && updated && updated.chatId) {
+      setTimeout(() => { window.location.href = 'messages.html?chat=' + updated.chatId; }, 400);
+      return;
+    }
     loadBookingRequests();        // refresh the requests list
     loadNotificationCount();      // update badge
     // Also refresh the owner-side Upcoming/Past lists on the same page so
@@ -603,27 +615,10 @@ const allUsers = [
 let adminUsers    = [];
 let adminDisputes = [];
 
-// Chat data
-const chatData = {
-  sarah: { name: 'Sarah K.', avatar: '🧑‍🦱', online: true, messages: [
-    { from: 'them', text: "Hi Usman! Excited for Monday's walk with Buddy 🐕", time: '10:28' },
-    { from: 'me', text: "Hi Sarah! He's been looking forward to it all week 😄", time: '10:29' },
-    { from: 'them', text: 'Haha brilliant! Should I bring his usual treats?', time: '10:31' },
-    { from: 'me', text: 'Yes please! He loves the chicken ones 🍗', time: '10:31' },
-    { from: 'them', text: "Sounds good! I'll bring a treat for Buddy 🐕", time: '10:32' }
-  ]},
-  emma: { name: 'Emma T.', avatar: '🧔', online: false, messages: [
-    { from: 'them', text: "Hi! I've confirmed your booking for Wednesday", time: 'Yesterday' },
-    { from: 'me', text: 'Perfect, thank you! Luna will be ready', time: 'Yesterday' },
-    { from: 'them', text: 'Your booking is confirmed for Wednesday!', time: 'Yesterday' }
-  ]},
-  james: { name: 'James M.', avatar: '👩‍🦰', online: false, messages: [
-    { from: 'them', text: 'Just finished the visit with Luna!', time: 'Mon' },
-    { from: 'them', text: 'Luna was an absolute angel today 🐈', time: 'Mon' },
-    { from: 'me', text: 'Thank you so much James! 😊', time: 'Mon' }
-  ]}
-};
-
+// Chat state — all chat data comes from the backend. chatListCache holds
+// the most recent /api/chats response so the sidebar can re-render without
+// an extra round-trip when a new message is sent.
+let chatListCache = [];
 let activeChat = null;
 let selectedPets = [];
 
@@ -655,8 +650,8 @@ function show(id) {
     document.getElementById('messages-container').classList.remove('chat-open');
     document.getElementById('chat-empty-state').style.display = 'flex';
     document.getElementById('chat-active-area').style.display = 'none';
-    document.querySelectorAll('.chat-item').forEach(c => c.classList.remove('active-chat'));
     activeChat = null;
+    loadChatList();
   }
   if (id === 'bookings') {
     // Force upcoming tab active
@@ -1035,41 +1030,135 @@ function goBack() {
 }
 
 // ===== MESSAGES =====
-function messageMinder(chatId) {
-  switchTab('messages');
-  setTimeout(() => {
-    const items = document.querySelectorAll('.chat-item');
-    const map = { sarah: 0, emma: 1, james: 2 };
-    if (map[chatId] !== undefined && items[map[chatId]]) openChatInline(items[map[chatId]], chatId);
-  }, 100);
+// Format an ISO timestamp into a short sidebar label: "HH:MM" today,
+// "Yesterday", day name within the last week, otherwise DD/MM.
+function formatChatTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) return d.toTimeString().slice(0, 5);
+  const yest = new Date(now); yest.setDate(now.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return 'Yesterday';
+  const diffDays = Math.floor((now - d) / 86400000);
+  if (diffDays < 7) return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+  return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
 }
 
-function openChatInline(el, chatId) {
-  activeChat = chatId;
-  const data = chatData[chatId];
-  document.querySelectorAll('.chat-item').forEach(c => c.classList.remove('active-chat'));
-  el.classList.add('active-chat');
-  const u = el.querySelector('.chat-unread'); if (u) u.remove();
+function formatMsgTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso); if (isNaN(d.getTime())) return '';
+  return d.toTimeString().slice(0, 5);
+}
+
+function chatAvatarHTML(other) {
+  if (other && other.avatar) {
+    return '<img class="avatar-img" src="' + other.avatar + '" alt="">';
+  }
+  return '🧑';
+}
+
+async function loadChatList() {
+  const list = document.getElementById('chat-list');
+  if (!list) return;
+  try {
+    const chats = await api.getChats();
+    chatListCache = chats;
+    renderChatList();
+  } catch {
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--bark-light);font-size:13px">Could not load chats.</div>';
+  }
+}
+
+function renderChatList() {
+  const list = document.getElementById('chat-list');
+  if (!list) return;
+  if (!chatListCache.length) {
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--bark-light);font-size:13px">No conversations yet.<br>Accept a booking or message a minder to start.</div>';
+    return;
+  }
+  list.innerHTML = chatListCache.map(c => {
+    const activeCls = activeChat === c.id ? ' active-chat' : '';
+    const unread = (c.unread && activeChat !== c.id) ? '<div class="chat-unread">' + c.unread + '</div>' : '';
+    return '<div class="chat-item' + activeCls + '" data-chat-id="' + c.id + '" onclick="openChatInline(' + c.id + ')">'
+      + '<div class="chat-avatar">' + chatAvatarHTML(c.other) + '</div>'
+      + '<div class="chat-info"><div class="chat-name">' + (c.other.name || 'User') + '</div>'
+      + '<div class="chat-preview">' + (c.lastPreview || 'No messages yet') + '</div></div>'
+      + '<div class="chat-meta"><div class="chat-time">' + formatChatTime(c.lastMessageAt) + '</div>' + unread + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+async function messageMinder(otherUserId) {
+  try {
+    const chat = await api.createChat(Number(otherUserId));
+    window.location.href = 'messages.html?chat=' + chat.id;
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Could not open chat'));
+  }
+}
+
+async function openChatInline(chatId) {
+  activeChat = Number(chatId);
+  const chat = chatListCache.find(c => c.id === activeChat);
+  renderChatList();
   document.getElementById('chat-empty-state').style.display = 'none';
   const area = document.getElementById('chat-active-area'); area.style.display = 'flex';
-  document.getElementById('chat-active-avatar').textContent = data.avatar;
-  document.getElementById('chat-active-name').textContent = data.name;
-  document.getElementById('chat-active-status').innerHTML = data.online ? '● Online' : '● Offline';
-  document.getElementById('chat-active-status').style.color = data.online ? '#4caf50' : '#999';
-  const msgs = document.getElementById('chat-active-messages'); msgs.innerHTML = '';
-  data.messages.forEach(m => { const b = document.createElement('div'); b.className = 'msg-bubble ' + (m.from === 'me' ? 'sent' : 'received'); b.innerHTML = m.text + '<div class="msg-time">' + m.time + '</div>'; msgs.appendChild(b); });
-  msgs.scrollTop = msgs.scrollHeight;
-  document.getElementById('messages-container').classList.add('chat-open');
-}
-function closeMobileChat() { document.getElementById('messages-container').classList.remove('chat-open'); }
-function sendMessage() {
-  const input = document.getElementById('chat-input-field'); const text = input.value.trim();
-  if (!text || !activeChat) return;
+  const avatarEl = document.getElementById('chat-active-avatar');
+  if (chat) {
+    avatarEl.innerHTML = chatAvatarHTML(chat.other);
+    document.getElementById('chat-active-name').textContent = chat.other.name || 'User';
+  }
+  document.getElementById('chat-active-status').innerHTML = '● Online';
+  document.getElementById('chat-active-status').style.color = '#4caf50';
   const msgs = document.getElementById('chat-active-messages');
-  const b = document.createElement('div'); b.className = 'msg-bubble sent'; b.innerHTML = text + '<div class="msg-time">Now</div>';
-  msgs.appendChild(b); msgs.scrollTop = msgs.scrollHeight;
-  chatData[activeChat].messages.push({ from: 'me', text, time: 'Now' }); input.value = '';
+  msgs.innerHTML = '<div style="color:var(--bark-light);font-size:13px;text-align:center">Loading…</div>';
+  document.getElementById('messages-container').classList.add('chat-open');
+  try {
+    const history = await api.getChatMessages(activeChat);
+    const myId = store.currentUserId();
+    msgs.innerHTML = '';
+    history.forEach(m => {
+      const b = document.createElement('div');
+      b.className = 'msg-bubble ' + (m.fromUserId === myId ? 'sent' : 'received');
+      b.innerHTML = escapeHTML(m.text) + '<div class="msg-time">' + formatMsgTime(m.createdAt) + '</div>';
+      msgs.appendChild(b);
+    });
+    msgs.scrollTop = msgs.scrollHeight;
+  } catch {
+    msgs.innerHTML = '<div style="color:var(--bark-light);font-size:13px;text-align:center">Could not load messages.</div>';
+  }
 }
+
+function escapeHTML(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function closeMobileChat() { document.getElementById('messages-container').classList.remove('chat-open'); }
+
+async function sendMessage() {
+  const input = document.getElementById('chat-input-field');
+  const text = input.value.trim();
+  if (!text || !activeChat) return;
+  input.value = '';
+  const msgs = document.getElementById('chat-active-messages');
+  const b = document.createElement('div');
+  b.className = 'msg-bubble sent';
+  b.innerHTML = escapeHTML(text) + '<div class="msg-time">…</div>';
+  msgs.appendChild(b);
+  msgs.scrollTop = msgs.scrollHeight;
+  try {
+    const saved = await api.sendChatMessage(activeChat, text);
+    b.innerHTML = escapeHTML(saved.text) + '<div class="msg-time">' + formatMsgTime(saved.createdAt) + '</div>';
+    // Refresh list so newest-message-first ordering updates (moves active chat to top)
+    await loadChatList();
+  } catch (err) {
+    b.remove();
+    showToast('❌ ' + (err.message || 'Failed to send'));
+  }
+}
+
 const _chatInputField = document.getElementById('chat-input-field');
 if (_chatInputField) _chatInputField.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
 

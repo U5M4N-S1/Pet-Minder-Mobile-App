@@ -168,6 +168,13 @@ router.patch('/:id', requireAuth, (req, res) => {
   if (isMinder && ['confirmed', 'declined'].includes(status)) {
     row.assign({ status }).write();
 
+    let chatId = null;
+    if (status === 'confirmed') {
+      const { findOrCreateChat } = require('./chats');
+      const chat = findOrCreateChat(booking.ownerId, Number(booking.minderKey));
+      if (chat) chatId = chat.id;
+    }
+
     // Cascade: when a minder accepts a booking, auto-decline all other
     // pending requests for the same minder at the same date/time, and
     // notify each affected owner.
@@ -197,7 +204,9 @@ router.patch('/:id', requireAuth, (req, res) => {
       });
     }
 
-    return res.json(toDTO(row.value()));
+    const dto = toDTO(row.value());
+    if (chatId) dto.chatId = chatId;
+    return res.json(dto);
   }
   if (isOwner && status === 'cancelled') {
     row.assign({ status }).write();

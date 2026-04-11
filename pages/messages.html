@@ -27,8 +27,34 @@
 <!-- MESSAGES -->
 <div class="screen active" id="screen-messages">
   <div class="messages-container" id="messages-container">
-    <div class="messages-sidebar"><div class="messages-sidebar-header"><h2>Messages</h2></div><div class="chat-list"><div class="chat-item" onclick="openChatInline(this,'sarah')"><div class="chat-avatar">🧑‍🦱<div class="chat-online"></div></div><div class="chat-info"><div class="chat-name">Sarah K.</div><div class="chat-preview">Sounds good! I'll bring a treat for Buddy 🐕</div></div><div class="chat-meta"><div class="chat-time">10:32</div><div class="chat-unread">2</div></div></div><div class="chat-item" onclick="openChatInline(this,'emma')"><div class="chat-avatar">🧔</div><div class="chat-info"><div class="chat-name">Emma T.</div><div class="chat-preview">Your booking is confirmed for Wednesday!</div></div><div class="chat-meta"><div class="chat-time">Yesterday</div></div></div><div class="chat-item" onclick="openChatInline(this,'james')"><div class="chat-avatar">👩‍🦰</div><div class="chat-info"><div class="chat-name">James M.</div><div class="chat-preview">Luna was an absolute angel today 🐈</div></div><div class="chat-meta"><div class="chat-time">Mon</div></div></div></div></div>
-    <div class="messages-main" id="messages-main"><div class="messages-empty" id="chat-empty-state"><div class="messages-empty-icon">💬</div><div class="messages-empty-text">Select a chat to start messaging</div><div class="messages-empty-sub">Choose from your conversations on the left</div></div><div id="chat-active-area" style="display:none;flex-direction:column;flex:1"><div class="chat-header-bar"><button class="chat-back-btn" onclick="closeMobileChat()">←</button><div class="chat-avatar" style="width:38px;height:38px;font-size:18px" id="chat-active-avatar">🧑‍🦱</div><div><div style="font-weight:600;font-size:15px" id="chat-active-name">Sarah K.</div><div class="chat-active-status" id="chat-active-status">● Online</div></div></div><div class="chat-messages" id="chat-active-messages"></div><div class="chat-input-bar"><input type="text" class="chat-input" placeholder="Type a message..." id="chat-input-field"><button class="send-btn" onclick="sendMessage()">➤</button></div></div></div>
+    <div class="messages-sidebar">
+      <div class="messages-sidebar-header"><h2>Messages</h2></div>
+      <div class="chat-list" id="chat-list">
+        <div style="padding:24px;text-align:center;color:var(--bark-light);font-size:13px">Loading chats…</div>
+      </div>
+    </div>
+    <div class="messages-main" id="messages-main">
+      <div class="messages-empty" id="chat-empty-state">
+        <div class="messages-empty-icon">💬</div>
+        <div class="messages-empty-text">Select a chat to start messaging</div>
+        <div class="messages-empty-sub">Choose from your conversations on the left</div>
+      </div>
+      <div id="chat-active-area" style="display:none;flex-direction:column;flex:1">
+        <div class="chat-header-bar">
+          <button class="chat-back-btn" onclick="closeMobileChat()">←</button>
+          <div class="chat-avatar" style="width:38px;height:38px;font-size:18px" id="chat-active-avatar">🧑</div>
+          <div>
+            <div style="font-weight:600;font-size:15px" id="chat-active-name">Chat</div>
+            <div class="chat-active-status" id="chat-active-status">● Online</div>
+          </div>
+        </div>
+        <div class="chat-messages" id="chat-active-messages"></div>
+        <div class="chat-input-bar">
+          <input type="text" class="chat-input" placeholder="Type a message..." id="chat-input-field">
+          <button class="send-btn" onclick="sendMessage()">➤</button>
+        </div>
+      </div>
+    </div>
   </div>
   <nav class="bottom-nav"><button class="bottom-nav-item" onclick="window.location.href='home.html'"><span>🏠</span><span>Home</span></button><button class="bottom-nav-item" onclick="window.location.href='search.html'"><span>🔍</span><span>Search</span></button><button class="bottom-nav-item" onclick="window.location.href='bookings.html'"><span>📅</span><span>Bookings</span></button><button class="bottom-nav-item active" onclick="window.location.href='messages.html'"><span>💬</span><span>Messages</span></button><button class="bottom-nav-item" onclick="window.location.href='profile.html'"><span>👤</span><span>Profile</span></button></nav>
 </div>
@@ -36,5 +62,25 @@
 <div class="toast" id="toast"></div>
 
 <script src="../app.js"></script>
+<script>
+(async () => {
+  // Re-bind the Enter-to-send handler for the chat input on this page.
+  // app.js captures the field once at load time; on this dedicated page
+  // the element exists, so attach directly here too for safety.
+  const input = document.getElementById('chat-input-field');
+  if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+
+  await loadChatList();
+
+  // Deep-link: ?chat=<id> opens that chat automatically (used after the
+  // minder accepts a booking so the chat opens in one click).
+  const params = new URLSearchParams(window.location.search);
+  const want = Number(params.get('chat'));
+  if (want) {
+    const exists = chatListCache.find(c => c.id === want);
+    if (exists) openChatInline(want);
+  }
+})();
+</script>
 </body>
 </html>

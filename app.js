@@ -12,6 +12,9 @@ let regPendingCerts = []; // certifications added during registration (pet minde
 let regCertNextId = 1;    // local counter for pending cert IDs
 let currentReviewMinder = null;
 let reportSelectedUser = null;
+// In-context report target — populated when the user opens the report modal
+// from the minder profile or from a booking card.
+let currentReportTarget = null;
 
 // User profile — populated from the session cache or API on page load
 let userProfile = {
@@ -19,7 +22,8 @@ let userProfile = {
   role: 'owner', profileImage: '',
   // Minder-specific (blank for owners)
   serviceArea: '', petsCaredFor: '', services: '', rate: '', experience: '',
-  priceMin: 0, priceMax: 50
+  priceMin: 0, priceMax: 50,
+  availableDays: [], availableSlots: [], certifications: ''
 };
 
 // ===== LOCAL STORE =====
@@ -147,6 +151,9 @@ function hydrateUserProfile(u) {
   userProfile.experience   = u.experience   || '';
   userProfile.priceMin     = u.priceMin != null ? u.priceMin : 0;
   userProfile.priceMax     = u.priceMax != null ? u.priceMax : 50;
+  userProfile.availableDays  = Array.isArray(u.availableDays)  ? u.availableDays.slice()  : [];
+  userProfile.availableSlots = Array.isArray(u.availableSlots) ? u.availableSlots.slice() : [];
+  userProfile.certifications = u.certifications || '';
 }
 (function initUserFromCache() { hydrateUserProfile(store.getUser()); }());
 
@@ -278,16 +285,25 @@ async function loadBookingRequests() {
   if (!el) return;
   el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--bark-light);font-size:13px">Loading requests...</div>';
   try {
-    // Requests tab shows only PENDING requests. Once the minder accepts or
-    // declines one it leaves this list — accepted bookings move to the
-    // Upcoming tab and declined/cancelled ones disappear from active views.
+    // The Requests tab shows ALL bookings where the logged-in user is the
+    // minder. Pending ones display the Accept/Decline actions and lead the
+    // list; accepted, declined, cancelled and completed ones still appear
+    // (sorted after pending) so the minder can report a customer from any
+    // past booking as well.
     const all = await api.getBookingRequests();
-    const requests = all.filter(b => b.status === 'pending');
+    const pending = all.filter(b => b.status === 'pending');
+    const rest    = all.filter(b => b.status !== 'pending');
+    const requests = pending.concat(rest);
     if (requests.length === 0) {
-      el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No pending booking requests.</div>';
+      el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No booking requests yet.</div>';
       return;
     }
-    el.innerHTML = requests.map(b => `
+    el.innerHTML = requests.map(b => {
+      // Safely escape the owner name for an inline onclick attribute:
+      // strip double-quotes (would close the attribute) and escape single-
+      // quotes (would terminate the JS string).
+      const ownerNameAttr = String(b.ownerName || 'Pet Owner').replace(/"/g, '').replace(/'/g, "\\'");
+      return `
       <div class="booking-card" style="cursor:default;flex-wrap:wrap">
         <div class="booking-date-block"><div class="booking-date-day">${b.day}</div><div class="booking-date-month">${b.month}</div></div>
         <div class="booking-date-sep"></div>
@@ -298,8 +314,12 @@ async function loadBookingRequests() {
           ${b.price ? '<div class="booking-detail" style="margin-top:4px;color:var(--terra)">' + b.price + '</div>' : ''}
         </div>
         <span class="booking-status status-${b.status}">${statusLabels[b.status] || b.status}</span>
+        <div style="width:100%;display:flex;justify-content:flex-end;margin-top:8px">
+          <button class="booking-report-btn" onclick="openReportCustomerModal(${b.id}, ${b.ownerId || 'null'}, '${ownerNameAttr}')">🚩 Report customer</button>
+        </div>
         ${b.status === 'pending' ? '<div class="booking-request-actions" style="width:100%;display:flex;gap:8px;margin-top:10px;padding-left:62px"><button class="btn-primary" style="flex:1;padding:10px;font-size:13px" onclick="respondToBooking(' + b.id + ',\'confirmed\',this)">Accept</button><button class="btn-outline" style="flex:1;padding:10px;font-size:13px;color:var(--bark-light);border-color:var(--sand)" onclick="respondToBooking(' + b.id + ',\'declined\',this)">Decline</button></div>' : ''}
-      </div>`).join('');
+      </div>`;
+    }).join('');
   } catch {
     el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">Could not load requests.</div>';
   }
@@ -1045,6 +1065,20 @@ function openMinderProfile(minderId) {
   previousScreen = currentScreen;
   // Try real minder data first, fall back to legacy hardcoded data
   const minder = loadedMinders.find(m => m.id === minderId) || minderData[minderId];
+  // Stash the currently-viewed minder as the default report target so the
+  // "🚩 Report" button in the hero can pick it up without extra state plumbing.
+  // Only real backend minders (numeric id) can be reported — legacy hardcoded
+  // demo profiles aren't real users so we leave the target null and hide the
+  // button.
+  const canReport = minder && typeof minder.id === 'number' && userProfile.role === 'owner';
+  currentReportTarget = canReport ? {
+    targetUserId: minder.id,
+    targetName:   minder.name,
+    targetRole:   'minder',
+    context:      'minder-profile'
+  } : null;
+  const reportBtn = document.getElementById('mp-report-btn');
+  if (reportBtn) reportBtn.style.display = canReport ? 'inline-block' : 'none';
   if (minder) {
     const mpAvatar = document.getElementById('mp-avatar');
     if (minder.profileImage) {
@@ -1055,16 +1089,25 @@ function openMinderProfile(minderId) {
     document.getElementById('mp-name').textContent = minder.name;
     document.getElementById('mp-loc').textContent = minder.location ? '📍 ' + minder.location : (minder.loc || '');
     document.getElementById('mp-bio').textContent = minder.bio || '';
-    // Update the detail section with real data
+    // Update the detail section with real data. For real backend minders
+    // (numeric id) we always overwrite so stale hardcoded rows from the
+    // template ("Pet First Aid ✅" etc.) can't leak through when a minder
+    // hasn't filled in their details yet.
     const details = document.getElementById('mp-details');
-    if (details && (minder.experience || minder.petsCaredFor || minder.services || minder.rate || minder.priceMin != null)) {
-      details.innerHTML = '';
-      if (minder.experience)   details.innerHTML += '<div class="info-row"><span class="info-label">Experience</span><span class="info-value">' + minder.experience + '</span></div>';
-      if (minder.petsCaredFor) details.innerHTML += '<div class="info-row"><span class="info-label">Pets accepted</span><span class="info-value">' + minder.petsCaredFor + '</span></div>';
-      if (minder.services)     details.innerHTML += '<div class="info-row"><span class="info-label">Services</span><span class="info-value">' + minder.services + '</span></div>';
+    const isRealMinder = typeof minder.id === 'number';
+    if (details && (isRealMinder || minder.experience || minder.petsCaredFor || minder.services || minder.rate || minder.priceMin != null)) {
+      let html = '';
+      if (minder.experience)   html += '<div class="info-row"><span class="info-label">Experience</span><span class="info-value">' + escapeHTML(minder.experience) + '</span></div>';
+      if (minder.petsCaredFor) html += '<div class="info-row"><span class="info-label">Pets accepted</span><span class="info-value">' + escapeHTML(minder.petsCaredFor) + '</span></div>';
+      if (minder.services)     html += '<div class="info-row"><span class="info-label">Services</span><span class="info-value">' + escapeHTML(minder.services) + '</span></div>';
       const priceStr = (minder.priceMin != null && minder.priceMax != null) ? '£' + minder.priceMin + ' – £' + minder.priceMax + '/hr' : (minder.rate || '');
-      if (priceStr) details.innerHTML += '<div class="info-row"><span class="info-label">Rate</span><span class="info-value">' + priceStr + '</span></div>';
+      if (priceStr) html += '<div class="info-row"><span class="info-label">Rate</span><span class="info-value">' + escapeHTML(priceStr) + '</span></div>';
+      if (minder.certifications) html += '<div class="info-row"><span class="info-label">Certifications</span><span class="info-value" style="white-space:pre-wrap;text-align:right;max-width:60%">' + escapeHTML(minder.certifications) + '</span></div>';
+      if (!html && isRealMinder) html = '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:8px 0">This minder hasn\'t added service details yet.</p>';
+      details.innerHTML = html;
     }
+    // Availability tab — render day grid + time-of-day slots from saved data
+    renderMinderAvailability(minder);
     // Hide stars for real minders (no review system wired to them yet)
     const starsEl = document.getElementById('mp-stars');
     if (starsEl) starsEl.innerHTML = minder.stars ? minder.stars + ' <span style="font-size:13px;opacity:0.8">(' + (minder.reviews || 0) + ' reviews)</span>' : '';
@@ -1076,6 +1119,47 @@ function openMinderProfile(minderId) {
   document.getElementById('tab-about').classList.remove('hidden');
   show('minder-profile');
   currentScreen = 'minder-profile';
+}
+
+// Render the minder's availability tab from their saved arrays. Falls back
+// to a "not set" grid/message when a minder hasn't configured anything yet.
+function renderMinderAvailability(minder) {
+  const grid  = document.getElementById('mp-avail-grid');
+  const slots = document.getElementById('mp-avail-slots');
+  if (!grid || !slots) return;
+
+  const days = Array.isArray(minder.availableDays)  ? minder.availableDays  : [];
+  const timeSlots = Array.isArray(minder.availableSlots) ? minder.availableSlots : [];
+  const isRealMinder = typeof minder.id === 'number';
+
+  const DAY_DEFS = [
+    { key: 'mon', label: 'M' }, { key: 'tue', label: 'T' }, { key: 'wed', label: 'W' },
+    { key: 'thu', label: 'T' }, { key: 'fri', label: 'F' }, { key: 'sat', label: 'S' },
+    { key: 'sun', label: 'S' }
+  ];
+
+  // For legacy demo minders (no numeric id) keep the old "all open" look so
+  // the existing mock data still demos nicely; for real minders show the
+  // actual saved availability.
+  grid.innerHTML = DAY_DEFS.map(d => {
+    const on = isRealMinder ? days.includes(d.key) : true;
+    return '<div class="avail-day ' + (on ? 'available' : 'busy') + '"><div>' + d.label + '</div><div>' + (on ? '✓' : '–') + '</div></div>';
+  }).join('');
+
+  const SLOT_DEFS = [
+    { key: 'morning',   label: 'Morning (8–12)' },
+    { key: 'afternoon', label: 'Afternoon (12–5)' },
+    { key: 'evening',   label: 'Evening (5–8)' }
+  ];
+  slots.innerHTML = SLOT_DEFS.map(s => {
+    const on = isRealMinder ? timeSlots.includes(s.key) : true;
+    const val = on ? '✅ Available' : '❌ Unavailable';
+    return '<div class="info-row"><span class="info-label">' + s.label + '</span><span class="info-value">' + val + '</span></div>';
+  }).join('');
+
+  if (isRealMinder && !days.length && !timeSlots.length) {
+    slots.innerHTML = '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:8px 0">This minder hasn\'t set their availability yet.</p>' + slots.innerHTML;
+  }
 }
 
 function openBooking() { previousScreen = currentScreen; show('booking'); currentScreen = 'booking'; }
@@ -1351,6 +1435,8 @@ function renderMinders(minders) {
     const tags = [];
     if (m.services) m.services.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
     if (m.petsCaredFor) m.petsCaredFor.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
+    const dayCount = Array.isArray(m.availableDays) ? m.availableDays.length : 0;
+    const availLine = dayCount ? '🗓 Available ' + dayCount + ' day' + (dayCount === 1 ? '' : 's') + '/week' : '';
 
     const card = document.createElement('div');
     card.className = 'minder-list-card';
@@ -1362,6 +1448,7 @@ function renderMinders(minders) {
         '<div class="minder-list-name">' + m.name + '</div>' +
         (loc ? '<div class="minder-list-loc">' + loc + '</div>' : '') +
         (tags.length ? '<div class="minder-list-tags">' + tags.join('') + '</div>' : '') +
+        (availLine ? '<div class="minder-list-loc" style="margin-top:2px">' + availLine + '</div>' : '') +
         (price ? '<div class="minder-list-rate">' + price + '</div>' : '') +
         '<div class="minder-btns">' +
           '<button class="btn-msg-minder" onclick="event.stopPropagation();showToast(\'Chat coming soon!\')">💬 Message</button>' +
@@ -1818,6 +1905,74 @@ function submitReport() {
   });
 }
 
+// ===== IN-CONTEXT REPORT MODAL =====
+// Used from the minder profile hero (owner → minder) and from the minder's
+// booking requests list (minder → owner). The modal reads `currentReportTarget`
+// and submits to POST /api/admin/disputes with structured context so the
+// admin dashboard sees who reported whom, from where.
+function openReportMinderModal() {
+  if (!currentReportTarget || currentReportTarget.targetRole !== 'minder') {
+    showToast('❌ Unable to report this profile');
+    return;
+  }
+  openReportModalWith(currentReportTarget);
+}
+
+function openReportCustomerModal(bookingId, ownerId, ownerName) {
+  currentReportTarget = {
+    targetUserId: ownerId,
+    targetName:   ownerName,
+    targetRole:   'owner',
+    context:      'booking',
+    bookingId:    bookingId
+  };
+  openReportModalWith(currentReportTarget);
+}
+
+function openReportModalWith(target) {
+  const modal = document.getElementById('report-modal');
+  if (!modal) { showToast('❌ Report form unavailable on this page'); return; }
+  const roleLabel = target.targetRole === 'minder' ? 'Pet Minder' : (target.targetRole === 'owner' ? 'Pet Owner' : '');
+  const targetEl  = document.getElementById('report-modal-target');
+  const titleEl   = document.getElementById('report-modal-title');
+  const reasonEl  = document.getElementById('report-modal-reason');
+  const catEl     = document.getElementById('report-modal-category');
+  if (titleEl)  titleEl.textContent = '🚩 Report ' + (roleLabel || 'User');
+  if (targetEl) targetEl.textContent = 'Reporting: ' + (target.targetName || 'Unknown') + (roleLabel ? ' (' + roleLabel + ')' : '');
+  if (reasonEl) reasonEl.value = '';
+  if (catEl)    catEl.selectedIndex = 0;
+  modal.classList.add('open');
+}
+
+function closeReportModal() {
+  const modal = document.getElementById('report-modal');
+  if (modal) modal.classList.remove('open');
+}
+
+async function submitReportModal() {
+  if (!currentReportTarget) { showToast('❌ No user selected'); return; }
+  const reasonEl = document.getElementById('report-modal-reason');
+  const catEl    = document.getElementById('report-modal-category');
+  const reason   = (reasonEl && reasonEl.value || '').trim();
+  const category = (catEl && catEl.value || '').trim();
+  if (!reason) { showToast('❌ Please describe what happened'); return; }
+  const fullReason = category ? ('[' + category + '] ' + reason) : reason;
+  try {
+    await api.createDispute({
+      reason:       fullReason,
+      targetUserId: currentReportTarget.targetUserId,
+      targetName:   currentReportTarget.targetName,
+      targetRole:   currentReportTarget.targetRole,
+      context:      currentReportTarget.context,
+      bookingId:    currentReportTarget.bookingId
+    });
+    showToast('✅ Report submitted. Our team will review it.');
+    closeReportModal();
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Failed to submit report'));
+  }
+}
+
 // ===== EDIT PROFILE =====
 // ===== CHIP SELECTORS & PRICE HELPERS =====
 // Toggle chip active state on click
@@ -1837,6 +1992,21 @@ function setSelectedChips(containerId, csv) {
   const el = document.getElementById(containerId);
   if (!el) return;
   const vals = csv.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  el.querySelectorAll('.chip-btn').forEach(b => {
+    b.classList.toggle('active', vals.includes(b.getAttribute('data-value').toLowerCase()));
+  });
+}
+// Array variants used for availability (days/slots are stored as arrays,
+// not csv, because they're validated against a strict whitelist server-side).
+function getSelectedChipsArray(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return [];
+  return Array.from(el.querySelectorAll('.chip-btn.active')).map(b => b.getAttribute('data-value'));
+}
+function setSelectedChipsArray(containerId, arr) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const vals = (Array.isArray(arr) ? arr : []).map(v => String(v).toLowerCase());
   el.querySelectorAll('.chip-btn').forEach(b => {
     b.classList.toggle('active', vals.includes(b.getAttribute('data-value').toLowerCase()));
   });
@@ -1868,6 +2038,10 @@ function openEditProfileModal() {
       document.getElementById('edit-price-min').value = userProfile.priceMin != null ? userProfile.priceMin : 0;
       document.getElementById('edit-price-max').value = userProfile.priceMax != null ? userProfile.priceMax : 50;
       document.getElementById('edit-experience').value = userProfile.experience || '';
+      setSelectedChipsArray('edit-avail-days-chips',  userProfile.availableDays);
+      setSelectedChipsArray('edit-avail-slots-chips', userProfile.availableSlots);
+      const certEl = document.getElementById('edit-certifications');
+      if (certEl) certEl.value = userProfile.certifications || '';
     }
   }
   document.getElementById('edit-profile-modal').classList.add('open');
@@ -1894,6 +2068,9 @@ function saveProfile() {
       updates.priceMin     = clampPrice(document.getElementById('edit-price-min'));
       updates.priceMax     = clampPrice(document.getElementById('edit-price-max'));
       updates.experience   = (document.getElementById('edit-experience') || {}).value || '';
+      updates.availableDays  = getSelectedChipsArray('edit-avail-days-chips');
+      updates.availableSlots = getSelectedChipsArray('edit-avail-slots-chips');
+      updates.certifications = ((document.getElementById('edit-certifications') || {}).value || '').trim();
     }
     // Optimistic local update so the UI feels instant
     Object.assign(userProfile, updates);
@@ -1984,7 +2161,32 @@ function renderAdminPanels() {
     }
     open.forEach(d => {
       const card = document.createElement('div'); card.className = 'dispute-card'; card.dataset.id = d.id;
-      card.innerHTML = '<div class="dispute-header"><span class="dispute-badge open">' + d.status + '</span><span class="dispute-date">' + d.date + '</span></div><div class="dispute-body"><p><strong>Reported by:</strong> ' + d.from + '</p><p><strong>Against:</strong> ' + d.against + '</p><p><strong>Reason:</strong> ' + d.reason + '</p></div><div class="dispute-actions"><button class="admin-btn edit" onclick="resolveDispute(' + d.id + ')">✅ Resolve</button><button class="admin-btn remove" onclick="dismissDispute(' + d.id + ')">Dismiss</button></div>';
+      // Translate the internal context + role codes into a human-readable
+      // badge so the admin can see where each report originated.
+      const contextLabel = d.context === 'minder-profile' ? '🐾 From minder profile'
+                         : d.context === 'booking'        ? ('📅 From booking #' + (d.bookingId || '?'))
+                         : d.context === 'help-centre'    ? '❓ From help centre'
+                         : '';
+      const reporterRoleLabel = d.reporterRole === 'minder' ? 'Pet Minder'
+                              : d.reporterRole === 'owner'  ? 'Pet Owner'
+                              : d.reporterRole === 'admin'  ? 'Admin' : '';
+      const targetRoleLabel   = d.targetRole === 'minder' ? 'Pet Minder'
+                              : d.targetRole === 'owner'  ? 'Pet Owner' : '';
+      const contextRow = contextLabel
+        ? '<p style="font-size:11px;color:var(--terra);font-weight:600;margin-bottom:6px">' + contextLabel + '</p>'
+        : '';
+      card.innerHTML =
+        '<div class="dispute-header"><span class="dispute-badge open">' + d.status + '</span><span class="dispute-date">' + d.date + '</span></div>' +
+        '<div class="dispute-body">' +
+          contextRow +
+          '<p><strong>Reported by:</strong> ' + d.from + (reporterRoleLabel ? ' <span style="color:var(--bark-light);font-size:12px">(' + reporterRoleLabel + ')</span>' : '') + '</p>' +
+          '<p><strong>Against:</strong> ' + d.against + (targetRoleLabel ? ' <span style="color:var(--bark-light);font-size:12px">(' + targetRoleLabel + ')</span>' : '') + '</p>' +
+          '<p><strong>Reason:</strong> ' + d.reason + '</p>' +
+        '</div>' +
+        '<div class="dispute-actions">' +
+          '<button class="admin-btn edit" onclick="resolveDispute(' + d.id + ')">✅ Resolve</button>' +
+          '<button class="admin-btn remove" onclick="dismissDispute(' + d.id + ')">Dismiss</button>' +
+        '</div>';
       disputesPanel.appendChild(card);
     });
   }

@@ -123,6 +123,28 @@
   </div>
 
   <div class="field-group"><label>Experience</label><input type="text" id="edit-experience" placeholder="e.g. 3 years"></div>
+
+  <div class="field-group"><label>Available Days</label>
+    <div class="chip-group" id="edit-avail-days-chips">
+      <button type="button" class="chip-btn" data-value="mon">Mon</button>
+      <button type="button" class="chip-btn" data-value="tue">Tue</button>
+      <button type="button" class="chip-btn" data-value="wed">Wed</button>
+      <button type="button" class="chip-btn" data-value="thu">Thu</button>
+      <button type="button" class="chip-btn" data-value="fri">Fri</button>
+      <button type="button" class="chip-btn" data-value="sat">Sat</button>
+      <button type="button" class="chip-btn" data-value="sun">Sun</button>
+    </div>
+  </div>
+
+  <div class="field-group"><label>Available Times</label>
+    <div class="chip-group" id="edit-avail-slots-chips">
+      <button type="button" class="chip-btn" data-value="morning">🌅 Morning</button>
+      <button type="button" class="chip-btn" data-value="afternoon">☀️ Afternoon</button>
+      <button type="button" class="chip-btn" data-value="evening">🌙 Evening</button>
+    </div>
+  </div>
+
+  <div class="field-group"><label>Certifications &amp; Qualifications</label><textarea id="edit-certifications" placeholder="e.g. Pet First Aid Certified, DBS Checked, Canine Care Level 2..." style="width:100%;padding:12px 14px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);resize:vertical;min-height:70px;outline:none"></textarea></div>
 </div>
 <div class="pet-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="closeEditProfileModal()">Cancel</button><button class="btn-primary" style="flex:2;padding:14px" onclick="saveProfile()">Save Changes</button></div></div></div>
 

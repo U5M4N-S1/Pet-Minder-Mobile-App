@@ -32,9 +32,17 @@ function userDTO(u) {
     rate:         u.rate         || '',
     experience:   u.experience   || '',
     priceMin:     u.priceMin != null ? u.priceMin : 0,
-    priceMax:     u.priceMax != null ? u.priceMax : 50
+    priceMax:     u.priceMax != null ? u.priceMax : 50,
+    // Availability + qualifications (minder-specific; empty for owners)
+    availableDays:  Array.isArray(u.availableDays)  ? u.availableDays  : [],
+    availableSlots: Array.isArray(u.availableSlots) ? u.availableSlots : [],
+    certifications: u.certifications || ''
   };
 }
+
+// Whitelists for availability validation
+const VALID_DAYS  = ['mon','tue','wed','thu','fri','sat','sun'];
+const VALID_SLOTS = ['morning','afternoon','evening'];
 
 // ── Avatar upload limits (easy to tune) ───────────────────────────────
 const AVATAR_MAX_BYTES  = 2 * 1024 * 1024; // 2 MB encoded (data-URI)
@@ -129,7 +137,8 @@ router.patch('/me', requireAuth, (req, res) => {
 
   const { firstName, lastName, email, phone, location, bio,
           serviceArea, petsCaredFor, services, rate, experience,
-          priceMin, priceMax } = req.body;
+          priceMin, priceMax,
+          availableDays, availableSlots, certifications } = req.body;
   const updates = {};
   if (typeof firstName    === 'string' && firstName.trim()) updates.firstName    = firstName.trim();
   if (typeof lastName     === 'string') updates.lastName     = lastName.trim();
@@ -145,6 +154,15 @@ router.patch('/me', requireAuth, (req, res) => {
   // Price range (clamped 0–50)
   if (priceMin != null) updates.priceMin = Math.max(0, Math.min(50, Number(priceMin) || 0));
   if (priceMax != null) updates.priceMax = Math.max(0, Math.min(50, Number(priceMax) || 50));
+  // Availability: filter to known day/slot codes and de-duplicate
+  if (Array.isArray(availableDays)) {
+    updates.availableDays = [...new Set(availableDays.map(d => String(d).toLowerCase()).filter(d => VALID_DAYS.includes(d)))];
+  }
+  if (Array.isArray(availableSlots)) {
+    updates.availableSlots = [...new Set(availableSlots.map(s => String(s).toLowerCase()).filter(s => VALID_SLOTS.includes(s)))];
+  }
+  // Certifications free-text (capped to avoid runaway payloads)
+  if (typeof certifications === 'string') updates.certifications = certifications.trim().slice(0, 2000);
 
   // Email changes need a uniqueness check
   if (typeof email === 'string' && email.trim()) {
@@ -292,7 +310,10 @@ router.get('/minders', (req, res) => {
       rate:         u.rate         || '',
       experience:   u.experience   || '',
       priceMin:     u.priceMin != null ? u.priceMin : 0,
-      priceMax:     u.priceMax != null ? u.priceMax : 50
+      priceMax:     u.priceMax != null ? u.priceMax : 50,
+      availableDays:  Array.isArray(u.availableDays)  ? u.availableDays  : [],
+      availableSlots: Array.isArray(u.availableSlots) ? u.availableSlots : [],
+      certifications: u.certifications || ''
     }));
   res.json(minders);
 });

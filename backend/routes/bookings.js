@@ -144,10 +144,12 @@ router.get('/requests', requireAuth, (req, res) => {
     .sortBy('createdAt')
     .value()
     .reverse();                    // newest first
-  // Attach pet-owner name so the minder knows who's requesting
+  // Attach pet-owner name + id so the minder knows who's requesting
+  // and can reference them in the reporting flow.
   const enriched = bookings.map(b => {
     const owner = db.get('users').find({ id: b.ownerId }).value();
     const dto   = toDTO(b);
+    dto.ownerId   = b.ownerId;
     dto.ownerName = owner ? ((owner.firstName || '') + ' ' + (owner.lastName || '')).trim() : 'Unknown';
     return dto;
   });

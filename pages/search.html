@@ -39,10 +39,10 @@
 <!-- MINDER PROFILE (view only) -->
 <div class="screen" id="screen-minder-profile">
   <div class="page-content">
-    <div class="profile-hero"><button class="back-btn" onclick="goBack()">←</button><div class="profile-big-avatar" id="mp-avatar">🧑‍🦱</div><div class="profile-name-lg" id="mp-name">Sarah K.</div><div class="profile-loc-sm" id="mp-loc">📍 Shoreditch, London · 0.8mi away</div><div class="profile-stars-lg" id="mp-stars">★★★★★ <span style="font-size:13px;opacity:0.8">(48 reviews)</span></div></div>
+    <div class="profile-hero"><button class="back-btn" onclick="goBack()">←</button><button class="mp-report-btn" id="mp-report-btn" onclick="openReportMinderModal()" style="display:none">🚩 Report</button><div class="profile-big-avatar" id="mp-avatar">🧑‍🦱</div><div class="profile-name-lg" id="mp-name">Sarah K.</div><div class="profile-loc-sm" id="mp-loc">📍 Shoreditch, London · 0.8mi away</div><div class="profile-stars-lg" id="mp-stars">★★★★★ <span style="font-size:13px;opacity:0.8">(48 reviews)</span></div></div>
     <div class="profile-tabs"><button class="profile-tab active" onclick="switchProfileTab(this,'tab-about')">About</button><button class="profile-tab" onclick="switchProfileTab(this,'tab-availability')">Availability</button><button class="profile-tab" onclick="switchProfileTab(this,'tab-reviews')">Reviews</button></div>
     <div id="tab-about" class="profile-section"><div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow);margin-bottom:16px"><p style="font-size:14px;line-height:1.7;color:var(--bark-light)" id="mp-bio">Hi! I'm Sarah, a passionate animal lover with 5 years of pet care experience. I specialise in dog walking and home visits. Your pet will be treated like royalty! 🐾</p></div><div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)" id="mp-details"><div class="info-row"><span class="info-label">Experience</span><span class="info-value">5 years</span></div><div class="info-row"><span class="info-label">Pets accepted</span><span class="info-value">Dogs, Cats</span></div><div class="info-row"><span class="info-label">Certifications</span><span class="info-value">Pet First Aid ✅</span></div><div class="info-row"><span class="info-label">Dog Walking</span><span class="info-value">£15/hr</span></div><div class="info-row"><span class="info-label">Home Visit</span><span class="info-value">£12/visit</span></div></div></div>
-    <div id="tab-availability" class="profile-section hidden"><div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)"><p style="font-size:13px;color:var(--bark-light);margin-bottom:12px">Available days this week</p><div class="avail-grid"><div class="avail-day available"><div>M</div><div>✓</div></div><div class="avail-day busy"><div>T</div><div>–</div></div><div class="avail-day available"><div>W</div><div>✓</div></div><div class="avail-day available"><div>T</div><div>✓</div></div><div class="avail-day busy"><div>F</div><div>–</div></div><div class="avail-day available"><div>S</div><div>✓</div></div><div class="avail-day available"><div>S</div><div>✓</div></div></div><div style="margin-top:16px"><div class="info-row"><span class="info-label">Morning (8–12)</span><span class="info-value">✅ Available</span></div><div class="info-row"><span class="info-label">Afternoon (12–5)</span><span class="info-value">✅ Available</span></div><div class="info-row"><span class="info-label">Evening (5–8)</span><span class="info-value">❌ Unavailable</span></div></div></div></div>
+    <div id="tab-availability" class="profile-section hidden"><div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)"><p style="font-size:13px;color:var(--bark-light);margin-bottom:12px">Available days this week</p><div class="avail-grid" id="mp-avail-grid"></div><div style="margin-top:16px" id="mp-avail-slots"></div></div></div>
     <div id="tab-reviews" class="profile-section hidden">
       <div style="display:flex;flex-direction:column;gap:12px" id="minder-reviews-list">
         <div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><strong style="font-size:14px">Tom H.</strong><span style="color:#f5a623">★★★★★</span></div><p style="font-size:13px;color:var(--bark-light);line-height:1.6">"Sarah was brilliant with Buster!"</p><p style="font-size:11px;color:var(--bark-light);margin-top:8px">2 days ago</p></div>
@@ -73,6 +73,30 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- REPORT USER MODAL (shared) -->
+<div class="report-modal-overlay" id="report-modal" onclick="if(event.target===this)closeReportModal()">
+  <div class="report-modal">
+    <div class="report-modal-header">
+      <h3 id="report-modal-title">🚩 Report User</h3>
+      <button class="report-modal-close" onclick="closeReportModal()" aria-label="Close">×</button>
+    </div>
+    <p class="report-modal-target" id="report-modal-target">Reporting: —</p>
+    <div class="field-group"><label>Category</label><select id="report-modal-category">
+      <option>Inappropriate behaviour</option>
+      <option>Harassment or abuse</option>
+      <option>Scam or fraud</option>
+      <option>Unsafe pet care</option>
+      <option>No-show / missed booking</option>
+      <option>Other</option>
+    </select></div>
+    <div class="field-group"><label>What happened?</label><textarea id="report-modal-reason" placeholder="Please describe the issue in detail..." rows="5"></textarea></div>
+    <div class="report-modal-actions">
+      <button class="btn-outline" onclick="closeReportModal()">Cancel</button>
+      <button class="btn-primary" onclick="submitReportModal()">Submit Report</button>
+    </div>
+  </div>
+</div>
 
 <!-- FILTER MODAL -->
 <div class="filter-modal-overlay" id="filter-modal" onclick="if(event.target===this)toggleFilterModal()"><div class="filter-modal"><div class="filter-modal-handle"></div><h3>🎛 Filter Minders</h3><div class="filter-section"><div class="filter-section-title">Pet Type</div><div class="filter-options" id="filter-pet-type"><div class="filter-opt" onclick="this.classList.toggle('active')">🐕 Dogs</div><div class="filter-opt" onclick="this.classList.toggle('active')">🐈 Cats</div><div class="filter-opt" onclick="this.classList.toggle('active')">🐇 Small Pets</div><div class="filter-opt" onclick="this.classList.toggle('active')">🐦 Birds</div></div></div><div class="filter-section"><div class="filter-section-title">Service Type</div><div class="filter-options" id="filter-service-type"><div class="filter-opt" onclick="this.classList.toggle('active')">🚶 Walking</div><div class="filter-opt" onclick="this.classList.toggle('active')">🏠 Home Visit</div><div class="filter-opt" onclick="this.classList.toggle('active')">🛁 Grooming</div><div class="filter-opt" onclick="this.classList.toggle('active')">🏥 Vet</div><div class="filter-opt" onclick="this.classList.toggle('active')">🎓 Training</div></div></div><div class="filter-section"><div class="filter-section-title">Price Range (per hour)</div><div class="filter-range"><input type="number" placeholder="£0" min="0" id="filter-price-min"><span>to</span><input type="number" placeholder="£50" min="0" id="filter-price-max"></div></div><div class="filter-actions"><button class="btn-filter-clear" onclick="clearAllFilters()">Clear All</button><button class="btn-filter-apply" onclick="applyFilters()">Save</button></div></div></div>

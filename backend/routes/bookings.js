@@ -150,6 +150,23 @@ router.post('/', requireAuth, (req, res) => {
   };
 
   db.get('bookings').push(booking).write();
+
+  // Notify the minder about the new booking request
+  if (minderKey != null && /^\d+$/.test(String(minderKey))) {
+    const owner = db.get('users').find({ id: req.user.userId }).value();
+    const ownerName = owner ? ((owner.firstName || '') + ' ' + (owner.lastName || '')).trim() : 'A customer';
+    db.get('notifications').push({
+      id:        nextNotifId(),
+      userId:    Number(minderKey),
+      type:      'booking_request',
+      bookingId: booking.id,
+      title:     'New booking request',
+      message:   ownerName + ' wants to book ' + service + ' for ' + petNames + ' on ' + bookingDate + ' at ' + bookingTime + '.',
+      read:      false,
+      createdAt: new Date().toISOString()
+    }).write();
+  }
+
   res.status(201).json(toDTO(booking));
 });
 
@@ -220,6 +237,48 @@ router.patch('/:id', requireAuth, (req, res) => {
           createdAt: new Date().toISOString()
         }).write();
       });
+    }
+
+    // Notify the owner about the accept/decline decision
+    const minderUser = db.get('users').find({ id: Number(booking.minderKey) }).value();
+    const minderFullName = minderUser ? ((minderUser.firstName || '') + ' ' + (minderUser.lastName || '')).trim() : (booking.minderName || 'The minder');
+    const ownerUser = db.get('users').find({ id: booking.ownerId }).value();
+    const ownerFullName = ownerUser ? ((ownerUser.firstName || '') + ' ' + (ownerUser.lastName || '')).trim() : 'The customer';
+
+    if (status === 'confirmed') {
+      // Notify the owner their booking was confirmed
+      db.get('notifications').push({
+        id:        nextNotifId(),
+        userId:    booking.ownerId,
+        type:      'booking_confirmed',
+        bookingId: booking.id,
+        title:     'Booking confirmed!',
+        message:   minderFullName + ' accepted your booking for ' + booking.petNames + ' on ' + booking.bookingDate + ' at ' + booking.bookingTime + '.',
+        read:      false,
+        createdAt: new Date().toISOString()
+      }).write();
+      // Notify the minder as confirmation receipt
+      db.get('notifications').push({
+        id:        nextNotifId(),
+        userId:    Number(booking.minderKey),
+        type:      'booking_confirmed',
+        bookingId: booking.id,
+        title:     'Booking confirmed',
+        message:   'You confirmed the booking for ' + ownerFullName + '\'s ' + booking.petNames + ' on ' + booking.bookingDate + ' at ' + booking.bookingTime + '.',
+        read:      false,
+        createdAt: new Date().toISOString()
+      }).write();
+    } else if (status === 'declined') {
+      db.get('notifications').push({
+        id:        nextNotifId(),
+        userId:    booking.ownerId,
+        type:      'booking_declined',
+        bookingId: booking.id,
+        title:     'Booking declined',
+        message:   minderFullName + ' declined your booking for ' + booking.petNames + ' on ' + booking.bookingDate + ' at ' + booking.bookingTime + '.',
+        read:      false,
+        createdAt: new Date().toISOString()
+      }).write();
     }
 
     const dto = toDTO(row.value());

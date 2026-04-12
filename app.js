@@ -401,13 +401,16 @@ let notifOwnerMessages = []; // owner: declined/other notifications from /api/no
 
 async function loadNotificationCount() {
   try {
+    // Both roles load from /api/notifications which now contains all
+    // booking request, confirmation, decline, and reminder notifications.
+    notifOwnerMessages = await api.getNotifications();
+    notifCount = notifOwnerMessages.filter(n => !n.read).length;
+
+    // Minders also need the requests list for the Bookings > Requests tab
     if (userProfile.role === 'minder') {
       notifRequests = await api.getBookingRequests();
-      notifCount = notifRequests.filter(b => b.status === 'pending').length;
-    } else {
-      notifOwnerMessages = await api.getNotifications();
-      notifCount = notifOwnerMessages.filter(n => !n.read).length;
     }
+
     const badge = document.getElementById('notif-badge');
     if (badge) {
       badge.textContent = notifCount;
@@ -416,52 +419,39 @@ async function loadNotificationCount() {
   } catch { /* silent */ }
 }
 
+function notifIcon(type) {
+  switch (type) {
+    case 'booking_request':   return '📩';
+    case 'booking_confirmed': return '✅';
+    case 'booking_declined':  return '❌';
+    case 'booking_reminder':  return '⏰';
+    default:                  return '🔔';
+  }
+}
+function notifAction(n) {
+  if (n.type === 'booking_request') return "window.location.href='bookings.html?tab=requests'";
+  return 'handleOwnerNotifClick(' + n.id + ')';
+}
+
 function openNotifications() {
   previousScreen = currentScreen;
   const list = document.getElementById('notif-list');
+  if (!list) { show('notifications'); currentScreen = 'notifications'; return; }
 
-  if (userProfile.role === 'minder') {
-    if (list) {
-      if (notifRequests.length === 0) {
-        list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No notifications yet.</div>';
-      } else {
-        const pending = notifRequests.filter(b => b.status === 'pending');
-        const rest    = notifRequests.filter(b => b.status !== 'pending');
-        const all     = pending.concat(rest);
-        list.innerHTML = all.map(b => {
-          const isPending = b.status === 'pending';
-          return '<div class="menu-item" style="' + (isPending ? 'border-left:3px solid var(--terra);' : 'opacity:0.7;') + '" onclick="window.location.href=\'bookings.html?tab=requests\'">' +
-            '<span class="menu-icon">' + (isPending ? '🔔' : (b.status === 'confirmed' ? '✅' : '❌')) + '</span>' +
-            '<span class="menu-label" style="display:flex;flex-direction:column;gap:2px">' +
-              '<span style="font-weight:600;font-size:14px">' + (b.ownerName || 'Pet Owner') + '</span>' +
-              '<span style="font-size:12px;color:var(--bark-light)">' + b.service + ' · ' + b.day + ' ' + b.month + ' · ' + b.price + '</span>' +
-              '<span style="font-size:11px;color:' + (isPending ? 'var(--terra)' : 'var(--bark-light)') + ';font-weight:' + (isPending ? '600' : '400') + '">' + (statusLabels[b.status] || b.status) + '</span>' +
-            '</span>' +
-            '<span class="menu-arrow">›</span>' +
-          '</div>';
-        }).join('');
-      }
-    }
+  if (!notifOwnerMessages || notifOwnerMessages.length === 0) {
+    list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No notifications yet.</div>';
   } else {
-    // Owner view — system notifications from /api/notifications
-    if (list) {
-      if (!notifOwnerMessages || notifOwnerMessages.length === 0) {
-        list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No notifications yet.</div>';
-      } else {
-        list.innerHTML = notifOwnerMessages.map(n => {
-          const unread = !n.read;
-          const icon = n.type === 'booking_declined' ? '❌' : '🔔';
-          return '<div class="menu-item" style="' + (unread ? 'border-left:3px solid var(--terra);' : 'opacity:0.75;') + '" onclick="handleOwnerNotifClick(' + n.id + ')">' +
-            '<span class="menu-icon">' + icon + '</span>' +
-            '<span class="menu-label" style="display:flex;flex-direction:column;gap:2px">' +
-              '<span style="font-weight:600;font-size:14px">' + (n.title || 'Notification') + '</span>' +
-              '<span style="font-size:12px;color:var(--bark-light);line-height:1.4">' + (n.message || '') + '</span>' +
-            '</span>' +
-            '<span class="menu-arrow">›</span>' +
-          '</div>';
-        }).join('');
-      }
-    }
+    list.innerHTML = notifOwnerMessages.map(n => {
+      const unread = !n.read;
+      return '<div class="menu-item" style="' + (unread ? 'border-left:3px solid var(--terra);' : 'opacity:0.75;') + '" onclick="' + notifAction(n) + '">' +
+        '<span class="menu-icon">' + notifIcon(n.type) + '</span>' +
+        '<span class="menu-label" style="display:flex;flex-direction:column;gap:2px">' +
+          '<span style="font-weight:600;font-size:14px">' + (n.title || 'Notification') + '</span>' +
+          '<span style="font-size:12px;color:var(--bark-light);line-height:1.4">' + (n.message || '') + '</span>' +
+        '</span>' +
+        '<span class="menu-arrow">›</span>' +
+      '</div>';
+    }).join('');
   }
   show('notifications');
   currentScreen = 'notifications';

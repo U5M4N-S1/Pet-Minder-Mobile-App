@@ -9,6 +9,23 @@ function nextId() {
   return last ? last.id + 1 : 1;
 }
 
+// GET /api/reviews/stats/all — aggregated avg rating + count for every minder
+// Used by the search page to filter/sort by rating without N+1 requests.
+router.get('/stats/all', (_req, res) => {
+  const all = db.get('reviews').value() || [];
+  const map = {};
+  all.forEach(r => {
+    if (!map[r.minderId]) map[r.minderId] = { total: 0, count: 0 };
+    map[r.minderId].total += r.rating;
+    map[r.minderId].count += 1;
+  });
+  const stats = {};
+  for (const [id, s] of Object.entries(map)) {
+    stats[id] = { avg: Math.round((s.total / s.count) * 10) / 10, count: s.count };
+  }
+  res.json(stats);
+});
+
 // GET /api/reviews/:minderId — public list of reviews for a minder
 router.get('/:minderId', (req, res) => {
   const minderId = Number(req.params.minderId);

@@ -132,6 +132,7 @@ const api = {
   createChat(otherUserId)   { return this._req('POST',   '/chats', { otherUserId }); },
   // Reviews
   getMinderReviews(minderId) { return this._req('GET',  '/reviews/' + minderId); },
+  getReviewStats()           { return this._req('GET',  '/reviews/stats/all'); },
   createReview(data)         { return this._req('POST', '/reviews', data); },
 };
 
@@ -1159,6 +1160,16 @@ async function loadMinders() {
   if (!list) return;
   try {
     loadedMinders = await api.getMinders();
+    // Attach live review stats (avg rating + count) to each minder so the
+    // search page can filter by rating and sort by review count.
+    try {
+      const stats = await api.getReviewStats();
+      loadedMinders.forEach(m => {
+        const s = stats[m.id];
+        m._avgRating    = s ? s.avg   : 0;
+        m._reviewCount  = s ? s.count : 0;
+      });
+    } catch { loadedMinders.forEach(m => { m._avgRating = 0; m._reviewCount = 0; }); }
     if (loadedMinders.length === 0) {
       list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No pet minders have signed up yet.</div>';
       return;
@@ -1531,10 +1542,17 @@ function toggleFilterModal() { document.getElementById('filter-modal').classList
 
 // ===== SEARCH & FILTER SYSTEM =====
 // Saved filter state — only updated when user clicks Save or Clear All.
-let savedFilters = { petTypes: [], serviceTypes: [], priceMin: null, priceMax: null };
+let savedFilters = { petTypes: [], serviceTypes: [], priceMin: null, priceMax: null, minRating: null };
 
 // Helper: read the text label from a filter-opt, strip its emoji prefix, return lowercase.
 function filterOptLabel(el) { return el.textContent.replace(/^[^\w]*/u, '').trim().toLowerCase(); }
+
+// Rating filter is single-select: clicking one deselects the others.
+function selectRatingFilter(el) {
+  const wasActive = el.classList.contains('active');
+  document.querySelectorAll('#filter-rating .filter-opt').forEach(o => o.classList.remove('active'));
+  if (!wasActive) el.classList.add('active');
+}
 
 // Location search bar — triggered by the Go button or Enter key
 function searchByLocation() {
@@ -1571,7 +1589,21 @@ function runSearch() {
     if (savedFilters.priceMin !== null && m.priceMax != null && m.priceMax < savedFilters.priceMin) return false;
     if (savedFilters.priceMax !== null && m.priceMin != null && m.priceMin > savedFilters.priceMax) return false;
 
+    // 5. Rating filter — only show minders whose avg rating >= selected minimum.
+    //    Minders with zero reviews are excluded when a rating filter is active.
+    if (savedFilters.minRating !== null) {
+      if (!m._reviewCount || m._avgRating < savedFilters.minRating) return false;
+    }
+
     return true;
+  });
+
+  // Sort: minders with the same rounded avg rating are ordered by review
+  // count (highest first) so the most-reviewed minder surfaces first.
+  filtered.sort((a, b) => {
+    const ra = a._avgRating || 0, rb = b._avgRating || 0;
+    if (rb !== ra) return rb - ra;
+    return (b._reviewCount || 0) - (a._reviewCount || 0);
   });
 
   renderMinders(filtered);
@@ -1585,7 +1617,7 @@ function clearAllFilters() {
   const maxEl = document.getElementById('filter-price-max');
   if (minEl) minEl.value = '';
   if (maxEl) maxEl.value = '';
-  savedFilters = { petTypes: [], serviceTypes: [], priceMin: null, priceMax: null };
+  savedFilters = { petTypes: [], serviceTypes: [], priceMin: null, priceMax: null, minRating: null };
   runSearch();
   toggleFilterModal();
   showToast('✅ Filters cleared');
@@ -1603,6 +1635,9 @@ function applyFilters() {
   const maxEl = document.getElementById('filter-price-max');
   savedFilters.priceMin = minEl && minEl.value !== '' ? Number(minEl.value) : null;
   savedFilters.priceMax = maxEl && maxEl.value !== '' ? Number(maxEl.value) : null;
+
+  const activeRating = document.querySelector('#filter-rating .filter-opt.active');
+  savedFilters.minRating = activeRating ? Number(activeRating.dataset.rating) : null;
 
   const filtered = runSearch();
   toggleFilterModal();
@@ -1629,6 +1664,9 @@ function renderMinders(minders) {
     if (m.petsCaredFor) m.petsCaredFor.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
     const dayCount = Array.isArray(m.availableDays) ? m.availableDays.length : 0;
     const availLine = dayCount ? '🗓 Available ' + dayCount + ' day' + (dayCount === 1 ? '' : 's') + '/week' : '';
+    const avgR = m._avgRating  || 0;
+    const cntR = m._reviewCount || 0;
+    const starsStr = cntR ? '★'.repeat(Math.round(avgR)) + '☆'.repeat(5 - Math.round(avgR)) + ' ' + avgR.toFixed(1) + ' (' + cntR + ')' : '';
 
     const card = document.createElement('div');
     card.className = 'minder-list-card';
@@ -1638,6 +1676,7 @@ function renderMinders(minders) {
       '<div class="minder-list-avatar">' + avatar + '</div>' +
       '<div class="minder-list-info">' +
         '<div class="minder-list-name">' + m.name + '</div>' +
+        (starsStr ? '<div class="minder-list-rating" style="font-size:13px;color:#e6a817;margin-top:2px">' + starsStr + '</div>' : '') +
         (loc ? '<div class="minder-list-loc">' + loc + '</div>' : '') +
         (tags.length ? '<div class="minder-list-tags">' + tags.join('') + '</div>' : '') +
         (availLine ? '<div class="minder-list-loc" style="margin-top:2px">' + availLine + '</div>' : '') +

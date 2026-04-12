@@ -33,7 +33,7 @@ function userDTO(u) {
     experience:      u.experience      || '',
     priceMin:        u.priceMin != null ? u.priceMin : 0,
     priceMax:        u.priceMax != null ? u.priceMax : 50,
-    minderServices:  u.minderServices  || []
+    availableForBooking: u.availableForBooking !== false, // default true
   };
 }
 
@@ -62,17 +62,24 @@ router.post('/signup', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
     const id = nextId('users');
     const baseRole = role || 'owner';
-    const roles = baseRole === 'minder' ? ['owner', 'minder'] : [baseRole];
+    const roles = [baseRole];
+    const isMinder = baseRole === 'minder';
     const user = {
       id,
       firstName: firstName.trim(),
       lastName:  lastName.trim(),
       email:     email.toLowerCase(),
       passwordHash,
-      role:           roles,
-      minderServices: roles.includes('minder') ? ['Walking', 'Home Visit'] : [],
+      role:      roles,
       location:  'London',
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      // Minders get default services and availability flag
+      ...(isMinder && {
+        services:           'Walking, Home Visit',
+        priceMin:           10,
+        priceMax:           30,
+        availableForBooking: true,
+      }),
     };
     db.get('users').push(user).write();
 
@@ -119,7 +126,7 @@ router.patch('/me', requireAuth, (req, res) => {
 
   const { firstName, lastName, email, phone, location, bio,
           serviceArea, petsCaredFor, services, rate, experience,
-          priceMin, priceMax, addMinderRole, minderServices } = req.body;
+          priceMin, priceMax, addMinderRole, minderServices, availableForBooking } = req.body;
   const updates = {};
   if (typeof firstName    === 'string' && firstName.trim()) updates.firstName    = firstName.trim();
   if (typeof lastName     === 'string') updates.lastName     = lastName.trim();
@@ -130,6 +137,11 @@ router.patch('/me', requireAuth, (req, res) => {
   if (typeof serviceArea  === 'string') updates.serviceArea  = serviceArea.trim();
   if (typeof petsCaredFor === 'string') updates.petsCaredFor = petsCaredFor.trim();
   if (typeof services     === 'string') updates.services     = services.trim();
+  if (Array.isArray(services)) {
+    updates.services = services.join(', ');
+  } else if (typeof services === 'string') {
+    updates.services = services.trim();
+  }
   if (typeof rate         === 'string') updates.rate         = rate.trim();
   if (typeof experience   === 'string') updates.experience   = experience.trim();
   // Price range (clamped 0–50)
@@ -142,6 +154,8 @@ router.patch('/me', requireAuth, (req, res) => {
     if (!roleArr.includes('minder')) updates.role = [...roleArr, 'minder'];
   }
   if (Array.isArray(minderServices)) updates.minderServices = minderServices;
+  // Toggle minder availability (on/off switch)
+  if (availableForBooking !== undefined) updates.availableForBooking = !!availableForBooking;
 
   // Email changes need a uniqueness check
   if (typeof email === 'string' && email.trim()) {
@@ -278,7 +292,8 @@ router.get('/minders', (req, res) => {
   const minders = db.get('users')
     .filter(u => {
       const roles = Array.isArray(u.role) ? u.role : [u.role];
-      return roles.includes('minder') && u.status !== 'Suspended' && u.status !== 'Banned';
+      return roles.includes('minder') && u.status !== 'Suspended' && u.status !== 'Banned'
+             && u.availableForBooking !== false; // exclude minders who toggled off
     })
     .value()
     .map(u => ({
@@ -288,12 +303,11 @@ router.get('/minders', (req, res) => {
       location:       u.serviceArea || u.location || '',
       bio:            u.bio          || '',
       petsCaredFor:   u.petsCaredFor || '',
-      services:       u.services     || (u.minderServices || []).join(', '),
+      services:       u.services     || '',
       rate:           u.rate         || '',
       experience:     u.experience   || '',
       priceMin:       u.priceMin != null ? u.priceMin : 0,
       priceMax:       u.priceMax != null ? u.priceMax : 50,
-      minderServices: u.minderServices || []
     }));
   res.json(minders);
 });

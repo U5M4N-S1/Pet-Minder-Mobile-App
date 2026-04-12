@@ -62,6 +62,17 @@ router.post('/', requireAuth, (req, res) => {
     createdAt: new Date().toISOString()
   };
   db.get('pets').push(pet).write();
+
+  // Auto-promote a minder-only account to also be an owner when they add their first pet
+  const userRow = db.get('users').find({ id: req.user.userId });
+  const userVal = userRow.value();
+  if (userVal) {
+    const roles = Array.isArray(userVal.role) ? userVal.role : [userVal.role || 'minder'];
+    if (roles.includes('minder') && !roles.includes('owner')) {
+      userRow.assign({ role: [...roles, 'owner'] }).write();
+    }
+  }
+
   res.status(201).json(toDTO(pet));
 });
 

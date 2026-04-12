@@ -16,6 +16,7 @@ let userProfile = {
   // Minder-specific (blank for owners)
   serviceArea: '', petsCaredFor: '', services: '', rate: '', experience: '',
   priceMin: 0, priceMax: 50,
+  availableForBooking: true,
 };
 
 // ===== LOCAL STORE =====
@@ -107,6 +108,7 @@ const api = {
   // Profile image
   uploadAvatar(image)       { return this._req('POST',   '/auth/avatar', { image }); },
   deleteAvatar()            { return this._req('DELETE', '/auth/avatar'); },
+  setAvailability(val)      { return this._req('PATCH',  '/auth/me', { availableForBooking: val }); },
   // Minders (public)
   getMinders()              { return this._req('GET',    '/minders'); },
   // Admin
@@ -137,6 +139,7 @@ function hydrateUserProfile(u) {
   userProfile.experience   = u.experience   || '';
   userProfile.priceMin     = u.priceMin != null ? u.priceMin : 0;
   userProfile.priceMax     = u.priceMax != null ? u.priceMax : 50;
+  userProfile.availableForBooking = !u.availableForBooking;
 }
 (function initUserFromCache() { hydrateUserProfile(store.getUser()); }());
 
@@ -964,6 +967,21 @@ async function bmConfirm() {
   }
 }
 
+// ===== MINDER AVAILABILITY TOGGLE =====
+async function toggleMinderAvailability() {
+  const newVal = !userProfile.availableForBooking;
+  try {
+    console.log('[PawPal] Setting availability to ' + newVal);
+    const saved = await api.setAvailability(!newVal);
+    hydrateUserProfile(saved);
+    store.setUser(userProfile);
+    renderProfileAvatar();
+    showToast(newVal ? '🌴 You are now hidden from Find Minders' : '✅ You are now visible to pet owners');
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Could not update availability'));
+  }
+}
+
 // ===== NAVIGATION =====
 function goToHome() { window.location.href = 'home.html'; }
 function switchTab(tab) {
@@ -1021,11 +1039,31 @@ function renderProfileAvatar() {
   if (bmItem) {
     bmItem.style.display = (isOwner && !isMinder) ? 'flex' : 'none';
   }
-
+  
+  // Show qualifications upload only for minders
   const qualItem = document.getElementById('upload-quals-item');
-  if(isMinder){
-    qualItem.style.display = 'flex';
-  } 
+  if (qualItem) {
+    qualItem.style.display = isMinder ? 'flex' : 'none';
+  }
+
+  // Availability toggle — only visible to minders
+  const availRow = document.getElementById('minder-availability-item');
+  if (availRow) {
+    availRow.style.display = isMinder ? 'flex' : 'none';
+    const toggle = document.getElementById('availability-toggle');
+    const toggleLabel = document.getElementById('availability-label');
+    const toggleIcon = document.getElementById('availability-icon');
+    if (toggle) toggle.checked = userProfile.availableForBooking !== true;
+    if (toggleLabel) {
+      toggleLabel.textContent = userProfile.availableForBooking !== true
+        ? 'Available for bookings'
+        : 'Not taking bookings';
+      toggleIcon.textContent = userProfile.availableForBooking !== false ? '🌴' : '🏠';
+      toggleLabel.style.color = userProfile.availableForBooking !== true
+        ? 'var(--bark)'
+        : 'var(--bark-light)';
+    }
+  }
 }
 
 async function handleAvatarUpload(event) {

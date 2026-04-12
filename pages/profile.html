@@ -10,6 +10,22 @@
 <link rel="stylesheet" href="../css/minder.css">
 <link rel="stylesheet" href="../css/auth.css">
 <link rel="stylesheet" href="../css/responsive.css">
+<style>
+/* Availability toggle switch */
+.avail-toggle { position:relative; display:inline-block; width:46px; height:26px; flex-shrink:0; }
+.avail-toggle input { opacity:0; width:0; height:0; }
+.avail-slider {
+  position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0;
+  background:#ccc; border-radius:26px; transition:.3s;
+}
+.avail-slider:before {
+  position:absolute; content:""; height:20px; width:20px; left:3px; bottom:3px;
+  background:white; border-radius:50%; transition:.3s;
+}
+.avail-toggle input:checked + .avail-slider { background:var(--terra, #c0714f); }
+.avail-toggle input:checked + .avail-slider:before { transform:translateX(20px); }
+.avail-toggle input:not(:checked) + .avail-slider { background:#bbb; }
+</style>
 </head>
 <body>
 
@@ -43,6 +59,19 @@
       <div id="profile-pets-list"></div>
       <div class="menu-item" onclick="openPetModal('new')"><span class="menu-icon">＋</span><span class="menu-label">Add a pet</span><span class="menu-arrow">›</span></div>
       <div class="menu-section-title">Account</div>
+      <div class="menu-item" id="minder-availability-item" onclick="toggleMinderAvailability()" style="display:none;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span id="availability-icon" class="menu-icon">🌴</span>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="font-weight:500;font-size:14px;color:var(--bark)">Taking Bookings</span>
+            <span id="availability-label" style="font-size:12px;color:var(--bark-light)">Available for bookings</span>
+          </div>
+        </div>
+        <label class="avail-toggle" onclick="event.stopPropagation()">
+          <input type="checkbox" id="availability-toggle" onchange="toggleMinderAvailability()">
+          <span class="avail-slider"></span>
+        </label>
+      </div>
       <div class="menu-item" onclick="openEditProfileModal()"><span class="menu-icon">✏️</span><span class="menu-label">Edit Profile</span><span class="menu-arrow">›</span></div>
       <div class="menu-item" id="become-minder-item" onclick="openBecomeMinder()" style="display:none"><span class="menu-icon">🐾❤️</span><span class="menu-label">Become a Minder</span><span class="menu-arrow">›</span></div>
       <div class="menu-item" onclick="showToast('Payment settings coming soon!')"><span class="menu-icon">💳</span><span class="menu-label">Payment Methods</span><span class="menu-arrow">›</span></div>

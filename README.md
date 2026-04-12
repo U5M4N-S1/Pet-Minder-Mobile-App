@@ -17,10 +17,10 @@
 
 # now: 
 - when selecting services on become minder it crosses over (✅)
-- allow minders to have a toggle button
-- fix notif button in profile section
+- allow minders to have a toggle button (✅)
+- hide minders from themselves in the find minders section
 - make a review system for admins for qualifications
 - admins should be able to enable services for minders
 - minder can add more qualifications (✅)
 - make an upload function (for qualifications)
-- add the other info automatically when user becomes minder
+- add the other info automatically when user becomes minder (?)

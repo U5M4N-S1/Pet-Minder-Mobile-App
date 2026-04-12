@@ -3,6 +3,7 @@ const bcrypt  = require('bcrypt');
 const jwt     = require('jsonwebtoken');
 const db      = require('../db');
 const { requireAuth, JWT_SECRET } = require('../middleware/authMiddleware');
+const { normalizeAvailability, VALID_DAYS, VALID_SLOTS } = require('../lib/availability');
 
 const router      = express.Router();
 const SALT_ROUNDS = 12;
@@ -33,16 +34,11 @@ function userDTO(u) {
     experience:   u.experience   || '',
     priceMin:     u.priceMin != null ? u.priceMin : 0,
     priceMax:     u.priceMax != null ? u.priceMax : 50,
-    // Availability + qualifications (minder-specific; empty for owners)
-    availableDays:  Array.isArray(u.availableDays)  ? u.availableDays  : [],
-    availableSlots: Array.isArray(u.availableSlots) ? u.availableSlots : [],
+    // Availability (per-day object; backward-compat with legacy flat arrays)
+    availability:   normalizeAvailability(u),
     certifications: u.certifications || ''
   };
 }
-
-// Whitelists for availability validation
-const VALID_DAYS  = ['mon','tue','wed','thu','fri','sat','sun'];
-const VALID_SLOTS = ['morning','afternoon','evening'];
 
 // ── Avatar upload limits (easy to tune) ───────────────────────────────
 const AVATAR_MAX_BYTES  = 2 * 1024 * 1024; // 2 MB encoded (data-URI)
@@ -138,7 +134,7 @@ router.patch('/me', requireAuth, (req, res) => {
   const { firstName, lastName, email, phone, location, bio,
           serviceArea, petsCaredFor, services, rate, experience,
           priceMin, priceMax,
-          availableDays, availableSlots, certifications } = req.body;
+          availability, certifications } = req.body;
   const updates = {};
   if (typeof firstName    === 'string' && firstName.trim()) updates.firstName    = firstName.trim();
   if (typeof lastName     === 'string') updates.lastName     = lastName.trim();
@@ -154,12 +150,17 @@ router.patch('/me', requireAuth, (req, res) => {
   // Price range (clamped 0–50)
   if (priceMin != null) updates.priceMin = Math.max(0, Math.min(50, Number(priceMin) || 0));
   if (priceMax != null) updates.priceMax = Math.max(0, Math.min(50, Number(priceMax) || 50));
-  // Availability: filter to known day/slot codes and de-duplicate
-  if (Array.isArray(availableDays)) {
-    updates.availableDays = [...new Set(availableDays.map(d => String(d).toLowerCase()).filter(d => VALID_DAYS.includes(d)))];
-  }
-  if (Array.isArray(availableSlots)) {
-    updates.availableSlots = [...new Set(availableSlots.map(s => String(s).toLowerCase()).filter(s => VALID_SLOTS.includes(s)))];
+  // Availability: per-day object { mon: ['morning','evening'], ... }
+  // Validate each key is a known day and each value only contains known slots.
+  if (availability != null && typeof availability === 'object' && !Array.isArray(availability)) {
+    const clean = {};
+    for (const day of VALID_DAYS) {
+      if (Array.isArray(availability[day])) {
+        const slots = [...new Set(availability[day].map(s => String(s).toLowerCase()).filter(s => VALID_SLOTS.includes(s)))];
+        if (slots.length) clean[day] = slots;
+      }
+    }
+    updates.availability = clean;
   }
   // Certifications free-text (capped to avoid runaway payloads)
   if (typeof certifications === 'string') updates.certifications = certifications.trim().slice(0, 2000);
@@ -311,8 +312,7 @@ router.get('/minders', (req, res) => {
       experience:   u.experience   || '',
       priceMin:     u.priceMin != null ? u.priceMin : 0,
       priceMax:     u.priceMax != null ? u.priceMax : 50,
-      availableDays:  Array.isArray(u.availableDays)  ? u.availableDays  : [],
-      availableSlots: Array.isArray(u.availableSlots) ? u.availableSlots : [],
+      availability:   normalizeAvailability(u),
       certifications: u.certifications || ''
     }));
   res.json(minders);

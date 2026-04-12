@@ -100,7 +100,7 @@
       "resetCode": null,
       "resetCodeExpires": null,
       "online": true,
-      "lastSeenAt": "2026-04-12T07:49:24.734Z",
+      "lastSeenAt": "2026-04-12T08:16:18.885Z",
       "availableDays": [
         "tue",
         "wed",
@@ -111,7 +111,31 @@
         "afternoon",
         "evening"
       ],
-      "certifications": ""
+      "certifications": "",
+      "availability": {
+        "mon": [
+          "morning",
+          "afternoon"
+        ],
+        "tue": [
+          "evening"
+        ],
+        "wed": [
+          "afternoon",
+          "evening"
+        ],
+        "thu": [
+          "morning"
+        ],
+        "fri": [
+          "afternoon"
+        ],
+        "sat": [
+          "morning",
+          "afternoon",
+          "evening"
+        ]
+      }
     },
     {
       "id": 1005,

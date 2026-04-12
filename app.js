@@ -23,7 +23,7 @@ let userProfile = {
   // Minder-specific (blank for owners)
   serviceArea: '', petsCaredFor: '', services: '', rate: '', experience: '',
   priceMin: 0, priceMax: 50,
-  availableDays: [], availableSlots: [], certifications: ''
+  availability: {}, certifications: ''
 };
 
 // ===== LOCAL STORE =====
@@ -155,8 +155,8 @@ function hydrateUserProfile(u) {
   userProfile.experience   = u.experience   || '';
   userProfile.priceMin     = u.priceMin != null ? u.priceMin : 0;
   userProfile.priceMax     = u.priceMax != null ? u.priceMax : 50;
-  userProfile.availableDays  = Array.isArray(u.availableDays)  ? u.availableDays.slice()  : [];
-  userProfile.availableSlots = Array.isArray(u.availableSlots) ? u.availableSlots.slice() : [];
+  userProfile.availability = (u.availability && typeof u.availability === 'object' && !Array.isArray(u.availability))
+    ? JSON.parse(JSON.stringify(u.availability)) : {};
   userProfile.certifications = u.certifications || '';
 }
 (function initUserFromCache() { hydrateUserProfile(store.getUser()); }());
@@ -490,12 +490,11 @@ async function initActiveBookingPage() {
       const match = loadedMinders.find(x => String(x.id) === String(minderId));
       if (match) {
         resolved = {
-          id:             match.id,
-          name:           match.name || 'Minder',
-          avatar:         '🧑‍🦱',              // emoji fallback for cards
-          profileImage:   match.profileImage || '', // real picture (data URI)
-          availableDays:  Array.isArray(match.availableDays)  ? match.availableDays  : [],
-          availableSlots: Array.isArray(match.availableSlots) ? match.availableSlots : []
+          id:           match.id,
+          name:         match.name || 'Minder',
+          avatar:       '🧑‍🦱',              // emoji fallback for cards
+          profileImage: match.profileImage || '', // real picture (data URI)
+          availability: (match.availability && typeof match.availability === 'object') ? match.availability : {}
         };
       }
     } catch { /* silent — fall through to hardcoded */ }
@@ -544,7 +543,7 @@ function renderBookingPetPicker() {
   });
 }
 
-const BOOKING_TIME_SLOTS = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00'];
+const BOOKING_TIME_SLOTS = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00'];
 
 // Mirror of backend/lib/availability.js — kept tiny so client and server
 // agree on which HH:MM falls in which slot bucket and which weekday a date
@@ -574,24 +573,23 @@ function availDayForDate(dateStr) {
 }
 // Pure check used both by the time-grid renderer and the pre-submit guard.
 // Returns { ok: true } or { ok: false, reason: string }.
+// `minder.availability` is the per-day object { mon: ['morning','evening'], ... }
 function checkMinderAvailability(minder, bookingDate, bookingTime) {
   if (!minder) return { ok: false, reason: 'Minder not found' };
-  // Legacy demo minders (string ids like 'sarah') have no availability fields
-  // and are not persisted server-side, so skip the check for them.
-  if (typeof minder.id !== 'number') return { ok: true };
-  const days  = Array.isArray(minder.availableDays)  ? minder.availableDays  : [];
-  const slots = Array.isArray(minder.availableSlots) ? minder.availableSlots : [];
-  if (!days.length || !slots.length) {
+  if (typeof minder.id !== 'number') return { ok: true }; // legacy demo minder
+  const avail = (minder.availability && typeof minder.availability === 'object') ? minder.availability : {};
+  if (!Object.keys(avail).length) {
     return { ok: false, reason: 'This minder has not published their availability yet' };
   }
   const day = availDayForDate(bookingDate);
   if (!day) return { ok: false, reason: 'Invalid booking date' };
-  if (!days.includes(day)) {
+  const daySlots = Array.isArray(avail[day]) ? avail[day] : [];
+  if (!daySlots.length) {
     return { ok: false, reason: 'This minder is not available on ' + (AVAIL_DAY_LABELS[day] || day) };
   }
   const slot = availSlotForTime(bookingTime);
   if (!slot) return { ok: false, reason: 'Booking time is outside working hours' };
-  if (!slots.includes(slot)) {
+  if (!daySlots.includes(slot)) {
     return { ok: false, reason: 'This minder is not available in the ' + slot + ' on the selected date' };
   }
   return { ok: true };
@@ -638,19 +636,19 @@ function getUnavailableTimes(myBookings, minderTaken, bookingDate, minderAvailab
     });
   }
 
-  // (3) Outside the minder's published availability — block any slot that
-  // either falls on an unavailable weekday or in an unavailable time bucket.
-  // `minderAvailability` is { availableDays, availableSlots, isReal } where
+  // (3) Outside the minder's published per-day availability.
+  // `minderAvailability` is { availability: { mon: [...], ... }, isReal } where
   // isReal=false skips the check (legacy demo minders).
   if (minderAvailability && minderAvailability.isReal) {
-    const days  = Array.isArray(minderAvailability.availableDays)  ? minderAvailability.availableDays  : [];
-    const slots = Array.isArray(minderAvailability.availableSlots) ? minderAvailability.availableSlots : [];
+    const avail = (minderAvailability.availability && typeof minderAvailability.availability === 'object')
+      ? minderAvailability.availability : {};
     const day = availDayForDate(bookingDate);
-    const dayOff = !days.length || !day || !days.includes(day);
+    const daySlots = (day && Array.isArray(avail[day])) ? avail[day] : [];
+    const dayOff = !Object.keys(avail).length || !day || !daySlots.length;
     BOOKING_TIME_SLOTS.forEach(t => {
       if (dayOff) { unavailable.add(t); return; }
       const slot = availSlotForTime(t);
-      if (!slot || !slots.includes(slot)) unavailable.add(t);
+      if (!slot || !daySlots.includes(slot)) unavailable.add(t);
     });
   }
 
@@ -692,7 +690,7 @@ async function refreshBookingTimeAvailability() {
   const minderId    = (window._activeMinder && window._activeMinder.id) || '';
   let myBookings = [];
   let minderTaken = [];
-  let minderAvailability = { isReal: false, availableDays: [], availableSlots: [] };
+  let minderAvailability = { isReal: false, availability: {} };
   try {
     myBookings = await api.getBookings();
     allBookingsCache = myBookings;
@@ -705,9 +703,8 @@ async function refreshBookingTimeAvailability() {
       const data = await api.getMinderTakenTimes(minderId, bookingDate);
       minderTaken = Array.isArray(data.taken) ? data.taken : [];
       minderAvailability = {
-        isReal:         true,
-        availableDays:  Array.isArray(data.availableDays)  ? data.availableDays  : [],
-        availableSlots: Array.isArray(data.availableSlots) ? data.availableSlots : []
+        isReal:       true,
+        availability: (data.availability && typeof data.availability === 'object') ? data.availability : {}
       };
     } catch { /* silent */ }
   }
@@ -1331,8 +1328,7 @@ function renderMinderAvailability(minder) {
   const slots = document.getElementById('mp-avail-slots');
   if (!grid || !slots) return;
 
-  const days = Array.isArray(minder.availableDays)  ? minder.availableDays  : [];
-  const timeSlots = Array.isArray(minder.availableSlots) ? minder.availableSlots : [];
+  const avail = (minder.availability && typeof minder.availability === 'object') ? minder.availability : {};
   const isRealMinder = typeof minder.id === 'number';
 
   const DAY_DEFS = [
@@ -1340,28 +1336,28 @@ function renderMinderAvailability(minder) {
     { key: 'thu', label: 'T' }, { key: 'fri', label: 'F' }, { key: 'sat', label: 'S' },
     { key: 'sun', label: 'S' }
   ];
+  const DAY_FULL = { mon:'Monday', tue:'Tuesday', wed:'Wednesday', thu:'Thursday', fri:'Friday', sat:'Saturday', sun:'Sunday' };
+  const SLOT_LABELS = { morning: 'Morning (8–12)', afternoon: 'Afternoon (12–5)', evening: 'Evening (5–8)' };
 
-  // For legacy demo minders (no numeric id) keep the old "all open" look so
-  // the existing mock data still demos nicely; for real minders show the
-  // actual saved availability.
   grid.innerHTML = DAY_DEFS.map(d => {
-    const on = isRealMinder ? days.includes(d.key) : true;
+    const on = isRealMinder ? Array.isArray(avail[d.key]) && avail[d.key].length > 0 : true;
     return '<div class="avail-day ' + (on ? 'available' : 'busy') + '"><div>' + d.label + '</div><div>' + (on ? '✓' : '–') + '</div></div>';
   }).join('');
 
-  const SLOT_DEFS = [
-    { key: 'morning',   label: 'Morning (8–12)' },
-    { key: 'afternoon', label: 'Afternoon (12–5)' },
-    { key: 'evening',   label: 'Evening (5–8)' }
-  ];
-  slots.innerHTML = SLOT_DEFS.map(s => {
-    const on = isRealMinder ? timeSlots.includes(s.key) : true;
-    const val = on ? '✅ Available' : '❌ Unavailable';
-    return '<div class="info-row"><span class="info-label">' + s.label + '</span><span class="info-value">' + val + '</span></div>';
-  }).join('');
-
-  if (isRealMinder && !days.length && !timeSlots.length) {
-    slots.innerHTML = '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:8px 0">This minder hasn\'t set their availability yet.</p>' + slots.innerHTML;
+  // Per-day slot breakdown
+  if (isRealMinder && Object.keys(avail).length) {
+    slots.innerHTML = DAY_DEFS.filter(d => Array.isArray(avail[d.key]) && avail[d.key].length)
+      .map(d => {
+        const slotLabels = avail[d.key].map(s => SLOT_LABELS[s] || s).join(', ');
+        return '<div class="info-row"><span class="info-label">' + DAY_FULL[d.key] + '</span><span class="info-value">' + slotLabels + '</span></div>';
+      }).join('');
+  } else if (isRealMinder) {
+    slots.innerHTML = '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:8px 0">This minder hasn\'t set their availability yet.</p>';
+  } else {
+    // Legacy demo minders — show all slots on all days
+    slots.innerHTML = Object.entries(SLOT_LABELS).map(([, label]) =>
+      '<div class="info-row"><span class="info-label">' + label + '</span><span class="info-value">✅ Available</span></div>'
+    ).join('');
   }
 }
 
@@ -1662,7 +1658,7 @@ function renderMinders(minders) {
     const tags = [];
     if (m.services) m.services.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
     if (m.petsCaredFor) m.petsCaredFor.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
-    const dayCount = Array.isArray(m.availableDays) ? m.availableDays.length : 0;
+    const dayCount = (m.availability && typeof m.availability === 'object') ? Object.keys(m.availability).length : 0;
     const availLine = dayCount ? '🗓 Available ' + dayCount + ' day' + (dayCount === 1 ? '' : 's') + '/week' : '';
     const avgR = m._avgRating  || 0;
     const cntR = m._reviewCount || 0;
@@ -2272,6 +2268,32 @@ function setSelectedChipsArray(containerId, arr) {
     b.classList.toggle('active', vals.includes(b.getAttribute('data-value').toLowerCase()));
   });
 }
+// Per-day availability grid helpers (edit profile modal).
+// The grid is a set of .avail-day-row[data-day] elements, each containing
+// .avail-slot-btn[data-value] chip buttons.
+function loadAvailabilityGrid(avail) {
+  const grid = document.getElementById('edit-avail-grid');
+  if (!grid) return;
+  grid.querySelectorAll('.avail-day-row').forEach(row => {
+    const day = row.dataset.day;
+    const slots = (avail && Array.isArray(avail[day])) ? avail[day] : [];
+    row.querySelectorAll('.avail-slot-btn').forEach(btn => {
+      btn.classList.toggle('active', slots.includes(btn.dataset.value));
+    });
+  });
+}
+function readAvailabilityGrid() {
+  const grid = document.getElementById('edit-avail-grid');
+  if (!grid) return {};
+  const avail = {};
+  grid.querySelectorAll('.avail-day-row').forEach(row => {
+    const day = row.dataset.day;
+    const slots = Array.from(row.querySelectorAll('.avail-slot-btn.active')).map(b => b.dataset.value);
+    if (slots.length) avail[day] = slots;
+  });
+  return avail;
+}
+
 // Clamp price input value to 0–50
 function clampPrice(input) {
   if (!input) return 0;
@@ -2299,8 +2321,7 @@ function openEditProfileModal() {
       document.getElementById('edit-price-min').value = userProfile.priceMin != null ? userProfile.priceMin : 0;
       document.getElementById('edit-price-max').value = userProfile.priceMax != null ? userProfile.priceMax : 50;
       document.getElementById('edit-experience').value = userProfile.experience || '';
-      setSelectedChipsArray('edit-avail-days-chips',  userProfile.availableDays);
-      setSelectedChipsArray('edit-avail-slots-chips', userProfile.availableSlots);
+      loadAvailabilityGrid(userProfile.availability || {});
       const certEl = document.getElementById('edit-certifications');
       if (certEl) certEl.value = userProfile.certifications || '';
     }
@@ -2329,8 +2350,7 @@ function saveProfile() {
       updates.priceMin     = clampPrice(document.getElementById('edit-price-min'));
       updates.priceMax     = clampPrice(document.getElementById('edit-price-max'));
       updates.experience   = (document.getElementById('edit-experience') || {}).value || '';
-      updates.availableDays  = getSelectedChipsArray('edit-avail-days-chips');
-      updates.availableSlots = getSelectedChipsArray('edit-avail-slots-chips');
+      updates.availability = readAvailabilityGrid();
       updates.certifications = ((document.getElementById('edit-certifications') || {}).value || '').trim();
     }
     // Optimistic local update so the UI feels instant

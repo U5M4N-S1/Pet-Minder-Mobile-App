@@ -2,15 +2,19 @@
 // owners cannot book a minder outside the minder's published schedule, and
 // re-exported so the frontend mirror logic stays in sync via these constants.
 //
-// Availability data is stored on the user record as:
-//   availableDays:  ['mon','tue', ...]            // ISO-style 3-letter codes
-//   availableSlots: ['morning','afternoon', ...]  // bucket the day into 3 ranges
+// Availability data is stored on the user record as a per-day object:
+//   availability: { mon: ['morning','evening'], wed: ['afternoon'], ... }
+//
+// Legacy flat arrays (availableDays + availableSlots) are supported via
+// normalizeAvailability() which converts them into the new format.
 //
 // Booking time is a single "HH:MM" string. We validate by mapping the
-// requested HH:MM into one of the slot buckets and checking that BOTH the
-// day-of-week and the slot are present on the minder's record.
+// requested HH:MM into one of the slot buckets and checking the day-specific
+// entry in the minder's availability object.
 
 const DAY_KEYS = ['sun','mon','tue','wed','thu','fri','sat'];
+const VALID_DAYS  = ['mon','tue','wed','thu','fri','sat','sun'];
+const VALID_SLOTS = ['morning','afternoon','evening'];
 
 // Hour-of-day ranges for each slot bucket. Half-open [start, end).
 // Mirrors the labels shown on the minder profile UI ("Morning 8–12", etc).
@@ -52,14 +56,39 @@ function slotForTime(timeStr) {
   return null;
 }
 
+// Convert any stored availability shape into the canonical per-day object:
+//   { mon: ['morning','evening'], ... }
+//
+// Handles three cases:
+//   1. New format — already an object with day keys → validate and return.
+//   2. Legacy flat arrays — availableDays + availableSlots → cross-product
+//      (every listed day gets all listed slots, which matches old behaviour).
+//   3. Missing / invalid → empty object (no availability).
+function normalizeAvailability(user) {
+  // Case 1: new per-day object
+  if (user.availability && typeof user.availability === 'object' && !Array.isArray(user.availability)) {
+    const out = {};
+    for (const day of VALID_DAYS) {
+      if (Array.isArray(user.availability[day])) {
+        const slots = user.availability[day].filter(s => VALID_SLOTS.includes(s));
+        if (slots.length) out[day] = slots;
+      }
+    }
+    return out;
+  }
+  // Case 2: legacy flat arrays
+  const days  = Array.isArray(user.availableDays)  ? user.availableDays.filter(d => VALID_DAYS.includes(d))  : [];
+  const slots = Array.isArray(user.availableSlots) ? user.availableSlots.filter(s => VALID_SLOTS.includes(s)) : [];
+  if (!days.length || !slots.length) return {};
+  const out = {};
+  days.forEach(d => { out[d] = slots.slice(); });
+  return out;
+}
+
 // Core validator. Returns { ok: true } or { ok: false, error: string }.
-//   minder       — the user row from the `users` table (or any object with
-//                  availableDays / availableSlots arrays)
+//   minder       — the user row from the `users` table
 //   bookingDate  — "YYYY-MM-DD"
 //   bookingTime  — "HH:MM"
-//
-// All branches return a clear, user-facing error string so the route can
-// pass it straight through to the client without rephrasing.
 function validateBookingSlot(minder, bookingDate, bookingTime) {
   if (!minder) {
     return { ok: false, error: 'Minder not found' };
@@ -75,19 +104,19 @@ function validateBookingSlot(minder, bookingDate, bookingTime) {
     return { ok: false, error: 'Booking time is outside working hours' };
   }
 
-  const days  = Array.isArray(minder.availableDays)  ? minder.availableDays  : [];
-  const slots = Array.isArray(minder.availableSlots) ? minder.availableSlots : [];
+  const avail = normalizeAvailability(minder);
 
-  if (!days.length || !slots.length) {
+  if (!Object.keys(avail).length) {
     return { ok: false, error: 'This minder has not published their availability yet' };
   }
 
-  if (!days.includes(day)) {
+  const daySlots = avail[day];
+  if (!daySlots || !daySlots.length) {
     const label = { mon:'Monday', tue:'Tuesday', wed:'Wednesday', thu:'Thursday', fri:'Friday', sat:'Saturday', sun:'Sunday' }[day];
     return { ok: false, error: 'This minder is not available on ' + label };
   }
 
-  if (!slots.includes(slot)) {
+  if (!daySlots.includes(slot)) {
     return { ok: false, error: 'This minder is not available in the ' + slot + ' on the selected date' };
   }
 
@@ -96,8 +125,11 @@ function validateBookingSlot(minder, bookingDate, bookingTime) {
 
 module.exports = {
   DAY_KEYS,
+  VALID_DAYS,
+  VALID_SLOTS,
   SLOT_RANGES,
   dayKeyForDate,
   slotForTime,
+  normalizeAvailability,
   validateBookingSlot
 };

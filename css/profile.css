@@ -33,6 +33,10 @@
 .chip-btn:hover { border-color: var(--terra-light); color: var(--bark); background: #fef3ed; }
 .chip-btn.active { border-color: var(--terra); background: var(--terra); color: white; }
 
+/* Per-day availability row */
+.avail-day-row { display: flex; align-items: center; gap: 10px; }
+.avail-day-row .chip-btn { padding: 6px 10px; font-size: 12px; }
+
 /* Price range row */
 .price-range-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
 .price-input-wrap { display: flex; align-items: center; border: 1.5px solid var(--sand); border-radius: var(--radius-sm); overflow: hidden; background: white; flex: 1; }

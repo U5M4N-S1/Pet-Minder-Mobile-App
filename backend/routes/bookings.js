@@ -1,7 +1,7 @@
 const express    = require('express');
 const db         = require('../db');
 const { requireAuth } = require('../middleware/authMiddleware');
-const { validateBookingSlot } = require('../lib/availability');
+const { validateBookingSlot, normalizeAvailability } = require('../lib/availability');
 
 const router = express.Router();
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -251,19 +251,14 @@ router.get('/minder/:id/taken', requireAuth, (req, res) => {
     .map('bookingTime')
     .value();
 
-  // Also return the minder's published availability so the booking UI can
-  // grey out slots that fall on unavailable days/times. Empty arrays signal
-  // "no availability published" and the client treats every slot as blocked.
-  let availableDays  = [];
-  let availableSlots = [];
+  // Also return the minder's published availability (per-day object) so the
+  // booking UI can grey out slots that fall on unavailable days/times.
+  let availability = {};
   if (/^\d+$/.test(minderId)) {
     const mu = db.get('users').find({ id: Number(minderId) }).value();
-    if (mu) {
-      availableDays  = Array.isArray(mu.availableDays)  ? mu.availableDays  : [];
-      availableSlots = Array.isArray(mu.availableSlots) ? mu.availableSlots : [];
-    }
+    if (mu) availability = normalizeAvailability(mu);
   }
-  res.json({ minderId, date, taken, availableDays, availableSlots });
+  res.json({ minderId, date, taken, availability });
 });
 
 module.exports = router;

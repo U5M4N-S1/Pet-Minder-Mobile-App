@@ -288,12 +288,15 @@ router.post('/reset-password', async (req, res) => {
 });
 
 // GET /api/minders — list all active petminder accounts (public, no auth required)
-router.get('/minders', (req, res) => {
+router.get('/minders', requireAuth, (req, res) => {
   const minders = db.get('users')
     .filter(u => {
       const roles = Array.isArray(u.role) ? u.role : [u.role];
-      return roles.includes('minder') && u.status !== 'Suspended' && u.status !== 'Banned'
-             && u.availableForBooking !== false; // exclude minders who toggled off
+      return (u.id !== req.user.userId && 
+        roles.includes('minder') && 
+        u.status !== 'Suspended' && 
+        u.status !== 'Banned' && 
+        u.availableForBooking !== false); // exclude minders who toggled off
     })
     .value()
     .map(u => ({

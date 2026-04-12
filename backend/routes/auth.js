@@ -293,6 +293,7 @@ router.get('/minders', requireAuth, (req, res) => {
     .filter(u => {
       const roles = Array.isArray(u.role) ? u.role : [u.role];
       return (u.id !== req.user.userId && 
+        u.services !== "" &&
         roles.includes('minder') && 
         u.status !== 'Suspended' && 
         u.status !== 'Banned' && 

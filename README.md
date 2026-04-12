@@ -18,9 +18,11 @@
 # now: 
 - when selecting services on become minder it crosses over (✅)
 - allow minders to have a toggle button (✅)
-- hide minders from themselves in the find minders section
+- hide minders from themselves in the find minders section (✅)
 - make a review system for admins for qualifications
 - admins should be able to enable services for minders
 - minder can add more qualifications (✅)
 - make an upload function (for qualifications)
 - add the other info automatically when user becomes minder (?)
+- in the reviews section minders can see their average reviews from customers
+- if a user isnt an owner they cant review other people

@@ -17,6 +17,7 @@ let userProfile = {
   serviceArea: '', petsCaredFor: '', services: '', rate: '', experience: '',
   priceMin: 0, priceMax: 50,
   availableForBooking: true,
+  enabledServices: [],
 };
 
 // ===== LOCAL STORE =====
@@ -109,6 +110,11 @@ const api = {
   uploadAvatar(image)       { return this._req('POST',   '/auth/avatar', { image }); },
   deleteAvatar()            { return this._req('DELETE', '/auth/avatar'); },
   setAvailability(val)      { return this._req('PATCH',  '/auth/me', { availableForBooking: val }); },
+  // Reviews
+  getMinderReviews(minderId) { return this._req('GET',    '/reviews/minder/' + minderId); },
+  submitReview(data)         { return this._req('POST',   '/reviews', data); },
+  // Admin service toggle
+  toggleAdminService(id, service, enabled) { return this._req('PATCH', '/admin/users/' + id + '/services', { service, enabled }); },
   // Minders (public)
   getMinders()              { return this._req('GET',    '/minders'); },
   // Admin
@@ -137,9 +143,10 @@ function hydrateUserProfile(u) {
   userProfile.services     = u.services     || '';
   userProfile.rate         = u.rate         || '';
   userProfile.experience   = u.experience   || '';
-  userProfile.priceMin     = u.priceMin != null ? u.priceMin : 0;
-  userProfile.priceMax     = u.priceMax != null ? u.priceMax : 50;
-  userProfile.availableForBooking = !u.availableForBooking;
+  userProfile.priceMin         = u.priceMin != null ? u.priceMin : 10;
+  userProfile.priceMax         = u.priceMax != null ? u.priceMax : 50;
+  userProfile.availableForBooking = u.availableForBooking !== false;
+  userProfile.enabledServices  = Array.isArray(u.enabledServices) ? u.enabledServices : [];
 }
 (function initUserFromCache() { hydrateUserProfile(store.getUser()); }());
 
@@ -334,7 +341,8 @@ let notifOwnerMessages = []; // owner: declined/other notifications from /api/no
 
 async function loadNotificationCount() {
   try {
-    if (userProfile.role === 'minder') {
+    const _nRoles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role || 'owner'];
+    if (_nRoles.includes('minder')) {
       notifRequests = await api.getBookingRequests();
       notifCount = notifRequests.filter(b => b.status === 'pending').length;
     } else {
@@ -353,7 +361,8 @@ function openNotifications() {
   previousScreen = currentScreen;
   const list = document.getElementById('notif-list');
 
-  if (userProfile.role === 'minder') {
+  const _oRoles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role || 'owner'];
+  if (_oRoles.includes('minder')) {
     if (list) {
       if (notifRequests.length === 0) {
         list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No notifications yet.</div>';
@@ -819,6 +828,10 @@ async function handleRegister() {
   const email     = document.getElementById('reg-email').value.trim();
   const pwd       = document.getElementById('reg-password').value;
   const confirm   = document.getElementById('reg-confirm-password').value;
+  let pMin, pMax;
+  if (selectedRole === 'minder') {
+    pMin = document.getElementById('bm-price-min').value;
+    pMax = document.getElementById('bm-price-max').value;}
 
   if (!firstName || !lastName || !email) { showToast('❌ Please fill in all fields'); return; }
   if (pwd !== confirm) {
@@ -829,13 +842,15 @@ async function handleRegister() {
   document.getElementById('reg-confirm-password').style.borderColor = 'var(--sand)';
 
   try {
-    const { token, user } = await api.signup({ firstName, lastName, email, password: pwd, role: selectedRole });
+    const payload = {firstName, lastName, email, password: pwd, role: selectedRole};
+    if (selectedRole === 'minder') {
+      payload.priceMin = pMin;
+      payload.priceMax = pMax;
+    }
+    const { token, user } = await api.signup(payload);
     api.setToken(token);
     store.setUser(user);
     hydrateUserProfile(user);
-    // Brand-new accounts always start with an empty pet list.
-    petData = {};
-    store.setPets(petData);
     goToHome();
   } catch (err) {
     showToast('❌ ' + err.message);
@@ -855,6 +870,11 @@ function selectRole(el, role) {
   document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('selected'));
   el.classList.add('selected');
   selectedRole = role;
+  disply = document.getElementById('bm-minder-price');
+  if (role === 'minder') {
+    disply.style.display = 'block';}
+  else{
+    disply.style.display = 'none';}
 }
 
 function handleCertUpload() {
@@ -914,17 +934,17 @@ function bmShowStep3() {
   document.getElementById('bm-step-quals').style.display    = 'none';
   document.getElementById('bm-step-services').style.display = 'block';
 
-  // Show all services if qualified, basic-only otherwise
+  // Always show only basic services — Grooming, Vet, Training are admin-enabled only.
   const available = BM_ALL_SERVICES.filter(s => s.basic);
   const hint = document.getElementById('bm-services-hint');
   const prev = document.getElementById('bm-back-btn');
   hint.textContent = _bmHasQuals
-    ? 'thank you for providing your qualifications! we will look them over and get back to you, making the following services available for you to offer.'
-    : 'Without qualifications you can offer basic services. Upload qualifications later to unlock more.';
+    ? 'Thank you! We will review your qualifications and may enable additional services once approved.'
+    : 'You can offer these services straight away. Additional services can be unlocked by uploading relevant qualifications.';
 
-  prev.onclick = _bmHasQuals ? function() { bmShowStep2(true); } : function() { /*upload();*/ openBecomeMinder(); };
+  prev.onclick = _bmHasQuals ? function() { bmShowStep2(true); } : function() { openBecomeMinder(); };
 
-  services = available.map(s => s.name); // pre-select all available
+  services = available.map(s => s.name); // pre-select all basic services
   const container = document.getElementById('bm-service-options');
   container.innerHTML = '';
   available.forEach(s => {
@@ -939,6 +959,12 @@ function bmShowStep3() {
     opt.onclick = function() { bmToggleService(this, s.name); };
     container.appendChild(opt);
   });
+
+  // Reset price fields to sensible defaults
+  const pMin = document.getElementById('bm-price-min');
+  const pMax = document.getElementById('bm-price-max');
+  if (pMin && !pMin.value) pMin.value = 10;
+  if (pMax && !pMax.value) pMax.value = 50;
 }
 
 function bmToggleService(el, name) {
@@ -951,11 +977,17 @@ function bmToggleService(el, name) {
 
 async function bmConfirm() {
   if (services.length === 0) { showToast('❌ Please select at least one service'); return; }
+  const pMinEl = document.getElementById('bm-price-min');
+  const pMaxEl = document.getElementById('bm-price-max');
+  const priceMin = pMinEl ? Math.max(0, Math.min(1000000, Number(pMinEl.value) || 10)) : 10;
+  const priceMax = pMaxEl ? Math.max(0, Math.min(1000000, Number(pMaxEl.value) || 50)) : 50;
   try {
     const saved = await api.updateMe({
-    addMinderRole: true,
-    services: services.join(', ')
-  });
+      addMinderRole: true,
+      services: services.join(', '),
+      priceMin,
+      priceMax,
+    });
     hydrateUserProfile(saved);
     store.setUser(userProfile);
     closeBecomeMinder();
@@ -970,13 +1002,14 @@ async function bmConfirm() {
 // ===== MINDER AVAILABILITY TOGGLE =====
 async function toggleMinderAvailability() {
   const newVal = !userProfile.availableForBooking;
+  const toggleIcon = document.getElementById('availability-icon');
   try {
-    console.log('[PawPal] Setting availability to ' + newVal);
-    const saved = await api.setAvailability(!newVal);
+    const saved = await api.setAvailability(newVal);
     hydrateUserProfile(saved);
     store.setUser(userProfile);
     renderProfileAvatar();
-    showToast(newVal ? '🌴 You are now hidden from Find Minders' : '✅ You are now visible to pet owners');
+    showToast(newVal ? '✅ You are now visible to pet owners' : '🌴 You are now hidden from Find Minders');
+    toggleIcon.textContent = newVal ? '🏠' : '🌴';
   } catch (err) {
     showToast('❌ ' + (err.message || 'Could not update availability'));
   }
@@ -1036,15 +1069,15 @@ function renderProfileAvatar() {
   }
   // Show "Become a Minder" only for owners who aren't yet minders
   const bmItem = document.getElementById('become-minder-item');
-  if (bmItem) {
-    bmItem.style.display = (isOwner && !isMinder) ? 'flex' : 'none';
-  }
-  
+  if (bmItem) bmItem.style.display = (isOwner && !isMinder) ? 'flex' : 'none';
+
+  // Show "Become a Pet Owner" only for minders who aren't yet owners
+  const boItem = document.getElementById('become-owner-item');
+  if (boItem) boItem.style.display = (isMinder && !isOwner) ? 'flex' : 'none';
+
   // Show qualifications upload only for minders
   const qualItem = document.getElementById('upload-quals-item');
-  if (qualItem) {
-    qualItem.style.display = isMinder ? 'flex' : 'none';
-  }
+  if (qualItem) qualItem.style.display = isMinder ? 'flex' : 'none';
 
   // Availability toggle — only visible to minders
   const availRow = document.getElementById('minder-availability-item');
@@ -1052,14 +1085,12 @@ function renderProfileAvatar() {
     availRow.style.display = isMinder ? 'flex' : 'none';
     const toggle = document.getElementById('availability-toggle');
     const toggleLabel = document.getElementById('availability-label');
-    const toggleIcon = document.getElementById('availability-icon');
-    if (toggle) toggle.checked = userProfile.availableForBooking !== true;
+    if (toggle) toggle.checked = userProfile.availableForBooking !== false;
     if (toggleLabel) {
-      toggleLabel.textContent = userProfile.availableForBooking !== true
+      toggleLabel.textContent = userProfile.availableForBooking !== false
         ? 'Available for bookings'
         : 'Not taking bookings';
-      toggleIcon.textContent = userProfile.availableForBooking !== false ? '🌴' : '🏠';
-      toggleLabel.style.color = userProfile.availableForBooking !== true
+      toggleLabel.style.color = userProfile.availableForBooking !== false
         ? 'var(--bark)'
         : 'var(--bark-light)';
     }
@@ -1738,16 +1769,65 @@ function submitReview() {
 }
 
 // ===== REVIEWS (from profile section) =====
-function openProfileReviews() {
+async function openProfileReviews() {
   previousScreen = currentScreen;
+  const roles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role];
+  const isMinder = roles.includes('minder');
+
+  // Render the write-reviews tab (bookings they made as an owner)
   const list = document.getElementById('profile-reviews-minder-list');
-  list.innerHTML = '';
-  bookedMinders.forEach(m => {
-    const card = document.createElement('div'); card.className = 'review-minder-card';
-    card.onclick = () => openWriteReview(m.id);
-    card.innerHTML = '<div class="review-minder-avatar">' + m.avatar + '</div><div class="review-minder-info"><div class="review-minder-name">' + m.name + '</div><div class="review-minder-booking">' + m.lastBooking + '</div></div><span style="color:var(--terra);font-weight:600;font-size:13px">Write Review ›</span>';
-    list.appendChild(card);
-  });
+  if (list) {
+    list.innerHTML = '';
+    bookedMinders.forEach(m => {
+      const card = document.createElement('div'); card.className = 'review-minder-card';
+      card.onclick = () => openWriteReview(m.id);
+      card.innerHTML = '<div class="review-minder-avatar">' + m.avatar + '</div><div class="review-minder-info"><div class="review-minder-name">' + m.name + '</div><div class="review-minder-booking">' + m.lastBooking + '</div></div><span style="color:var(--terra);font-weight:600;font-size:13px">Write Review ›</span>';
+      list.appendChild(card);
+    });
+  }
+
+  // Render received reviews section (minders only)
+  const receivedSection = document.getElementById('received-reviews-section');
+  const titleEl = document.getElementById('received-reviews-title');
+  if (receivedSection) {
+    if (isMinder) {
+      receivedSection.style.display = 'block';
+      if (titleEl) titleEl.textContent = 'Loading…';
+      try {
+        const { reviews, average, count } = await api.getMinderReviews(userProfile.id);
+        const starDisplay = average
+          ? '★ ' + average + ' <span style="font-size:12px;color:var(--bark-light)">(' + count + ' review' + (count !== 1 ? 's' : '') + ')</span>'
+          : '<span style="font-size:12px;color:var(--bark-light)">No reviews yet</span>';
+        if (titleEl) titleEl.innerHTML = 'My Minder Reviews &nbsp;' + starDisplay;
+        const rList = document.getElementById('received-reviews-list');
+        if (rList) {
+          if (!reviews.length) {
+            rList.innerHTML = '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:20px 0">You haven\'t received any reviews yet.</p>';
+          } else {
+            rList.innerHTML = reviews.map(r => {
+              const stars = '★'.repeat(r.stars) + '☆'.repeat(5 - r.stars);
+              const date = new Date(r.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+              return '<div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)">' +
+                '<div style="display:flex;justify-content:space-between;margin-bottom:6px">' +
+                '<strong style="font-size:14px;color:var(--bark)">' + (r.reviewerName || 'Anonymous') + '</strong>' +
+                '<span style="color:#f5a623;font-size:15px">' + stars + '</span>' +
+                '</div>' +
+                '<p style="font-size:13px;color:var(--bark-light);line-height:1.6;margin:0">"' + r.text + '"</p>' +
+                '<p style="font-size:11px;color:var(--bark-light);margin-top:8px">' + date + '</p>' +
+                '</div>';
+            }).join('');
+          }
+        }
+      } catch {
+        if (titleEl) titleEl.textContent = 'My Minder Reviews';
+        const rList = document.getElementById('received-reviews-list');
+        if (rList) rList.innerHTML = '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:20px 0">Could not load reviews.</p>';
+      }
+    } else {
+      receivedSection.style.display = 'none';
+    }
+  }
+
   show('profile-reviews'); currentScreen = 'profile-reviews';
 }
 
@@ -1755,7 +1835,7 @@ function openWriteReview(minderId) {
   previousScreen = 'profile-reviews';
   currentReviewMinder = minderId;
   const m = minderData[minderId];
-  document.getElementById('write-review-title').textContent = 'Review ' + m.name;
+  document.getElementById('write-review-title').textContent = 'Review ' + (m ? m.name : 'Minder');
   document.getElementById('profile-review-text').value = '';
   profileReviewStars = 0;
   document.querySelectorAll('#profile-review-stars .star-btn').forEach(s => s.classList.remove('active'));
@@ -1767,10 +1847,27 @@ function setProfileReviewStars(n) {
   document.querySelectorAll('#profile-review-stars .star-btn').forEach((s, i) => s.classList.toggle('active', i < n));
 }
 
-function submitProfileReview() {
+async function submitProfileReview() {
   const text = document.getElementById('profile-review-text').value.trim();
   if (!text) { showToast('❌ Please write a review'); return; }
   if (profileReviewStars === 0) { showToast('❌ Please select a star rating'); return; }
+
+  // Real backend minder (numeric id) → submit to API
+  if (currentReviewMinder && /^\d+$/.test(String(currentReviewMinder))) {
+    try {
+      await api.submitReview({ minderId: currentReviewMinder, stars: profileReviewStars, text });
+      showToast('✅ Review submitted!');
+      document.getElementById('profile-review-text').value = '';
+      setProfileReviewStars(0);
+      goBack();
+      return;
+    } catch (err) {
+      showToast('❌ ' + (err.message || 'Could not submit review'));
+      return;
+    }
+  }
+
+  // Legacy local display for hardcoded demo minders
   const starStr = '★'.repeat(profileReviewStars) + '☆'.repeat(5 - profileReviewStars);
   const sub = document.getElementById('profile-review-submitted');
   const card = document.createElement('div');
@@ -1865,7 +1962,7 @@ function clampPrice(input) {
   if (!input) return 0;
   let v = parseInt(input.value, 10);
   if (isNaN(v) || v < 0) v = 0;
-  if (v > 50) v = 50;
+  if (v > 1000000) v = 1000000;
   return v;
 }
 
@@ -1977,6 +2074,100 @@ async function loadAdminData() {
   }
 }
 
+// ── Admin: ADVANCED_SERVICES list (mirrors backend) ──
+const ADVANCED_SERVICES = ['Grooming', 'Vet', 'Training'];
+
+function openAdminUserDetail(userId) {
+  const u = adminUsers.find(x => x.id === userId);
+  if (!u) return;
+  const isMinder = u.rawRoles ? u.rawRoles.includes('minder') : u.role.toLowerCase().includes('minder');
+  const avatarHTML = u.profileImage
+    ? '<img src="' + u.profileImage + '" alt="" style="width:64px;height:64px;border-radius:50%;object-fit:cover">'
+    : '<span style="font-size:40px">👤</span>';
+  const statusBadge = u.status !== 'Active'
+    ? '<span style="color:#e53935;font-size:12px;font-weight:600"> (' + u.status + ')</span>' : '';
+
+  let minderSection = '';
+  if (isMinder) {
+    const enabled = Array.isArray(u.enabledServices) ? u.enabledServices : [];
+    const basicList = (u.services || '').split(',').map(s => s.trim()).filter(s => s && !ADVANCED_SERVICES.includes(s));
+    const allServices = [...basicList, ...enabled];
+    const serviceChips = allServices.length
+      ? allServices.map(s => '<span style="background:var(--sand-light);color:var(--bark);padding:3px 10px;border-radius:12px;font-size:12px;font-weight:500">' + s + '</span>').join(' ')
+      : '<span style="color:var(--bark-light);font-size:13px">No services yet</span>';
+    const toggles = ADVANCED_SERVICES.map(svc => {
+      const isOn = enabled.includes(svc);
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--sand-light)">' +
+        '<div><div style="font-weight:500;font-size:14px;color:var(--bark)">' + svc + '</div>' +
+          '<div style="font-size:12px;color:var(--bark-light)">Admin-enabled service</div></div>' +
+        '<label class="avail-toggle" onclick="event.stopPropagation()">' +
+          '<input type="checkbox" ' + (isOn ? 'checked' : '') +
+            ' onchange="adminToggleService(' + u.id + ', \'' + svc + '\', this.checked)">' +
+              '<span class="avail-slider"></span>' +
+          '</label></div>';
+    }).join('');
+    minderSection =
+      '<div style="margin-top:18px">' +
+        '<div style="font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Current Services</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">' + serviceChips + '</div>' +
+        '<div style="font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Enable Advanced Services</div>' +
+        '<div>' + toggles + '</div>' +
+        '<div style="font-size:11px;color:var(--bark-light);margin-top:10px">Toggling sends the minder a notification and updates their profile immediately.</div>' +
+      '</div>';
+  }
+
+  const infoRows = [
+    ['Email', u.email],
+    ['Role', u.role],
+    ['Status', u.status || 'Active'],
+    ...(isMinder ? [
+      ['Service Area', u.serviceArea || '—'],
+      ['Experience', u.experience || '—'],
+      ['Rate', (u.priceMin != null && u.priceMax != null) ? '£' + u.priceMin + ' – £' + u.priceMax + '/hr' : '—'],
+      ['Availability', u.availableForBooking !== false ? '✅ Available' : '🌴 Not taking bookings'],
+    ] : [])
+  ];
+  const rows = infoRows.map(([label, val]) =>
+    '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--sand-light)">' +
+    '<span style="color:var(--bark-light);font-size:13px">' + label + '</span>' +
+    '<span style="font-weight:500;font-size:13px;color:var(--bark);text-align:right;max-width:60%">' + val + '</span></div>'
+  ).join('');
+
+  document.getElementById('admin-detail-body').innerHTML =
+    '<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">' +
+      '<div style="width:64px;height:64px;border-radius:50%;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--sand-light)">' + avatarHTML + '</div>' +
+      '<div><div style="font-family:"Playfair Display",serif;font-size:18px;font-weight:600;color:var(--bark)">' + u.name + statusBadge + '</div>' +
+      '<div style="font-size:13px;color:var(--bark-light);margin-top:2px">' + u.role + '</div></div>' +
+    '</div>' +
+    '<div>' + rows + '</div>' +
+    minderSection +
+    '<div style="display:flex;gap:8px;margin-top:18px">' +
+      '<button class="btn-outline" style="flex:1;padding:12px;color:var(--bark-light);border-color:var(--sand);font-size:13px" onclick="openAdminEditUser(' + u.id + ');closeAdminDetailPanel()">✏️ Edit</button>' +
+      '<button class="btn-outline" style="flex:1;padding:12px;color:#e53935;border-color:#e53935;font-size:13px" onclick="adminRemoveUser(' + u.id + ');closeAdminDetailPanel()">🗑 Remove</button>' +
+    '</div>';
+
+  document.getElementById('admin-detail-panel').classList.add('open');
+}
+
+function closeAdminDetailPanel() {
+  document.getElementById('admin-detail-panel').classList.remove('open');
+}
+
+async function adminToggleService(userId, service, enabled) {
+  try {
+    const result = await api.toggleAdminService(userId, service, enabled);
+    const u = adminUsers.find(x => x.id === userId);
+    if (u) u.enabledServices = result.enabledServices;
+    showToast((enabled ? '✅ ' : '🚫 ') + service + (enabled ? ' enabled' : ' disabled') + ' for ' + (u ? u.name : 'minder'));
+    openAdminUserDetail(userId); // re-render panel with updated toggles
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Failed to update service'));
+    openAdminUserDetail(userId); // revert visual state
+  }
+}
+
+function openAdminServicePanel(userId) { openAdminUserDetail(userId); }
+
 function renderAdminPanels() {
   // Users panel
   const usersPanel = document.getElementById('admin-users');
@@ -1987,8 +2178,24 @@ function renderAdminPanels() {
     }
     adminUsers.forEach(u => {
       const card = document.createElement('div'); card.className = 'admin-user-card'; card.id = 'admin-card-' + u.id;
+      card.style.cursor = 'pointer';
       const statusBadge = u.status === 'Active' ? '' : ' <span style="color:#e53935;font-size:11px">(' + u.status + ')</span>';
-      card.innerHTML = '<div class="admin-user-avatar">' + (u.avatar || '👤') + '</div><div class="admin-user-info"><div class="admin-user-name">' + u.name + statusBadge + '</div><div class="admin-user-role">' + (Array.isArray(u.role) ? u.role.join(' & ') : u.role) + ' · ' + u.email + '</div></div><div class="admin-user-actions"><button class="admin-btn edit" onclick="openAdminEditUser(' + u.id + ')">✏️ Edit</button><button class="admin-btn suspend" onclick="adminSuspendUser(' + u.id + ')">⏸ Suspend</button><button class="admin-btn remove" onclick="adminRemoveUser(' + u.id + ')">🗑 Remove</button></div>';
+      const isMinder = u.rawRoles ? u.rawRoles.includes('minder') : u.role.toLowerCase().includes('minder');
+      const minderBadge = isMinder ? ' <span style="background:var(--terra);color:white;font-size:10px;padding:2px 6px;border-radius:8px;margin-left:4px">Minder</span>' : '';
+      const avatar = u.profileImage
+        ? '<img src="' + u.profileImage + '" alt="" style="width:38px;height:38px;border-radius:50%;object-fit:cover">'
+        : '<span style="font-size:22px">' + (u.avatar || '👤') + '</span>';
+      card.innerHTML =
+        '<div class="admin-user-avatar">' + avatar + '</div>' +
+        '<div class="admin-user-info"><div class="admin-user-name">' + u.name + statusBadge + minderBadge + '</div>' +
+        '<div class="admin-user-role">' + u.role + ' · ' + u.email + '</div></div>' +
+        '<div class="admin-user-actions">' +
+          (isMinder ? '<button class="admin-btn edit" onclick="event.stopPropagation();openAdminServicePanel(' + u.id + ')">🛎 Services</button>' : '') +
+          '<button class="admin-btn edit" onclick="event.stopPropagation();openAdminEditUser(' + u.id + ')">✏️ Edit</button>' +
+          '<button class="admin-btn suspend" onclick="event.stopPropagation();adminSuspendUser(' + u.id + ')">⏸ Suspend</button>' +
+          '<button class="admin-btn remove" onclick="event.stopPropagation();adminRemoveUser(' + u.id + ')">🗑 Remove</button>' +
+        '</div>';
+      card.onclick = function() { openAdminUserDetail(u.id); };
       usersPanel.appendChild(card);
     });
   }

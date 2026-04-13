@@ -50,6 +50,14 @@
           <div class="role-btn selected" onclick="selectRole(this,'owner')"><span>🐶🐱</span>Pet Owner</div>
           <div class="role-btn" onclick="selectRole(this,'minder')"><span>🧑‍🦰👩‍🦰</span>Pet Minder</div>
         </div>
+        <div id = "bm-minder-price" style="margin-top:16px; display:none">
+        <label style="font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:8px">Your Hourly Rate (£)</label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="flex:1;position:relative"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--bark-light);font-size:14px">£</span><input type="number" id="bm-price-min" min="0" value="0" style="width:100%;padding:10px 10px 10px 24px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);outline:none"></div>
+          <span style="color:var(--bark-light);font-size:13px">to</span>
+          <div style="flex:1;position:relative"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--bark-light);font-size:14px">£</span><input type="number" id="bm-price-max" min="0" value="50" style="width:100%;padding:10px 10px 10px 24px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);outline:none"></div>
+        </div>
+      </div>
       </div>
       <button class="btn-primary" style="margin-top:8px" onclick="handleRegister()">Create Account</button>
     </div>

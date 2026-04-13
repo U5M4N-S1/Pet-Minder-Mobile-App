@@ -1,3 +1,5 @@
+const ADVANCED_SERVICES = ['Grooming', 'Vet', 'Training'];
+
 const express = require('express');
 const db      = require('../db');
 const { requireAuth } = require('../middleware/authMiddleware');
@@ -29,14 +31,27 @@ function roleKey(label) {
 // ─── USERS ───────────────────────────────────────────────────────────
 // GET /api/admin/users — list every registered account
 router.get('/users', requireAuth, requireAdmin, (_req, res) => {
-  const users = db.get('users').value().map(u => ({
-    id:     u.id,
-    name:   ((u.firstName || '') + ' ' + (u.lastName || '')).trim(),
-    email:  u.email,
-    role:   roleLabel(Array.isArray(u.role) ? u.role : [u.role || 'owner']),
-    status: u.status || 'Active',
-    avatar: '👤'
-  }));
+  const users = db.get('users').value().map(u => {
+    const roles = Array.isArray(u.role) ? u.role : [u.role || 'owner'];
+    return {
+      id:               u.id,
+      name:             ((u.firstName || '') + ' ' + (u.lastName || '')).trim(),
+      email:            u.email,
+      role:             roleLabel(roles), // may need to change back roleLabel(Array.isArray(u.role) ? u.role : [u.role || 'owner'])
+      rawRoles:         roles,
+      status:           u.status || 'Active',
+      avatar:           '👤',
+      profileImage:     u.profileImage || '',
+      // Minder-specific
+      services:         u.services        || '',
+      enabledServices:  Array.isArray(u.enabledServices) ? u.enabledServices : [],
+      serviceArea:      u.serviceArea     || '',
+      experience:       u.experience      || '',
+      priceMin:         u.priceMin != null ? u.priceMin : 0,
+      priceMax:         u.priceMax != null ? u.priceMax : 50,
+      availableForBooking: u.availableForBooking !== false,
+    };
+  });
   res.json(users);
 });
 
@@ -54,18 +69,41 @@ router.patch('/users/:id', requireAuth, requireAdmin, (req, res) => {
     updates.lastName  = parts.slice(1).join(' ');
   }
   if (typeof email  === 'string' && email.trim())  updates.email  = email.trim().toLowerCase();
-  if (typeof role   === 'string' && role.trim())    updates.role   = [roleKey(role.trim())];
+  // Role: the admin edit modal only changes the *primary* display role (owner/minder).
+  // We never strip existing roles — a dual-role user keeps both. We only add a role
+  // that isn't already present. Admins who need full control should use the service
+  // toggles or status field instead.
+  if (typeof role === 'string' && role.trim()) {
+    const key = roleKey(role.trim());
+    const currentRoles = Array.isArray(row.value().role) ? row.value().role : [row.value().role || 'owner'];
+    // Only update if the requested key isn't already in the array
+    if (!currentRoles.includes(key)) {
+      // Replace the primary role (owner/minder) but keep admin or other extra roles
+      const extras = currentRoles.filter(r => r !== 'owner' && r !== 'minder');
+      updates.role = [key, ...extras];
+    }
+  }
   if (typeof status === 'string' && status.trim())  updates.status = status.trim();
 
   row.assign(updates).write();
   const u = row.value();
+  const updatedRoles = Array.isArray(u.role) ? u.role : [u.role || 'owner'];
   res.json({
-    id:     u.id,
-    name:   ((u.firstName || '') + ' ' + (u.lastName || '')).trim(),
-    email:  u.email,
-    role:   roleLabel(Array.isArray(u.role) ? u.role : [u.role || 'owner']),
-    status: u.status || 'Active',
-    avatar: '👤'
+    id:       u.id,
+    name:     ((u.firstName || '') + ' ' + (u.lastName || '')).trim(),
+    email:    u.email,
+    role:     roleLabel(updatedRoles), // may need to change back roleLabel(Array.isArray(u.role) ? u.role : [u.role || 'owner']),
+    rawRoles: updatedRoles,
+    status:   u.status || 'Active',
+    avatar:   '👤',
+    profileImage: u.profileImage || '',
+    services:        u.services || '',
+    enabledServices: Array.isArray(u.enabledServices) ? u.enabledServices : [],
+    serviceArea:     u.serviceArea || '',
+    experience:      u.experience || '',
+    priceMin:        u.priceMin != null ? u.priceMin : 0,
+    priceMax:        u.priceMax != null ? u.priceMax : 50,
+    availableForBooking: u.availableForBooking !== false,
   });
 });
 
@@ -124,6 +162,49 @@ router.patch('/disputes/:id', requireAuth, requireAdmin, (req, res) => {
 
   row.assign({ status: status.trim() }).write();
   res.json(row.value());
+});
+
+
+// PATCH /api/admin/users/:id/services — enable/disable advanced services for a minder
+// Body: { service: 'Grooming'|'Vet'|'Training', enabled: true|false }
+router.patch('/users/:id/services', requireAuth, requireAdmin, (req, res) => {
+  const id  = Number(req.params.id);
+  const row = db.get('users').find({ id });
+  const user = row.value();
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const roles = Array.isArray(user.role) ? user.role : [user.role || 'owner'];
+  if (!roles.includes('minder')) return res.status(400).json({ error: 'User is not a minder' });
+
+  const { service, enabled } = req.body;
+  if (!ADVANCED_SERVICES.includes(service)) {
+    return res.status(400).json({ error: 'Invalid service. Must be Grooming, Vet, or Training' });
+  }
+
+  // Update enabledServices array
+  let enabledServices = Array.isArray(user.enabledServices) ? [...user.enabledServices] : [];
+  if (enabled) {
+    if (!enabledServices.includes(service)) enabledServices.push(service);
+  } else {
+    enabledServices = enabledServices.filter(s => s !== service);
+  }
+  row.assign({ enabledServices }).write();
+
+  // Push a notification to the minder
+  const action = enabled ? 'enabled' : 'disabled';
+  const notifLast = db.get('notifications').maxBy('id').value();
+  const notifId   = notifLast ? notifLast.id + 1 : 1;
+  db.get('notifications').push({
+    id:        notifId,
+    userId:    id,
+    type:      'service_update',
+    title:     'Service ' + action + ': ' + service,
+    message:   'An admin has ' + action + ' the ' + service + ' service on your minder profile.',
+    read:      false,
+    createdAt: new Date().toISOString()
+  }).write();
+
+  res.json({ id, enabledServices });
 });
 
 module.exports = router;

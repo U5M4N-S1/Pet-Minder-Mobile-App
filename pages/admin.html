@@ -30,5 +30,32 @@
 <div class="pet-modal-overlay" id="admin-edit-modal" onclick="if(event.target===this)closeAdminEditModal()"><div class="pet-modal"><h3 id="admin-edit-title">Edit User</h3><div class="field-group"><label>Name</label><input type="text" id="admin-edit-name"></div><div class="field-group"><label>Email</label><input type="email" id="admin-edit-email"></div><div class="field-group"><label>Role</label><select id="admin-edit-role"><option>Pet Owner</option><option>Pet Minder</option></select></div><div class="field-group"><label>Status</label><select id="admin-edit-status"><option>Active</option><option>Suspended</option><option>Banned</option></select></div><div class="pet-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="closeAdminEditModal()">Cancel</button><button class="btn-primary" style="flex:2;padding:14px" onclick="saveAdminEdit()">Save Changes</button></div></div></div>
 
 <script src="../app.js"></script>
+
+<!-- ADMIN USER DETAIL PANEL -->
+<div id="admin-detail-panel" style="
+  position:fixed;top:0;right:-420px;width:420px;max-width:95vw;height:100vh;
+  background:var(--warm-white);box-shadow:-4px 0 24px rgba(0,0,0,0.12);
+  z-index:200;transition:right 0.3s ease;overflow-y:auto;display:flex;flex-direction:column;
+" class="admin-detail-panel">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px 16px;border-bottom:1px solid var(--sand-light);position:sticky;top:0;background:var(--warm-white);z-index:1">
+    <span style="font-family:'Playfair Display',serif;font-size:18px;color:var(--bark);font-weight:600">User Details</span>
+    <button onclick="closeAdminDetailPanel()" style="background:var(--sand-light);border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;color:var(--bark);display:flex;align-items:center;justify-content:center">✕</button>
+  </div>
+  <div id="admin-detail-body" style="padding:20px 24px;flex:1"></div>
+</div>
+<div id="admin-detail-overlay" onclick="closeAdminDetailPanel()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:199"></div>
+
+<style>
+.admin-detail-panel.open { right: 0 !important; }
+.admin-detail-panel.open + #admin-detail-overlay { display: block !important; }
+/* Reuse toggle styles from profile */
+.avail-toggle { position:relative; display:inline-block; width:46px; height:26px; flex-shrink:0; }
+.avail-toggle input { opacity:0; width:0; height:0; }
+.avail-slider { position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:26px;transition:.3s; }
+.avail-slider:before { position:absolute;content:"";height:20px;width:20px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s; }
+.avail-toggle input:checked + .avail-slider { background:var(--terra,#c0714f); }
+.avail-toggle input:checked + .avail-slider:before { transform:translateX(20px); }
+</style>
+
 </body>
 </html>

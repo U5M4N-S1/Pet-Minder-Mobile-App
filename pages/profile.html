@@ -89,7 +89,25 @@
 
 <!-- PROFILE REVIEWS -->
 <div class="screen" id="screen-profile-reviews">
-  <div class="page-content"><div class="profile-sub-header"><button class="back-btn" style="position:static;background:var(--sand-light);color:var(--bark);margin-bottom:16px" onclick="goBack()">←</button><h1 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--bark);margin-bottom:6px">My Reviews</h1><p style="font-size:13px;color:var(--bark-light);margin-bottom:20px">Leave reviews for minders you've previously booked</p></div><div style="padding:0 24px 24px"><div id="profile-reviews-minder-list"></div></div></div>
+  <div class="page-content">
+    <div class="profile-sub-header">
+      <button class="back-btn" style="position:static;background:var(--sand-light);color:var(--bark);margin-bottom:16px" onclick="goBack()">←</button>
+      <h1 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--bark);margin-bottom:6px">Reviews</h1>
+      <p style="font-size:13px;color:var(--bark-light);margin-bottom:20px">Leave reviews for minders you've booked</p>
+    </div>
+
+    <!-- Received reviews section — visible only to minders -->
+    <div id="received-reviews-section" style="display:none;padding:0 24px 8px">
+      <h2 id="received-reviews-title" style="font-family:'Playfair Display',serif;font-size:17px;color:var(--bark);margin-bottom:12px">My Minder Reviews</h2>
+      <div id="received-reviews-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px"></div>
+    </div>
+
+    <!-- Write reviews for booked minders -->
+    <div style="padding:0 24px 4px">
+      <h2 style="font-family:'Playfair Display',serif;font-size:17px;color:var(--bark);margin-bottom:12px">Write a Review</h2>
+    </div>
+    <div style="padding:0 24px 24px"><div id="profile-reviews-minder-list"></div></div>
+  </div>
 </div>
 
 <!-- WRITE REVIEW -->
@@ -191,6 +209,14 @@
       <h3>🛎 Choose Your Services</h3>
       <p style="font-size:13px;color:var(--bark-light);margin-bottom:16px" id="bm-services-hint">Select the services you'd like to offer.</p>
       <div style="display:flex;flex-direction:column;gap:10px" id="bm-service-options"></div>
+      <div style="margin-top:16px">
+        <label style="font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:8px">Your Hourly Rate (£)</label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="flex:1;position:relative"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--bark-light);font-size:14px">£</span><input type="number" id="bm-price-min" min="0" value="0" style="width:100%;padding:10px 10px 10px 24px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);outline:none"></div>
+          <span style="color:var(--bark-light);font-size:13px">to</span>
+          <div style="flex:1;position:relative"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--bark-light);font-size:14px">£</span><input type="number" id="bm-price-max" min="0" value="50" style="width:100%;padding:10px 10px 10px 24px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);outline:none"></div>
+        </div>
+      </div>
       <button class="btn-primary" style="width:100%;padding:14px;margin-top:20px" onclick="bmConfirm()">✅ Become a Minder</button>
       <button id = "bm-back-btn" style="background:none;border:none;color:var(--bark-light);font-size:13px;margin-top:12px;cursor:pointer;width:100%;text-align:center" onclick="openBecomeMinder()">← Back</button>
     </div>

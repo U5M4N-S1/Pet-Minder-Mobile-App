@@ -34,6 +34,7 @@ function userDTO(u) {
     priceMin:        u.priceMin != null ? u.priceMin : 0,
     priceMax:        u.priceMax != null ? u.priceMax : 50,
     availableForBooking: u.availableForBooking !== false, // default true
+    enabledServices:  Array.isArray(u.enabledServices) ? u.enabledServices : [],
   };
 }
 
@@ -75,9 +76,9 @@ router.post('/signup', async (req, res) => {
       createdAt: new Date().toISOString(),
       // Minders get default services and availability flag
       ...(isMinder && {
-        services:           'Walking, Home Visit',
-        priceMin:           10,
-        priceMax:           30,
+        services:            'Walking, Home Visit',
+        priceMin:            10,
+        priceMax:            50,
         availableForBooking: true,
       }),
     };
@@ -136,7 +137,6 @@ router.patch('/me', requireAuth, (req, res) => {
   // Minder-specific fields
   if (typeof serviceArea  === 'string') updates.serviceArea  = serviceArea.trim();
   if (typeof petsCaredFor === 'string') updates.petsCaredFor = petsCaredFor.trim();
-  if (typeof services     === 'string') updates.services     = services.trim();
   if (Array.isArray(services)) {
     updates.services = services.join(', ');
   } else if (typeof services === 'string') {
@@ -307,7 +307,7 @@ router.get('/minders', requireAuth, (req, res) => {
       location:       u.serviceArea || u.location || '',
       bio:            u.bio          || '',
       petsCaredFor:   u.petsCaredFor || '',
-      services:       u.services     || '',
+      services:       [u.services || '', ...(Array.isArray(u.enabledServices) ? u.enabledServices : [])].filter(Boolean).join(', '),
       rate:           u.rate         || '',
       experience:     u.experience   || '',
       priceMin:       u.priceMin != null ? u.priceMin : 0,

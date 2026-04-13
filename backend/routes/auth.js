@@ -32,7 +32,7 @@ function userDTO(u) {
     rate:            u.rate            || '',
     experience:      u.experience      || '',
     priceMin:        u.priceMin != null ? u.priceMin : 0,
-    priceMax:        u.priceMax != null ? u.priceMax : 50,
+    priceMax:        u.priceMax != null ? u.priceMax : 10000,
     availableForBooking: u.availableForBooking !== false, // default true
     enabledServices:  Array.isArray(u.enabledServices) ? u.enabledServices : [],
   };
@@ -45,7 +45,7 @@ const AVATAR_MAX_DIM    = 1024; // px (width and height)
 
 // POST /api/auth/signup
 router.post('/signup', async (req, res) => {
-  const { firstName, lastName, email, password, role } = req.body;
+  const { firstName, lastName, email, password, role, priceMin, priceMax } = req.body;
 
   if (!firstName || !lastName || !email || !password) {
     return res.status(400).json({ error: 'All fields are required' });
@@ -63,8 +63,9 @@ router.post('/signup', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
     const id = nextId('users');
     const baseRole = role || 'owner';
-    const roles = [baseRole];
     const isMinder = baseRole === 'minder';
+    // Minders always also get owner role so they can book & review other minders
+    const roles = isMinder ? ['minder', 'owner'] : [baseRole];
     const user = {
       id,
       firstName: firstName.trim(),
@@ -77,8 +78,8 @@ router.post('/signup', async (req, res) => {
       // Minders get default services and availability flag
       ...(isMinder && {
         services:            'Walking, Home Visit',
-        priceMin:            10,
-        priceMax:            50,
+        priceMin:            priceMin != null ? Math.max(0, Math.min(10000, Number(priceMin) || 10)) : 10,
+        priceMax:            priceMax != null ? Math.max(0, Math.min(10000, Number(priceMax) || 30)) : 30,
         availableForBooking: true,
       }),
     };
@@ -145,8 +146,8 @@ router.patch('/me', requireAuth, (req, res) => {
   if (typeof rate         === 'string') updates.rate         = rate.trim();
   if (typeof experience   === 'string') updates.experience   = experience.trim();
   // Price range (clamped 0–50)
-  if (priceMin != null) updates.priceMin = Math.max(0, Math.min(50, Number(priceMin) || 0));
-  if (priceMax != null) updates.priceMax = Math.max(0, Math.min(50, Number(priceMax) || 50));
+  if (priceMin != null) updates.priceMin = Math.max(0, Math.min(10000, Number(priceMin) || 0));
+  if (priceMax != null) updates.priceMax = Math.max(0, Math.min(10000, Number(priceMax) || 10000));
   // Add minder role to the role array
   if (addMinderRole === true) {
     const currentRole = user.value().role;
@@ -300,19 +301,29 @@ router.get('/minders', requireAuth, (req, res) => {
         u.availableForBooking !== false); // exclude minders who toggled off
     })
     .value()
-    .map(u => ({
-      id:             u.id,
-      name:           ((u.firstName || '') + ' ' + (u.lastName || '')).trim(),
-      profileImage:   u.profileImage || '',
-      location:       u.serviceArea || u.location || '',
-      bio:            u.bio          || '',
-      petsCaredFor:   u.petsCaredFor || '',
-      services:       [u.services || '', ...(Array.isArray(u.enabledServices) ? u.enabledServices : [])].filter(Boolean).join(', '),
-      rate:           u.rate         || '',
-      experience:     u.experience   || '',
-      priceMin:       u.priceMin != null ? u.priceMin : 0,
-      priceMax:       u.priceMax != null ? u.priceMax : 50,
-    }));
+    .map(u => {
+      // Compute average rating from reviews collection
+      const reviews = db.get('reviews').filter({ minderId: u.id }).value();
+      const reviewCount = reviews.length;
+      const avgRating = reviewCount
+        ? (reviews.reduce((sum, r) => sum + r.stars, 0) / reviewCount).toFixed(1)
+        : null;
+      return {
+        id:             u.id,
+        name:           ((u.firstName || '') + ' ' + (u.lastName || '')).trim(),
+        profileImage:   u.profileImage || '',
+        location:       u.serviceArea || u.location || '',
+        bio:            u.bio          || '',
+        petsCaredFor:   u.petsCaredFor || '',
+        services:       [u.services || '', ...(Array.isArray(u.enabledServices) ? u.enabledServices : [])].filter(Boolean).join(', '),
+        rate:           u.rate         || '',
+        experience:     u.experience   || '',
+        priceMin:       u.priceMin != null ? u.priceMin : 0,
+        priceMax:       u.priceMax != null ? u.priceMax : 10000,
+        avgRating,
+        reviewCount,
+      };
+    });
   res.json(minders);
 });
 

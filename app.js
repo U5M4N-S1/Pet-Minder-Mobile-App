@@ -7,6 +7,7 @@ let reviewStars = 0;
 let profileReviewStars = 0;
 let currentEditPetId = null;
 let currentReviewMinder = null;
+let _openMinderIsBackend = false; // true when viewing a real (numeric-id) minder
 let reportSelectedUser = null;
 
 // User profile — populated from the session cache or API on page load
@@ -15,7 +16,7 @@ let userProfile = {
   role: ['owner'], profileImage: '',
   // Minder-specific (blank for owners)
   serviceArea: '', petsCaredFor: '', services: '', rate: '', experience: '',
-  priceMin: 0, priceMax: 50,
+  priceMin: 0, priceMax: 10000,
   availableForBooking: true,
   enabledServices: [],
 };
@@ -143,7 +144,7 @@ function hydrateUserProfile(u) {
   userProfile.services     = u.services     || '';
   userProfile.rate         = u.rate         || '';
   userProfile.experience   = u.experience   || '';
-  userProfile.priceMin         = u.priceMin != null ? u.priceMin : 10;
+  userProfile.priceMin         = u.priceMin != null ? u.priceMin : 0;
   userProfile.priceMax         = u.priceMax != null ? u.priceMax : 50;
   userProfile.availableForBooking = u.availableForBooking !== false;
   userProfile.enabledServices  = Array.isArray(u.enabledServices) ? u.enabledServices : [];
@@ -1177,6 +1178,7 @@ async function loadMinders() {
         '<div class="minder-list-info">' +
           '<div class="minder-list-name">' + m.name + '</div>' +
           (loc ? '<div class="minder-list-loc">' + loc + '</div>' : '') +
+          (m.avgRating ? '<div style="font-size:12px;color:#f5a623;margin-top:2px">★ ' + m.avgRating + ' <span style="color:var(--bark-light)">(' + m.reviewCount + ' review' + (m.reviewCount !== 1 ? 's' : '') + ')</span></div>' : '') +
           (tags.length ? '<div class="minder-list-tags">' + tags.join('') + '</div>' : '') +
           (price ? '<div class="minder-list-rate">' + price + '</div>' : '') +
           '<div class="minder-btns">' +
@@ -1193,9 +1195,11 @@ async function loadMinders() {
   }
 }
 
-function openMinderProfile(minderId) {
+async function openMinderProfile(minderId) {
   previousScreen = currentScreen;
-  // Try real minder data first, fall back to legacy hardcoded data
+  _openMinderIsBackend = /^\d+$/.test(String(minderId));
+  currentReviewMinder = minderId;
+
   const minder = loadedMinders.find(m => m.id === minderId) || minderData[minderId];
   if (minder) {
     const mpAvatar = document.getElementById('mp-avatar');
@@ -1207,7 +1211,7 @@ function openMinderProfile(minderId) {
     document.getElementById('mp-name').textContent = minder.name;
     document.getElementById('mp-loc').textContent = minder.location ? '📍 ' + minder.location : (minder.loc || '');
     document.getElementById('mp-bio').textContent = minder.bio || '';
-    // Update the detail section with real data
+
     const details = document.getElementById('mp-details');
     if (details && (minder.experience || minder.petsCaredFor || minder.services || minder.rate || minder.priceMin != null)) {
       details.innerHTML = '';
@@ -1217,17 +1221,95 @@ function openMinderProfile(minderId) {
       const priceStr = (minder.priceMin != null && minder.priceMax != null) ? '£' + minder.priceMin + ' – £' + minder.priceMax + '/hr' : (minder.rate || '');
       if (priceStr) details.innerHTML += '<div class="info-row"><span class="info-label">Rate</span><span class="info-value">' + priceStr + '</span></div>';
     }
-    // Hide stars for real minders (no review system wired to them yet)
+
+    // Stars placeholder — will be updated after reviews load
     const starsEl = document.getElementById('mp-stars');
-    if (starsEl) starsEl.innerHTML = minder.stars ? minder.stars + ' <span style="font-size:13px;opacity:0.8">(' + (minder.reviews || 0) + ' reviews)</span>' : '';
+    if (starsEl) starsEl.innerHTML = minder.stars
+      ? minder.stars + ' <span style="font-size:13px;opacity:0.8">(' + (minder.reviews || 0) + ' reviews)</span>'
+      : '<span style="font-size:13px;color:var(--bark-light)">No reviews yet</span>';
   }
+
   // Reset to About tab
   document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
   document.querySelector('.profile-tab').classList.add('active');
   document.querySelectorAll('[id^="tab-"]').forEach(t => t.classList.add('hidden'));
   document.getElementById('tab-about').classList.remove('hidden');
+
+  // Pre-clear review list (will populate when Reviews tab is clicked)
+  const reviewList = document.getElementById('minder-reviews-list');
+  if (reviewList) reviewList.dataset.loaded = '';
+
   show('minder-profile');
   currentScreen = 'minder-profile';
+
+  // For backend minders: load reviews in the background to update stars immediately
+  if (_openMinderIsBackend) {
+    try {
+      const { reviews, average, count } = await api.getMinderReviews(minderId);
+      _cachedMinderReviews = { reviews, average, count };
+      const starsEl = document.getElementById('mp-stars');
+      if (starsEl && currentScreen === 'minder-profile') {
+        if (average) {
+          const filled = Math.round(Number(average));
+          const starStr = '★'.repeat(filled) + '☆'.repeat(5 - filled);
+          starsEl.innerHTML = '<span style="color:#f5a623">' + starStr + '</span> <span style="font-size:13px;opacity:0.9">' + average + '</span> <span style="font-size:13px;opacity:0.7">(' + count + ' review' + (count !== 1 ? 's' : '') + ')</span>';
+        } else {
+          starsEl.innerHTML = '<span style="font-size:13px;color:var(--bark-light)">No reviews yet</span>';
+        }
+      }
+      // If the reviews tab is already open, populate it
+      if (reviewList && reviewList.dataset.loaded === 'pending') {
+        _renderMinderReviewsTab(reviews);
+      }
+    } catch { /* silent */ }
+  }
+}
+
+let _cachedMinderReviews = null;
+
+function _renderMinderReviewsTab(reviews) {
+  const container = document.getElementById('minder-reviews-list');
+  if (!container) return;
+  const writeBox = container.querySelector('.review-write-box');
+  // Keep just the write-review box, replace everything else
+  const isOwner = (Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role]).includes('owner');
+  const isSelf  = currentReviewMinder != null && String(currentReviewMinder) === String(store.currentUserId());
+
+  let html = '';
+  if (!reviews || reviews.length === 0) {
+    html = '<div style="padding:20px;text-align:center;color:var(--bark-light);font-size:13px">No reviews yet. Be the first!</div>';
+  } else {
+    html = reviews.map(r => {
+      const stars = '★'.repeat(r.stars) + '☆'.repeat(5 - r.stars);
+      const date = new Date(r.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      return '<div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)">' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:8px">' +
+        '<strong style="font-size:14px;color:var(--bark)">' + (r.reviewerName || 'Anonymous') + '</strong>' +
+        '<span style="color:#f5a623">' + stars + '</span></div>' +
+        '<p style="font-size:13px;color:var(--bark-light);line-height:1.6;margin:0">"' + r.text + '"</p>' +
+        '<p style="font-size:11px;color:var(--bark-light);margin-top:8px">' + date + '</p>' +
+        '</div>';
+    }).join('');
+  }
+
+  // Write-review box (only if viewer is an owner and not self)
+  const writeHTML = (!isSelf && isOwner) ? `
+    <div class="review-write-box" style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)">
+      <p style="font-family:'Playfair Display',serif;font-size:15px;font-weight:600;color:var(--bark);margin-bottom:12px">Leave a Review</p>
+      <div class="star-rating-input" id="review-stars">
+        <span class="star-btn" onclick="setReviewStars(1)">★</span>
+        <span class="star-btn" onclick="setReviewStars(2)">★</span>
+        <span class="star-btn" onclick="setReviewStars(3)">★</span>
+        <span class="star-btn" onclick="setReviewStars(4)">★</span>
+        <span class="star-btn" onclick="setReviewStars(5)">★</span>
+      </div>
+      <textarea id="review-text-input" placeholder="Write your review..." style="width:100%;padding:12px 14px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);resize:vertical;min-height:70px;outline:none;margin-top:10px"></textarea>
+      <button class="btn-primary" style="width:100%;margin-top:10px;padding:12px" onclick="submitReview()">Submit Review</button>
+    </div>` : (!isOwner && !isSelf ? '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:12px 0">Only pet owners can leave reviews.</p>' : '');
+
+  container.innerHTML = html + writeHTML;
+  container.dataset.loaded = 'done';
+  reviewStars = 0;
 }
 
 function openBooking() { previousScreen = currentScreen; show('booking'); currentScreen = 'booking'; }
@@ -1282,6 +1364,25 @@ function switchProfileTab(btn, tabId) {
   btn.classList.add('active');
   document.querySelectorAll('[id^="tab-"]').forEach(t => t.classList.add('hidden'));
   document.getElementById(tabId).classList.remove('hidden');
+
+  // Lazy-load real reviews when the Reviews tab is opened on a backend minder
+  if (tabId === 'tab-reviews' && _openMinderIsBackend && currentReviewMinder) {
+    const container = document.getElementById('minder-reviews-list');
+    if (container && container.dataset.loaded !== 'done') {
+      if (_cachedMinderReviews) {
+        _renderMinderReviewsTab(_cachedMinderReviews.reviews);
+      } else {
+        container.dataset.loaded = 'pending';
+        container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--bark-light);font-size:13px">Loading reviews…</div>';
+        api.getMinderReviews(currentReviewMinder).then(({ reviews, average, count }) => {
+          _cachedMinderReviews = { reviews, average, count };
+          _renderMinderReviewsTab(reviews);
+        }).catch(() => {
+          container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--bark-light);font-size:13px">Could not load reviews.</div>';
+        });
+      }
+    }
+  }
 }
 
 // ===== BOOKINGS TABS =====
@@ -1412,6 +1513,7 @@ function renderMinders(minders) {
       '<div class="minder-list-info">' +
         '<div class="minder-list-name">' + m.name + '</div>' +
         (loc ? '<div class="minder-list-loc">' + loc + '</div>' : '') +
+        (m.avgRating ? '<div style="font-size:12px;color:#f5a623;margin-top:2px">★ ' + m.avgRating + ' <span style="color:var(--bark-light)">(' + m.reviewCount + ' review' + (m.reviewCount !== 1 ? 's' : '') + ')</span></div>' : '') +
         (tags.length ? '<div class="minder-list-tags">' + tags.join('') + '</div>' : '') +
         (price ? '<div class="minder-list-rate">' + price + '</div>' : '') +
         '<div class="minder-btns">' +
@@ -1753,16 +1855,44 @@ function setReviewStars(n) {
   reviewStars = n;
   document.querySelectorAll('#review-stars .star-btn').forEach((s, i) => s.classList.toggle('active', i < n));
 }
-function submitReview() {
+async function submitReview() {
   const text = document.getElementById('review-text-input').value.trim();
   if (!text) { showToast('❌ Please write a review'); return; }
   if (reviewStars === 0) { showToast('❌ Please select a star rating'); return; }
-  const container = document.getElementById('user-reviews-container');
+
+  if (_openMinderIsBackend && currentReviewMinder) {
+    try {
+      const r = await api.submitReview({ minderId: currentReviewMinder, stars: reviewStars, text });
+      showToast('✅ Review submitted!');
+      document.getElementById('review-text-input').value = '';
+      setReviewStars(0);
+      // Refresh the reviews tab
+      _cachedMinderReviews = null;
+      const { reviews, average, count } = await api.getMinderReviews(currentReviewMinder);
+      _cachedMinderReviews = { reviews, average, count };
+      _renderMinderReviewsTab(reviews);
+      // Update stars in header
+      const starsEl = document.getElementById('mp-stars');
+      if (starsEl && average) {
+        const filled = Math.round(Number(average));
+        const starStr2 = '★'.repeat(filled) + '☆'.repeat(5 - filled);
+        starsEl.innerHTML = '<span style="color:#f5a623">' + starStr2 + '</span> <span style="font-size:13px;opacity:0.9">' + average + '</span> <span style="font-size:13px;opacity:0.7">(' + count + ' review' + (count !== 1 ? 's' : '') + ')</span>';
+      }
+    } catch (err) {
+      showToast('❌ ' + (err.message || 'Could not submit review'));
+    }
+    return;
+  }
+
+  // Legacy local display for demo/hardcoded minders
   const starStr = '★'.repeat(reviewStars) + '☆'.repeat(5 - reviewStars);
-  const review = document.createElement('div');
-  review.style.cssText = 'background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)';
-  review.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><strong style="font-size:14px">' + userProfile.firstName + ' ' + userProfile.lastName.charAt(0) + '.</strong><span style="color:#f5a623">' + starStr + '</span></div><p style="font-size:13px;color:var(--bark-light);line-height:1.6">"' + text + '"</p><p style="font-size:11px;color:var(--bark-light);margin-top:8px">Just now</p>';
-  container.appendChild(review);
+  const container = document.getElementById('user-reviews-container');
+  if (container) {
+    const review = document.createElement('div');
+    review.style.cssText = 'background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)';
+    review.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><strong style="font-size:14px">' + userProfile.firstName + ' ' + userProfile.lastName.charAt(0) + '.</strong><span style="color:#f5a623">' + starStr + '</span></div><p style="font-size:13px;color:var(--bark-light);line-height:1.6">"' + text + '"</p><p style="font-size:11px;color:var(--bark-light);margin-top:8px">Just now</p>';
+    container.appendChild(review);
+  }
   document.getElementById('review-text-input').value = '';
   setReviewStars(0);
   showToast('✅ Review submitted!');
@@ -1981,9 +2111,30 @@ function openEditProfileModal() {
     if (isMinderProfile) {
       document.getElementById('edit-service-area').value = userProfile.serviceArea || '';
       setSelectedChips('edit-pet-type-chips', userProfile.petsCaredFor || '');
-      setSelectedChips('edit-service-type-chips', userProfile.services || '');
+      // Only show/select basic services in the chip editor.
+      // Advanced services (Grooming/Vet/Training) are admin-controlled and shown
+      // separately as read-only indicators; minders cannot self-select them.
+      const _adminEnabled = Array.isArray(userProfile.enabledServices) ? userProfile.enabledServices : [];
+      const _basicServices = (userProfile.services || '').split(',')
+        .map(s => s.trim()).filter(s => s && !ADVANCED_SERVICES.includes(s)).join(', ');
+      setSelectedChips('edit-service-type-chips', _basicServices);
+      // Show advanced chip slots only if admin has enabled them for this minder
+      document.querySelectorAll('#edit-service-type-chips .chip-btn').forEach(btn => {
+        const val = btn.getAttribute('data-value');
+        if (ADVANCED_SERVICES.includes(val)) {
+          if (_adminEnabled.includes(val)) {
+            btn.style.display = '';
+            btn.classList.add('active'); // always on — admin-controlled
+            btn.disabled = true;
+            btn.title = 'Enabled by admin';
+          } else {
+            btn.style.display = 'none';
+            btn.classList.remove('active');
+          }
+        }
+      });
       document.getElementById('edit-price-min').value = userProfile.priceMin != null ? userProfile.priceMin : 0;
-      document.getElementById('edit-price-max').value = userProfile.priceMax != null ? userProfile.priceMax : 50;
+      document.getElementById('edit-price-max').value = userProfile.priceMax != null ? userProfile.priceMax : 10000;
       document.getElementById('edit-experience').value = userProfile.experience || '';
 
     }
@@ -2008,7 +2159,10 @@ function saveProfile() {
     if ((Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role]).includes('minder')) {
       updates.serviceArea  = (document.getElementById('edit-service-area') || {}).value || '';
       updates.petsCaredFor = getSelectedChips('edit-pet-type-chips');
-      updates.services     = getSelectedChips('edit-service-type-chips');
+      // Only save basic services — advanced ones live in enabledServices (admin-managed)
+      const _rawChips = getSelectedChips('edit-service-type-chips');
+      updates.services = _rawChips.split(',').map(s => s.trim())
+        .filter(s => s && !ADVANCED_SERVICES.includes(s)).join(', ');
       updates.priceMin     = clampPrice(document.getElementById('edit-price-min'));
       updates.priceMax     = clampPrice(document.getElementById('edit-price-max'));
       updates.experience   = (document.getElementById('edit-experience') || {}).value || '';

@@ -2111,22 +2111,20 @@ function openEditProfileModal() {
     if (isMinderProfile) {
       document.getElementById('edit-service-area').value = userProfile.serviceArea || '';
       setSelectedChips('edit-pet-type-chips', userProfile.petsCaredFor || '');
-      // Only show/select basic services in the chip editor.
-      // Advanced services (Grooming/Vet/Training) are admin-controlled and shown
-      // separately as read-only indicators; minders cannot self-select them.
       const _adminEnabled = Array.isArray(userProfile.enabledServices) ? userProfile.enabledServices : [];
-      const _basicServices = (userProfile.services || '').split(',')
-        .map(s => s.trim()).filter(s => s && !ADVANCED_SERVICES.includes(s)).join(', ');
-      setSelectedChips('edit-service-type-chips', _basicServices);
-      // Show advanced chip slots only if admin has enabled them for this minder
+      // Set chip selection from the minder's actual saved services (includes any
+      // advanced ones they have previously chosen to offer).
+      setSelectedChips('edit-service-type-chips', userProfile.services || '');
+      // Show advanced chips only when admin has unlocked them; make them fully
+      // interactive so the minder can opt in or out. They start unselected unless
+      // already saved in services.
       document.querySelectorAll('#edit-service-type-chips .chip-btn').forEach(btn => {
         const val = btn.getAttribute('data-value');
         if (ADVANCED_SERVICES.includes(val)) {
           if (_adminEnabled.includes(val)) {
-            btn.style.display = '';
-            btn.classList.add('active'); // always on — admin-controlled
-            btn.disabled = true;
-            btn.title = 'Enabled by admin';
+            btn.style.display = '';    // visible
+            btn.disabled = false;      // fully clickable
+            btn.title = 'Unlocked by admin';
           } else {
             btn.style.display = 'none';
             btn.classList.remove('active');
@@ -2159,10 +2157,9 @@ function saveProfile() {
     if ((Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role]).includes('minder')) {
       updates.serviceArea  = (document.getElementById('edit-service-area') || {}).value || '';
       updates.petsCaredFor = getSelectedChips('edit-pet-type-chips');
-      // Only save basic services — advanced ones live in enabledServices (admin-managed)
-      const _rawChips = getSelectedChips('edit-service-type-chips');
-      updates.services = _rawChips.split(',').map(s => s.trim())
-        .filter(s => s && !ADVANCED_SERVICES.includes(s)).join(', ');
+      // Save all selected service chips. Advanced chips (Grooming/Vet/Training) are
+      // only visible when admin has unlocked them, so whatever the minder ticks is valid.
+      updates.services = getSelectedChips('edit-service-type-chips');
       updates.priceMin     = clampPrice(document.getElementById('edit-price-min'));
       updates.priceMax     = clampPrice(document.getElementById('edit-price-max'));
       updates.experience   = (document.getElementById('edit-experience') || {}).value || '';
@@ -2311,7 +2308,11 @@ async function adminToggleService(userId, service, enabled) {
   try {
     const result = await api.toggleAdminService(userId, service, enabled);
     const u = adminUsers.find(x => x.id === userId);
-    if (u) u.enabledServices = result.enabledServices;
+    if (u) {
+      u.enabledServices = result.enabledServices;
+      // When disabling, the backend also cleans the services string — sync that too
+      if (!enabled && result.services !== undefined) u.services = result.services;
+    }
     showToast((enabled ? '✅ ' : '🚫 ') + service + (enabled ? ' enabled' : ' disabled') + ' for ' + (u ? u.name : 'minder'));
     openAdminUserDetail(userId); // re-render panel with updated toggles
   } catch (err) {

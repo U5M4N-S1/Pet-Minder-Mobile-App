@@ -188,7 +188,18 @@ router.patch('/users/:id/services', requireAuth, requireAdmin, (req, res) => {
   } else {
     enabledServices = enabledServices.filter(s => s !== service);
   }
-  row.assign({ enabledServices }).write();
+
+  // When disabling, also strip the service from the minder's services string so
+  // it doesn't linger in their profile or reappear on their next profile save.
+  const updates = { enabledServices };
+  if (!enabled) {
+    const cleaned = (user.services || '').split(',')
+      .map(s => s.trim())
+      .filter(s => s && s !== service)
+      .join(', ');
+    updates.services = cleaned;
+  }
+  row.assign(updates).write();
 
   // Push a notification to the minder
   const action = enabled ? 'enabled' : 'disabled';
@@ -204,7 +215,7 @@ router.patch('/users/:id/services', requireAuth, requireAdmin, (req, res) => {
     createdAt: new Date().toISOString()
   }).write();
 
-  res.json({ id, enabledServices });
+  res.json({ id, enabledServices, services: row.value().services || '' });
 });
 
 module.exports = router;

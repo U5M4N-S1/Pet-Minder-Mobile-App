@@ -285,7 +285,7 @@ function openBookingDetail(bookingId, recipientBool) {
         (b.price ? '<div class="info-row" style="display:flex;justify-content:space-between;padding:10px 0"><span style="color:var(--bark-light);font-size:13px">Price</span><span style="font-weight:700;font-size:16px;color:var(--terra)">' + b.price + '</span></div>' : '') +
       '</div>' +
     '</div>' +
-    (canCancel && recipientBool ? '<button class="btn-primary" style="width:100%;margin-top:20px;padding:14px;background:#008000" onclick="completeBooking(' + b.id + ')">Confirm Completion</button>' : '') +
+    (canCancel && recipientBool ? '<button class="btn-primary" style="width:100%;margin-top:20px;padding:14px;background:#008000">Confirm Completion</button>' : '') +
     (canCancel ? '<button class="btn-primary" style="width:100%;margin-top:20px;padding:14px;background:#e53935" onclick="cancelBooking(' + b.id + ')">Cancel Booking</button>' : '');
   document.getElementById('bookings-detail-section').style.display = 'block';
   document.getElementById('bookings-main-section').style.display = 'none';
@@ -301,25 +301,6 @@ function cancelBooking(bookingId) {
     try {
       await api.updateBooking(bookingId, { status: 'cancelled' });
       showToast('✅ Booking cancelled');
-      closeBookingDetail();
-      // Refresh bookings list
-      try {
-        const bookings = await loadAllBookingsForUser();
-        allBookingsCache = bookings;
-        renderBookingCards('bookings-upcoming-list', filterUpcoming(bookings));
-        renderBookingCards('bookings-past-list',     filterPast(bookings));
-      } catch { /* silent */ }
-    } catch (err) {
-      showToast('❌ ' + (err.message || 'Failed to cancel booking'));
-    }
-  });
-}
-
-function completeBooking(bookingId) {
-  showConfirmModal('✅', 'Confirm Booking?', 'Are you sure you want to confirm this booking? This cannot be undone.', async function() {
-    try {
-      await api.updateBooking(bookingId, { status: 'completed' });
-      showToast('✅ Booking completed');
       closeBookingDetail();
       // Refresh bookings list
       try {

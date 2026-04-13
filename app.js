@@ -338,14 +338,21 @@ async function respondToBooking(bookingId, status, btnEl) {
 // booking for that slot"). Both come through the same notification UI.
 let notifCount = 0;
 let notifRequests = [];      // minder: pending booking requests
-let notifOwnerMessages = []; // owner: declined/other notifications from /api/notifications
+let notifOwnerMessages = []; // owner: system notifications from /api/notifications
+let notifMinderMessages = []; // minder: system notifications (service updates etc.)
 
 async function loadNotificationCount() {
   try {
     const _nRoles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role || 'owner'];
     if (_nRoles.includes('minder')) {
-      notifRequests = await api.getBookingRequests();
-      notifCount = notifRequests.filter(b => b.status === 'pending').length;
+      // Minders see both booking requests AND system notifications (e.g. service updates)
+      [notifRequests, notifMinderMessages] = await Promise.all([
+        api.getBookingRequests(),
+        api.getNotifications()
+      ]);
+      const pendingCount  = notifRequests.filter(b => b.status === 'pending').length;
+      const unreadCount   = notifMinderMessages.filter(n => !n.read).length;
+      notifCount = pendingCount + unreadCount;
     } else {
       notifOwnerMessages = await api.getNotifications();
       notifCount = notifOwnerMessages.filter(n => !n.read).length;
@@ -365,24 +372,45 @@ function openNotifications() {
   const _oRoles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role || 'owner'];
   if (_oRoles.includes('minder')) {
     if (list) {
-      if (notifRequests.length === 0) {
+      const pending = notifRequests.filter(b => b.status === 'pending');
+      const rest    = notifRequests.filter(b => b.status !== 'pending');
+
+      // Build booking request rows
+      const bookingRows = pending.concat(rest).map(b => {
+        const isPending = b.status === 'pending';
+        return '<div class="menu-item" style="' + (isPending ? 'border-left:3px solid var(--terra);' : 'opacity:0.7;') + '" onclick="window.location.href=\'bookings.html?tab=requests\'">' +
+          '<span class="menu-icon">' + (isPending ? '🔔' : (b.status === 'confirmed' ? '✅' : '❌')) + '</span>' +
+          '<span class="menu-label" style="display:flex;flex-direction:column;gap:2px">' +
+            '<span style="font-weight:600;font-size:14px">' + (b.ownerName || 'Pet Owner') + '</span>' +
+            '<span style="font-size:12px;color:var(--bark-light)">' + b.service + ' · ' + b.day + ' ' + b.month + ' · ' + b.price + '</span>' +
+            '<span style="font-size:11px;color:' + (isPending ? 'var(--terra)' : 'var(--bark-light)') + ';font-weight:' + (isPending ? '600' : '400') + '">' + (statusLabels[b.status] || b.status) + '</span>' +
+          '</span>' +
+          '<span class="menu-arrow">›</span>' +
+        '</div>';
+      });
+
+      // Build system notification rows (service updates etc.) — unread first
+      const sysUnread = notifMinderMessages.filter(n => !n.read);
+      const sysRead   = notifMinderMessages.filter(n =>  n.read);
+      const sysRows = sysUnread.concat(sysRead).map(n => {
+        const unread = !n.read;
+        const icon = n.type === 'service_update' ? '🛎' : '🔔';
+        return '<div class="menu-item" style="' + (unread ? 'border-left:3px solid var(--terra);' : 'opacity:0.75;') + '" onclick="handleMinderNotifClick(' + n.id + ')">' +
+          '<span class="menu-icon">' + icon + '</span>' +
+          '<span class="menu-label" style="display:flex;flex-direction:column;gap:2px">' +
+            '<span style="font-weight:600;font-size:14px">' + (n.title || 'Notification') + '</span>' +
+            '<span style="font-size:12px;color:var(--bark-light);line-height:1.4">' + (n.message || '') + '</span>' +
+          '</span>' +
+          '<button onclick="event.stopPropagation();deleteMinderNotif(' + n.id + ')" style="background:none;border:none;cursor:pointer;padding:6px;color:#ff0000;font-size:15px;flex-shrink:0;line-height:1" title="Delete">🗑</button>' +
+        '</div>';
+      });
+
+      const allRows = [...sysUnread.length ? sysRows.slice(0, sysUnread.length) : [], ...bookingRows, ...sysRead.length ? sysRows.slice(sysUnread.length) : []];
+
+      if (allRows.length === 0) {
         list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No notifications yet.</div>';
       } else {
-        const pending = notifRequests.filter(b => b.status === 'pending');
-        const rest    = notifRequests.filter(b => b.status !== 'pending');
-        const all     = pending.concat(rest);
-        list.innerHTML = all.map(b => {
-          const isPending = b.status === 'pending';
-          return '<div class="menu-item" style="' + (isPending ? 'border-left:3px solid var(--terra);' : 'opacity:0.7;') + '" onclick="window.location.href=\'bookings.html?tab=requests\'">' +
-            '<span class="menu-icon">' + (isPending ? '🔔' : (b.status === 'confirmed' ? '✅' : '❌')) + '</span>' +
-            '<span class="menu-label" style="display:flex;flex-direction:column;gap:2px">' +
-              '<span style="font-weight:600;font-size:14px">' + (b.ownerName || 'Pet Owner') + '</span>' +
-              '<span style="font-size:12px;color:var(--bark-light)">' + b.service + ' · ' + b.day + ' ' + b.month + ' · ' + b.price + '</span>' +
-              '<span style="font-size:11px;color:' + (isPending ? 'var(--terra)' : 'var(--bark-light)') + ';font-weight:' + (isPending ? '600' : '400') + '">' + (statusLabels[b.status] || b.status) + '</span>' +
-            '</span>' +
-            '<span class="menu-arrow">›</span>' +
-          '</div>';
-        }).join('');
+        list.innerHTML = allRows.join('');
       }
     }
   } else {
@@ -408,6 +436,26 @@ function openNotifications() {
   }
   show('notifications');
   currentScreen = 'notifications';
+}
+
+async function handleMinderNotifClick(id) {
+  try { await api.markNotificationRead(id); } catch { /* silent */ }
+  // Mark as read in local cache and refresh the badge + list
+  const n = notifMinderMessages.find(x => x.id === id);
+  if (n) n.read = true;
+  loadNotificationCount();
+  openNotifications();
+}
+
+async function deleteMinderNotif(id) {
+  try {
+    await api.deleteNotification(id);
+    notifMinderMessages = notifMinderMessages.filter(n => n.id !== id);
+    loadNotificationCount();
+    openNotifications();
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Could not delete notification'));
+  }
 }
 
 async function handleOwnerNotifClick(id) {

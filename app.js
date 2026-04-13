@@ -128,7 +128,7 @@ const api = {
   // Chats
   getChats()                { return this._req('GET',    '/chats'); },
   getChatMessages(id)       { return this._req('GET',    '/chats/' + id + '/messages'); },
-  sendChatMessage(id, text) { return this._req('POST',   '/chats/' + id + '/messages', { text }); },
+  sendChatMessage(id, text, image) { const body = {}; if (text) body.text = text; if (image) body.image = image; return this._req('POST', '/chats/' + id + '/messages', body); },
   createChat(otherUserId)   { return this._req('POST',   '/chats', { otherUserId }); },
   // Reviews
   getMinderReviews(minderId) { return this._req('GET',  '/reviews/' + minderId); },
@@ -1458,7 +1458,11 @@ async function openChatInline(chatId) {
     history.forEach(m => {
       const b = document.createElement('div');
       b.className = 'msg-bubble ' + (m.fromUserId === myId ? 'sent' : 'received');
-      b.innerHTML = escapeHTML(m.text) + '<div class="msg-time">' + formatMsgTime(m.createdAt) + '</div>';
+      let content = '';
+      if (m.image) content += '<img src="' + m.image + '" class="msg-image" alt="Photo" onclick="openImagePreview(this.src)">';
+      if (m.text) content += escapeHTML(m.text);
+      content += '<div class="msg-time">' + formatMsgTime(m.createdAt) + '</div>';
+      b.innerHTML = content;
       msgs.appendChild(b);
     });
     msgs.scrollTop = msgs.scrollHeight;
@@ -1473,26 +1477,60 @@ function escapeHTML(s) {
 
 function closeMobileChat() { document.getElementById('messages-container').classList.remove('chat-open'); }
 
-async function sendMessage() {
+async function sendMessage(imageDataUri) {
   const input = document.getElementById('chat-input-field');
-  const text = input.value.trim();
-  if (!text || !activeChat) return;
-  input.value = '';
+  const text = (input ? input.value.trim() : '');
+  if (!imageDataUri && !text) return;
+  if (!activeChat) return;
+  if (input) input.value = '';
   const msgs = document.getElementById('chat-active-messages');
   const b = document.createElement('div');
   b.className = 'msg-bubble sent';
-  b.innerHTML = escapeHTML(text) + '<div class="msg-time">…</div>';
+  let preview = '';
+  if (imageDataUri) preview += '<img src="' + imageDataUri + '" class="msg-image" alt="Photo">';
+  if (text) preview += escapeHTML(text);
+  preview += '<div class="msg-time">…</div>';
+  b.innerHTML = preview;
   msgs.appendChild(b);
   msgs.scrollTop = msgs.scrollHeight;
   try {
-    const saved = await api.sendChatMessage(activeChat, text);
-    b.innerHTML = escapeHTML(saved.text) + '<div class="msg-time">' + formatMsgTime(saved.createdAt) + '</div>';
-    // Refresh list so newest-message-first ordering updates (moves active chat to top)
+    const saved = await api.sendChatMessage(activeChat, text || '', imageDataUri || '');
+    let content = '';
+    if (saved.image) content += '<img src="' + saved.image + '" class="msg-image" alt="Photo" onclick="openImagePreview(this.src)">';
+    if (saved.text) content += escapeHTML(saved.text);
+    content += '<div class="msg-time">' + formatMsgTime(saved.createdAt) + '</div>';
+    b.innerHTML = content;
     await loadChatList();
   } catch (err) {
     b.remove();
     showToast('❌ ' + (err.message || 'Failed to send'));
   }
+}
+
+function openChatImagePicker() {
+  const picker = document.getElementById('chat-image-input');
+  if (picker) picker.click();
+}
+
+function handleChatImageSelect(inputEl) {
+  const file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { showToast('❌ Please select an image file'); inputEl.value = ''; return; }
+  if (file.size > 2 * 1024 * 1024) { showToast('❌ Image must be under 2 MB'); inputEl.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = () => { sendMessage(reader.result); inputEl.value = ''; };
+  reader.onerror = () => { showToast('❌ Failed to read image'); inputEl.value = ''; };
+  reader.readAsDataURL(file);
+}
+
+function openImagePreview(src) {
+  const overlay = document.getElementById('image-preview-overlay');
+  const img = document.getElementById('image-preview-img');
+  if (overlay && img) { img.src = src; overlay.style.display = 'flex'; }
+}
+function closeImagePreview() {
+  const overlay = document.getElementById('image-preview-overlay');
+  if (overlay) overlay.style.display = 'none';
 }
 
 const _chatInputField = document.getElementById('chat-input-field');

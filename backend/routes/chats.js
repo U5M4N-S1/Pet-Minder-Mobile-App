@@ -103,11 +103,24 @@ router.get('/:id/messages', requireAuth, (req, res) => {
 });
 
 // POST /api/chats/:id/messages — send a message in a chat
-router.post('/:id/messages', requireAuth, (req, res) => {
+// Body: { text } for text messages, { image } for image messages (data-URI)
+router.post('/:id/messages', requireAuth, express.json({ limit: '3mb' }), (req, res) => {
   const me     = req.user.userId;
   const chatId = Number(req.params.id);
   const text   = String((req.body && req.body.text) || '').trim();
-  if (!text) return res.status(400).json({ error: 'Message text is required' });
+  const image  = (req.body && req.body.image) || '';
+
+  if (!text && !image) return res.status(400).json({ error: 'Message text or image is required' });
+
+  // Validate image if provided
+  if (image) {
+    if (typeof image !== 'string' || !image.match(/^data:image\/(jpeg|png|webp|gif);base64,/)) {
+      return res.status(400).json({ error: 'Invalid image format' });
+    }
+    if (image.length > 2 * 1024 * 1024) {
+      return res.status(400).json({ error: 'Image too large. Maximum 2 MB' });
+    }
+  }
 
   const chatRow = db.get('chats').find({ id: chatId });
   const chat    = chatRow.value();
@@ -119,12 +132,15 @@ router.post('/:id/messages', requireAuth, (req, res) => {
     id:         nextId('messages'),
     chatId,
     fromUserId: me,
-    text,
+    text:       text || '',
     read:       false,
     createdAt:  now
   };
+  if (image) msg.image = image;
   db.get('messages').push(msg).write();
-  chatRow.assign({ lastMessageAt: now, lastPreview: text.slice(0, 80) }).write();
+
+  const preview = image ? (text || '📷 Photo') : text.slice(0, 80);
+  chatRow.assign({ lastMessageAt: now, lastPreview: preview }).write();
 
   res.status(201).json(msg);
 });

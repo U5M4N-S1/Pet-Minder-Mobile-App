@@ -1,28 +1,24 @@
 # goals
-- trying to make it so a user can be a pet owner and pet minder
-- cant book yourself (option is hidden, even if it appears wont allow to book)
-- a user can provide no services (or can choose to opt to not provide using a toggle next to the ) if they choose to, they will be automatically removed from find minder
-- when user signs up to be a minder they auto get basic services, walk and home visit
-- user can upload certificate if want to do grooming, vet, and training
-- these services only appear on their profile once the certificate has been verified
-- admins will review and approve said qualifications
-- admins can toggle certain services for the minders once qualifications approved
+- user can upload certificate if want to do grooming, vet, and training (!!!)
+- these services only appear on their profile once the certificate has been verified (!!!)
+- admins will review and approve said qualifications (!!!)
+- admins can toggle certain services for the minders once qualifications approved (!!!)
+
+- review system (out of 10 but appear as 5 star sys, average)
+- message system (for admin as well, user sends qualifications, admin gets notif next to user card, clicks user card, image appears, admin can approve qualification)
 
 
 # new errors:
-- can see own profile on find minders
-- removing all services from profile doesnt remove from find minders
 - if yes have qualifications it still allows to pick grooming, vet, and training
+- the set price when sign in doesnt work (doesnt write in json file)
 
 
 # now: 
-- when selecting services on become minder it crosses over (✅)
-- allow minders to have a toggle button (✅)
-- hide minders from themselves in the find minders section (✅)
 - make a review system for admins for qualifications
+- make an upload function (for qualifications) (external)
+- how to upload image for admins to see? (external)
 - admins should be able to enable services for minders
-- minder can add more qualifications (✅)
-- make an upload function (for qualifications)
-- add the other info automatically when user becomes minder (?)
+
 - in the reviews section minders can see their average reviews from customers
-- if a user isnt an owner they cant review other people
+- minder cant book other minders (need owner role)
+- if a user isnt an owner they cant review other people 

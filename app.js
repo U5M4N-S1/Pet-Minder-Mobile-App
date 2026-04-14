@@ -1111,7 +1111,8 @@ async function handleRegister() {
   let pMin, pMax;
   if (selectedRole === 'minder') {
     pMin = document.getElementById('bm-price-min').value;
-    pMax = document.getElementById('bm-price-max').value;}
+    pMax = document.getElementById('bm-price-max').value;
+  }
 
   if (!firstName || !lastName || !email) { showToast('❌ Please fill in all fields'); return; }
   if (pwd !== confirm) {
@@ -1121,8 +1122,14 @@ async function handleRegister() {
   }
   document.getElementById('reg-confirm-password').style.borderColor = 'var(--sand)';
 
+  // Owners must add at least one pet before registering
+  if (selectedRole === 'owner' && regPendingPets.length === 0) {
+    showToast('❌ Please add at least one pet to create an owner account');
+    return;
+  }
+
   try {
-    const payload = {firstName, lastName, email, password: pwd, role: selectedRole};
+    const payload = { firstName, lastName, email, password: pwd, role: selectedRole };
     if (selectedRole === 'minder') {
       payload.priceMin = pMin;
       payload.priceMax = pMax;
@@ -1131,6 +1138,30 @@ async function handleRegister() {
     api.setToken(token);
     store.setUser(user);
     hydrateUserProfile(user);
+
+    // For owners: create the pending pets on the backend now that we have a user
+    if (selectedRole === 'owner' && regPendingPets.length > 0) {
+      await Promise.all(regPendingPets.map(p => api.createPet(p).catch(() => {})));
+      regPendingPets = [];
+    }
+
+    // For minders: upload qualification image if one was selected
+    if (selectedRole === 'minder') {
+      const certInput = document.getElementById('cert-upload-input');
+      const certFile  = certInput && certInput.files && certInput.files[0];
+      if (certFile) {
+        try {
+          const dataUri = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload  = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.readAsDataURL(certFile);
+          });
+          await api.uploadQualification(dataUri);
+        } catch { /* non-fatal — account is already created */ }
+      }
+    }
+
     goToHome();
   } catch (err) {
     showToast('❌ ' + err.message);
@@ -1150,16 +1181,31 @@ function selectRole(el, role) {
   document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('selected'));
   el.classList.add('selected');
   selectedRole = role;
-  disply = document.getElementById('bm-minder-price');
-  if (role === 'minder') {
-    disply.style.display = 'block';}
-  else{
-    disply.style.display = 'none';}
+  const ownerExtras  = document.getElementById('reg-owner-extras');
+  const minderExtras = document.getElementById('reg-minder-extras');
+  const priceEl      = document.getElementById('bm-minder-price');
+  if (ownerExtras)  ownerExtras.style.display  = role === 'owner'  ? 'block' : 'none';
+  if (minderExtras) minderExtras.style.display = role === 'minder' ? 'block' : 'none';
+  if (priceEl)      priceEl.style.display      = role === 'minder' ? 'block' : 'none';
 }
 
 function handleCertUpload() {
   const input = document.getElementById('cert-upload-input');
-  document.getElementById('cert-file-names').textContent = '✅ ' + Array.from(input.files).map(f => f.name).join(', ');
+  const file  = input.files && input.files[0];
+  if (!file) return;
+  if (file.type !== 'image/png') {
+    showToast('❌ Only PNG images are accepted');
+    input.value = '';
+    document.getElementById('cert-file-names').textContent = '';
+    return;
+  }
+  if (file.size > 3 * 1024 * 1024) {
+    showToast('❌ Image must be under 3 MB');
+    input.value = '';
+    document.getElementById('cert-file-names').textContent = '';
+    return;
+  }
+  document.getElementById('cert-file-names').textContent = '✅ ' + file.name;
 }
 
 // ===== BECOME A MINDER =====
@@ -1192,33 +1238,34 @@ function openQualifications(){
 
 async function bmSubmitQuals() {
   const fileInput = document.getElementById('bm-cert-input');
-  const file = fileInput.files && fileInput.files[0];
+  const file = fileInput && fileInput.files && fileInput.files[0];
 
-  if (!file) { showToast('❌ Please select a PNG image to upload'); return; }
-  if (file.type !== 'image/png') { showToast('❌ Only PNG images are accepted'); return; }
-  if (file.size > 3 * 1024 * 1024) { showToast('❌ Image must be under 3 MB'); return; }
+  // Validate only if a file was selected (qualification is optional)
+  if (file) {
+    if (file.type !== 'image/png') { showToast('❌ Only PNG images are accepted'); return; }
+    if (file.size > 3 * 1024 * 1024) { showToast('❌ Image must be under 3 MB'); return; }
+  }
 
   const selected = Array.from(document.querySelectorAll('#qual-service-checkboxes input[type="checkbox"]:checked'))
     .map(cb => cb.value);
   if (selected.length === 0) { showToast('❌ Please select at least one service to apply for'); return; }
 
   try {
-    // Read file as base64 data URI
-    const dataUri = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload  = () => resolve(reader.result);
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsDataURL(file);
-    });
+    const tasks = [api.applyForServices(selected)];
 
-    // Upload image then submit service application in parallel
-    await Promise.all([
-      api.uploadQualification(dataUri),
-      api.applyForServices(selected)
-    ]);
+    if (file) {
+      const dataUri = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
+      tasks.push(api.uploadQualification(dataUri));
+    }
 
+    await Promise.all(tasks);
     closeBecomeMinder();
-    showToast('📨 Qualification uploaded! Admin will review your application.');
+    showToast(file ? '📨 Qualification uploaded! Admin will review your application.' : '📨 Application sent! Admin will review your request.');
   } catch (err) {
     showToast('❌ ' + (err.message || 'Could not submit application'));
   }

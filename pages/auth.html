@@ -53,23 +53,22 @@
           <div class="role-btn" onclick="selectRole(this,'minder')"><span>🧑‍🦰👩‍🦰</span>Pet Minder</div>
         </div>
       </div>
-      <!----remove-->
+      <!-- Owner: must add at least one pet -->
       <div id="reg-owner-extras">
         <div class="reg-extras-box">
-          <p class="reg-extras-title">🐾 Register Your Pet</p>
-          <p class="reg-extras-sub">Add your first pet to get started</p>
+          <p class="reg-extras-title">🐾 Register Your Pet <span style="color:var(--terra)">*</span></p>
+          <p class="reg-extras-sub">You must add at least one pet to create an owner account</p>
           <button class="btn-outline" style="color:var(--terra);border-color:var(--terra);padding:10px 20px;font-size:13px;margin-top:8px" onclick="openPetModal('new')">＋ Add a Pet</button>
           <div id="reg-pets-grid" class="reg-pets-grid"></div>
         </div>
       </div>
-      <!----remove and ask after account is created-->
+      <!-- Minder: optional qualification PNG upload -->
       <div id="reg-minder-extras" style="display:none">
-        <div class="reg-extras-box" id="reg-minder-extras-box">
-          <p class="reg-extras-title">📜 Upload Certifications <span style="color:var(--terra)">*</span></p>
-          <p class="reg-extras-sub">Required — add your qualifications &amp; certifications. You can add more than one.</p>
-          <label class="file-upload-label"><input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple id="cert-upload-input" onchange="handleCertUpload()" style="display:none">＋ Add Certification</label>
+        <div class="reg-extras-box">
+          <p class="reg-extras-title">📜 Qualification Image <span style="color:var(--bark-light);font-weight:400">(optional)</span></p>
+          <p class="reg-extras-sub">Upload a PNG of your certification or qualification. You can add more later.</p>
+          <label class="file-upload-label" style="cursor:pointer"><input type="file" accept="image/png" id="cert-upload-input" onchange="handleCertUpload()" style="display:none">＋ Choose PNG</label>
           <div id="cert-file-names" style="margin-top:8px;font-size:12px;color:var(--moss)"></div>
-          <div id="reg-certs-grid" class="reg-pets-grid"></div>
         </div>
       </div>
       <div id="bm-minder-price" style="margin-top:16px; display:none">

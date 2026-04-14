@@ -35,7 +35,7 @@ let userProfile = {
   role: ['owner'], profileImage: '',
   // Minder-specific (blank for owners)
   serviceArea: '', petsCaredFor: '', services: '', rate: '', experience: '',
-  priceMin: 0, priceMax: 10000,
+  priceMin: 10, priceMax: 25,
   availableForBooking: true,
   enabledServices: [],
 };
@@ -182,7 +182,7 @@ function hydrateUserProfile(u) {
   userProfile.rate         = u.rate         || '';
   userProfile.experience   = u.experience   || '';
   userProfile.priceMin         = u.priceMin != null ? u.priceMin : 0;
-  userProfile.priceMax         = u.priceMax != null ? u.priceMax : 50;
+  userProfile.priceMax         = u.priceMax != null ? u.priceMax : 25;
   userProfile.availableForBooking = u.availableForBooking !== false;
   userProfile.availability     = (u.availability && typeof u.availability === 'object' && !Array.isArray(u.availability)) ? u.availability : {};
   userProfile.enabledServices  = Array.isArray(u.enabledServices) ? u.enabledServices : [];
@@ -1174,7 +1174,7 @@ function selectRole(el, role) {
 // ===== BECOME A MINDER =====
 const BM_ALL_SERVICES = [
   { name: 'Walking',  icon: '🚶', desc: '1 hour walk',   basic: true  },
-  { name: 'Home Visit',   icon: '🏠', desc: '30 min check-in',     basic: true  },
+  { name: 'Home Visit',   icon: '🏠', desc: '1 hour check-in',     basic: true  },
 ];
 let _bmHasQuals = false;
 
@@ -1434,8 +1434,8 @@ async function bmConfirm() {
   if (services.length === 0) { showToast('❌ Please select at least one service'); return; }
   const pMinEl = document.getElementById('bm-price-min');
   const pMaxEl = document.getElementById('bm-price-max');
-  const priceMin = pMinEl ? Math.max(0, Math.min(1000000, Number(pMinEl.value) || 10)) : 10;
-  const priceMax = pMaxEl ? Math.max(0, Math.min(1000000, Number(pMaxEl.value) || 50)) : 50;
+  const priceMin = pMinEl ? Math.max(1, Math.min(100, Number(pMinEl.value) || 10)) : 10;
+  const priceMax = pMaxEl ? Math.max(1, Math.min(100, Number(pMaxEl.value) || 25)) : 25;
   try {
     const saved = await api.updateMe({
       addMinderRole: true,
@@ -2774,7 +2774,7 @@ function openEditProfileModal() {
         }
       });
       document.getElementById('edit-price-min').value = userProfile.priceMin != null ? userProfile.priceMin : 0;
-      document.getElementById('edit-price-max').value = userProfile.priceMax != null ? userProfile.priceMax : 10000;
+      document.getElementById('edit-price-max').value = userProfile.priceMax != null ? userProfile.priceMax : 25;
       document.getElementById('edit-experience').value = userProfile.experience || '';
       // Load certifications tags
       renderCertTags(Array.isArray(userProfile.certificationTags) ? userProfile.certificationTags : (userProfile.certifications ? userProfile.certifications.split('\n').filter(Boolean) : []));

@@ -188,9 +188,9 @@
 
   <div class="field-group"><label>Price Range (£ per hour)</label>
     <div class="price-range-row">
-      <div class="price-input-wrap"><span class="price-prefix">£</span><input type="number" id="edit-price-min" min="0" max="50" value="0" placeholder="0"></div>
+      <div class="price-input-wrap"><span class="price-prefix">£</span><input type="number" id="edit-price-min" min="1" max="100" value="10" placeholder="0"></div>
       <span class="price-sep">to</span>
-      <div class="price-input-wrap"><span class="price-prefix">£</span><input type="number" id="edit-price-max" min="0" max="50" value="50" placeholder="50"></div>
+      <div class="price-input-wrap"><span class="price-prefix">£</span><input type="number" id="edit-price-max" min="1" max="100" value="25" placeholder="50"></div>
     </div>
   </div>
 
@@ -275,9 +275,9 @@
       <div style="margin-top:16px">
         <label style="font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:8px">Your Hourly Rate (£)</label>
         <div style="display:flex;align-items:center;gap:10px">
-          <div style="flex:1;position:relative"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--bark-light);font-size:14px">£</span><input type="number" id="bm-price-min" min="0" value="0" style="width:100%;padding:10px 10px 10px 24px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);outline:none"></div>
+          <div style="flex:1;position:relative"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--bark-light);font-size:14px">£</span><input type="number" id="bm-price-min" min="1" max="100" value="10" style="width:100%;padding:10px 10px 10px 24px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);outline:none"></div>
           <span style="color:var(--bark-light);font-size:13px">to</span>
-          <div style="flex:1;position:relative"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--bark-light);font-size:14px">£</span><input type="number" id="bm-price-max" min="0" value="50" style="width:100%;padding:10px 10px 10px 24px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);outline:none"></div>
+          <div style="flex:1;position:relative"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--bark-light);font-size:14px">£</span><input type="number" id="bm-price-max" min="1" max="100" value="25" style="width:100%;padding:10px 10px 10px 24px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);outline:none"></div>
         </div>
       </div>
       <button class="btn-primary" style="width:100%;padding:14px;margin-top:20px" onclick="bmConfirm()">✅ Become a Minder</button>

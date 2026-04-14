@@ -33,7 +33,7 @@ function userDTO(u) {
     rate:            u.rate            || '',
     experience:      u.experience      || '',
     priceMin:        u.priceMin != null ? u.priceMin : 0,
-    priceMax:        u.priceMax != null ? u.priceMax : 10000,
+    priceMax:        u.priceMax != null ? u.priceMax : 25,
     availableForBooking: u.availableForBooking !== false, // default true
     enabledServices:  Array.isArray(u.enabledServices) ? u.enabledServices : [],
     // Per-day availability schedule (used for booking validation)
@@ -85,8 +85,8 @@ router.post('/signup', async (req, res) => {
       // Minders get default services and availability flag
       ...(isMinder && {
         services:            'Walking, Home Visit',
-        priceMin:            priceMin != null ? Math.max(0, Math.min(10000, Number(priceMin) || 10)) : 10,
-        priceMax:            priceMax != null ? Math.max(0, Math.min(10000, Number(priceMax) || 30)) : 30,
+        priceMin:            priceMin != null ? Math.max(1, Math.min(100, Number(priceMin) || 10)) : 10,
+        priceMax:            priceMax != null ? Math.max(1, Math.min(100, Number(priceMax) || 25)) : 25,
         availableForBooking: true,
       }),
     };
@@ -162,8 +162,8 @@ router.patch('/me', requireAuth, (req, res) => {
   if (typeof rate         === 'string') updates.rate         = rate.trim();
   if (typeof experience   === 'string') updates.experience   = experience.trim();
   // Price range (clamped 0–50)
-  if (priceMin != null) updates.priceMin = Math.max(0, Math.min(10000, Number(priceMin) || 0));
-  if (priceMax != null) updates.priceMax = Math.max(0, Math.min(10000, Number(priceMax) || 10000));
+  if (priceMin != null) updates.priceMin = Math.max(1, Math.min(100, Number(priceMin) || 1));
+  if (priceMax != null) updates.priceMax = Math.max(1, Math.min(100, Number(priceMax) || 100));
   // Add minder role to the role array
   if (addMinderRole === true) {
     const currentRole = user.value().role;
@@ -376,7 +376,7 @@ router.get('/minders', requireAuth, (req, res) => {
         rate:           u.rate         || '',
         experience:     u.experience   || '',
         priceMin:       u.priceMin != null ? u.priceMin : 0,
-        priceMax:       u.priceMax != null ? u.priceMax : 10000,
+        priceMax:       u.priceMax != null ? u.priceMax : 25,
         avgRating,
         reviewCount,
         availability:       normalizeAvailability(u),

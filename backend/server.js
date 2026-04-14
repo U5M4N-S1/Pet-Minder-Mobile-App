@@ -22,6 +22,7 @@ app.use('/api/admin',         require('./routes/admin'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/chats',         require('./routes/chats'));
 app.use('/api/reviews',       require('./routes/reviews'));
+app.use('/api/routes',        require('./routes/routes'));
 
 // Catch-all: any unmatched path serves the landing page
 app.get('*', (_req, res) => {

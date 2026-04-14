@@ -9,6 +9,8 @@
 <link rel="stylesheet" href="../css/auth.css">
 <link rel="stylesheet" href="../css/bookings.css">
 <link rel="stylesheet" href="../css/responsive.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
 <body>
 
@@ -32,10 +34,10 @@
     <div id="bookings-main-section">
       <div style="padding:24px 24px 0"><h1 style="font-family:'Playfair Display',serif;font-size:26px;color:var(--bark);margin-bottom:16px">My Bookings</h1><div class="auth-tabs" id="bookings-tabs-row" style="max-width:420px"><button class="auth-tab active" id="bookings-tab-upcoming" onclick="switchBookingTab(this,'upcoming')">Upcoming</button><button class="auth-tab" id="bookings-tab-past" onclick="switchBookingTab(this,'past')">Past</button><button class="auth-tab" id="bookings-tab-requests" style="display:none" onclick="switchBookingTab(this,'requests')">Requests</button></div></div>
       <div style="padding:20px 24px" id="bookings-upcoming"><div class="booking-list" id="bookings-upcoming-list"></div></div>
-      <div style="padding:0 24px 20px" id="bookings-gps-live"><div class="gps-card"><h4>📍 Live Tracking</h4><div class="gps-map-placeholder"><div class="gps-dot" style="top:40%;left:55%"></div><span style="position:absolute;bottom:10px;right:10px;font-size:11px;background:white;padding:4px 8px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.1)">🗺 Victoria Park area</span></div><div class="gps-info"><div class="gps-stat"><div class="gps-stat-val">0.8mi</div><div class="gps-stat-label">Distance</div></div><div class="gps-stat"><div class="gps-stat-val">23min</div><div class="gps-stat-label">Duration</div></div><div class="gps-stat"><div class="gps-stat-val">Active</div><div class="gps-stat-label">Status</div></div></div></div></div>
+      <div style="padding:0 24px 20px;display:none" id="bookings-gps-live"><div class="gps-card"><h4 id="gps-live-title">📍 Live Tracking</h4><div id="live-map" style="width:100%;height:240px;border-radius:var(--radius-sm);overflow:hidden;background:var(--sand-light)"></div><div class="gps-info"><div class="gps-stat"><div class="gps-stat-val" id="gps-live-distance">0.00 km</div><div class="gps-stat-label">Distance Travelled</div></div><div class="gps-stat"><div class="gps-stat-val" id="gps-live-duration">0min</div><div class="gps-stat-label">Duration</div></div><div class="gps-stat"><div class="gps-stat-val" id="gps-live-status">Active</div><div class="gps-stat-label">Status</div></div></div></div></div>
       <div style="padding:20px 24px;display:none" id="bookings-past"><div class="booking-list" id="bookings-past-list"></div></div>
       <div style="padding:20px 24px;display:none" id="bookings-requests"><div class="booking-list" id="bookings-requests-list"></div></div>
-      <div style="padding:0 24px 20px;display:none" id="bookings-gps"><div class="gps-card"><h4>🗺 Completed Walk Routes</h4><div class="gps-route-card" onclick="showToast('Route map opening...')"><div class="gps-route-icon">🗺️</div><div class="gps-route-info"><div class="gps-route-date">28 Mar – Buddy with Sarah K.</div><div class="gps-route-detail">1.2mi · 45min · Victoria Park loop</div></div><span style="color:var(--bark-light);font-size:16px">›</span></div><div class="gps-route-card" onclick="showToast('Route map opening...')"><div class="gps-route-icon">🗺️</div><div class="gps-route-info"><div class="gps-route-date">22 Mar – Buddy with Sarah K.</div><div class="gps-route-detail">0.9mi · 38min · Canal towpath</div></div><span style="color:var(--bark-light);font-size:16px">›</span></div></div></div>
+      <div style="padding:0 24px 20px;display:none" id="bookings-gps"><div class="gps-card"><h4>🗺 Completed Walk Routes</h4><div id="bookings-past-routes-list"><p style="font-size:13px;color:var(--bark-light);margin:8px 0">No recorded walks yet.</p></div></div></div>
     </div>
     <!-- Booking detail view (shown when a card is clicked) -->
     <div id="bookings-detail-section" style="display:none;padding:24px">
@@ -77,14 +79,22 @@
 <!-- CONFIRM MODAL -->
 <div class="confirm-modal-overlay" id="confirm-modal" onclick="if(event.target===this)closeConfirmModal()"><div class="confirm-modal"><div class="confirm-modal-icon" id="confirm-modal-icon">⚠️</div><h3 id="confirm-modal-title">Are you sure?</h3><p id="confirm-modal-message">This action cannot be undone.</p><div class="confirm-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:12px" onclick="closeConfirmModal()">Cancel</button><button class="btn-primary" style="flex:1;padding:12px" id="confirm-modal-btn">Confirm</button></div></div></div>
 
+<!-- ASK FOR LOCATION MODAL (shown on load when the account has no town/city yet) -->
+<div class="pet-modal-overlay" id="ask-location-modal" onclick="if(event.target===this)skipAskLocation()"><div class="pet-modal"><h3>📍 Where are you based?</h3><p style="font-size:13px;color:var(--bark-light);margin-bottom:12px">We need your town or city so the map can show minders walking near you.</p><div class="field-group"><label>Town or City</label><input type="text" id="ask-location-input" placeholder="e.g. Mile End, London"></div><div class="pet-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="skipAskLocation()">Skip for now</button><button class="btn-primary" style="flex:2;padding:14px" onclick="submitAskLocation()">Save</button></div></div></div>
+
+<!-- PAST ROUTE VIEWER MODAL -->
+<div class="pet-modal-overlay" id="route-view-modal" onclick="if(event.target===this)closeRouteViewModal()"><div class="pet-modal" style="max-width:560px"><h3 id="route-view-title">Walk Route</h3><div id="route-view-map" style="width:100%;height:320px;border-radius:var(--radius-sm);overflow:hidden;background:var(--sand-light);margin-bottom:10px"></div><div class="gps-info"><div class="gps-stat"><div class="gps-stat-val" id="route-view-distance">—</div><div class="gps-stat-label">Distance Travelled</div></div><div class="gps-stat"><div class="gps-stat-val" id="route-view-duration">—</div><div class="gps-stat-label">Duration</div></div></div><div class="pet-modal-actions"><button class="btn-primary" style="flex:1;padding:14px" onclick="closeRouteViewModal()">Close</button></div></div></div>
+
+<script src="../js/tracking.js"></script>
 <script src="../app.js"></script>
 <script>
 (async () => {
+  let bookings = [];
   try {
     // Pull bookings from BOTH perspectives so a minder sees both the
     // bookings they placed as an owner and the ones they received as a
     // minder (recipient cards are tagged for the orange/yellow style).
-    const bookings = await loadAllBookingsForUser();
+    bookings = await loadAllBookingsForUser();
     allBookingsCache = bookings;
     renderBookingCards('bookings-upcoming-list', filterUpcoming(bookings));
     renderBookingCards('bookings-past-list',     filterPast(bookings));
@@ -92,6 +102,14 @@
     renderBookingCards('bookings-upcoming-list', upcomingBookings);
     renderBookingCards('bookings-past-list',     pastBookings);
   }
+
+  // Ask for a town/city if the account has none — needed as the walk start point.
+  maybeAskLocation();
+
+  // Wire up the live-tracking map against any booking that's happening right now.
+  initLiveTracking(bookings);
+  // Render past-booking routes the user has recorded.
+  renderPastRoutes();
 
   // If the logged-in user is a minder, also pre-load their pending
   // requests tab so switching to it is instant and the pending count is

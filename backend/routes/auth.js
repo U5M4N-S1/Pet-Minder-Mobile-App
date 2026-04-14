@@ -47,7 +47,7 @@ const AVATAR_MAX_DIM    = 1024; // px (width and height)
 
 // POST /api/auth/signup
 router.post('/signup', async (req, res) => {
-  const { firstName, lastName, email, password, role } = req.body;
+  const { firstName, lastName, email, password, role, location } = req.body;
 
   if (!firstName || !lastName || !email || !password) {
     return res.status(400).json({ error: 'All fields are required' });
@@ -71,7 +71,7 @@ router.post('/signup', async (req, res) => {
       email:     email.toLowerCase(),
       passwordHash,
       role:      role || 'owner',
-      location:  'London',
+      location:  (typeof location === 'string' && location.trim()) ? location.trim() : '',
       createdAt: new Date().toISOString()
     };
     user.online     = true;

@@ -781,7 +781,8 @@ function show(id) {
     pastTab.classList.remove('active');
     if (reqTab) reqTab.classList.remove('active');
     document.getElementById('bookings-upcoming').style.display = 'block';
-    document.getElementById('bookings-gps-live').style.display = 'block';
+    const liveCard = document.getElementById('bookings-gps-live');
+    liveCard.style.display = liveCard.dataset.hasLive === '1' ? 'block' : 'none';
     document.getElementById('bookings-past').style.display = 'none';
     document.getElementById('bookings-gps').style.display = 'none';
     const reqSection = document.getElementById('bookings-requests');
@@ -929,10 +930,11 @@ async function handleRegister() {
   const firstName = document.getElementById('reg-first-name').value.trim();
   const lastName  = document.getElementById('reg-last-name').value.trim();
   const email     = document.getElementById('reg-email').value.trim();
+  const location  = document.getElementById('reg-location').value.trim();
   const pwd       = document.getElementById('reg-password').value;
   const confirm   = document.getElementById('reg-confirm-password').value;
 
-  if (!firstName || !lastName || !email) { showToast('❌ Please fill in all fields'); return; }
+  if (!firstName || !lastName || !email || !location) { showToast('❌ Please fill in all fields'); return; }
   if (pwd !== confirm) {
     showToast('❌ Passwords do not match');
     document.getElementById('reg-confirm-password').style.borderColor = 'var(--terra)';
@@ -954,7 +956,7 @@ async function handleRegister() {
   }
 
   try {
-    const { token, user } = await api.signup({ firstName, lastName, email, password: pwd, role: selectedRole });
+    const { token, user } = await api.signup({ firstName, lastName, email, password: pwd, role: selectedRole, location });
     api.setToken(token);
     store.setUser(user);
     hydrateUserProfile(user);
@@ -1549,7 +1551,8 @@ function switchBookingTab(btn, tab) {
   document.querySelectorAll('#screen-bookings .auth-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('bookings-upcoming').style.display = tab === 'upcoming' ? 'block' : 'none';
-  document.getElementById('bookings-gps-live').style.display = tab === 'upcoming' ? 'block' : 'none';
+  const liveCard = document.getElementById('bookings-gps-live');
+  liveCard.style.display = (tab === 'upcoming' && liveCard.dataset.hasLive === '1') ? 'block' : 'none';
   document.getElementById('bookings-past').style.display = tab === 'past' ? 'block' : 'none';
   document.getElementById('bookings-gps').style.display = tab === 'past' ? 'block' : 'none';
   const reqSection = document.getElementById('bookings-requests');
@@ -2672,3 +2675,226 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.location.href = 'auth.html';
   }
 });
+
+// ===== Location prompt (for accounts created before we asked at signup) =====
+function maybeAskLocation() {
+  const loc = (userProfile && userProfile.location) ? String(userProfile.location).trim() : '';
+  const skipped = sessionStorage.getItem('pawpal-skip-ask-location') === '1';
+  const modal = document.getElementById('ask-location-modal');
+  if (!modal || loc || skipped) return;
+  modal.classList.add('open');
+  const input = document.getElementById('ask-location-input');
+  if (input) { input.value = ''; setTimeout(() => input.focus(), 50); }
+}
+
+function skipAskLocation() {
+  sessionStorage.setItem('pawpal-skip-ask-location', '1');
+  const modal = document.getElementById('ask-location-modal');
+  if (modal) modal.classList.remove('open');
+}
+
+async function submitAskLocation() {
+  const input = document.getElementById('ask-location-input');
+  const value = input ? input.value.trim() : '';
+  if (!value) { showToast('Please enter a town or city'); return; }
+  try {
+    const saved = await api.updateMe({ location: value });
+    hydrateUserProfile(saved);
+    store.setUser(userProfile);
+    const modal = document.getElementById('ask-location-modal');
+    if (modal) modal.classList.remove('active');
+    showToast('✅ Location saved');
+    // Re-init tracking now that we have a start coord
+    if (allBookingsCache) initLiveTracking(allBookingsCache);
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Could not save'));
+  }
+}
+
+// ===== Live tracking on the Bookings page =====
+let _liveMap = null;
+let _liveMarker = null;
+let _livePolyline = null;
+let _liveBookingId = null;
+let _liveTickListener = null;
+let _liveStartCoord = null;
+let _liveWatchdog = null;
+
+function metersBetween(a, b) {
+  // Haversine — good enough for short city walks.
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat), lat2 = toRad(b.lat);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function pathMeters(path) {
+  let total = 0;
+  for (let i = 1; i < path.length; i++) total += metersBetween(path[i - 1], path[i]);
+  return total;
+}
+
+function metersToKmStr(m)      { return (m / 1000).toFixed(2) + ' km'; }
+function msToMinutesStr(ms)    { return Math.max(0, Math.round(ms / 60000)) + 'min'; }
+
+function initLiveTracking(bookings) {
+  if (typeof PawTracking === 'undefined' || typeof L === 'undefined') return;
+  const card = document.getElementById('bookings-gps-live');
+  if (!card) return;
+
+  const live = PawTracking.getLiveBooking(bookings || []);
+  if (!live) {
+    card.dataset.hasLive = '';
+    card.style.display = 'none';
+    // Re-check in a minute — a booking may become live.
+    scheduleLiveWatchdog(bookings);
+    return;
+  }
+
+  const startCoord = PawTracking.geocodeCity(userProfile && userProfile.location);
+  _liveStartCoord = startCoord;
+  _liveBookingId  = live.id;
+
+  card.dataset.hasLive = '1';
+  // Only actually show if the Upcoming tab is currently visible.
+  const upcomingVisible = document.getElementById('bookings-upcoming').style.display !== 'none';
+  card.style.display = upcomingVisible ? 'block' : 'none';
+
+  const titleEl = document.getElementById('gps-live-title');
+  if (titleEl) titleEl.textContent = '📍 Live Tracking · ' + (live.service || 'Walk') + ' · ' + (live.minderName || 'Minder');
+
+  // Lazy-init the Leaflet map.
+  setTimeout(() => {
+    const mapEl = document.getElementById('live-map');
+    if (!mapEl) return;
+    if (!_liveMap) {
+      _liveMap = L.map(mapEl, { zoomControl: true, attributionControl: false })
+        .setView([startCoord.lat, startCoord.lng], 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(_liveMap);
+    } else {
+      _liveMap.setView([startCoord.lat, startCoord.lng], 15);
+    }
+    L.marker([startCoord.lat, startCoord.lng]).addTo(_liveMap).bindTooltip('Start', { permanent: false });
+    if (_liveMarker) { _liveMap.removeLayer(_liveMarker); _liveMarker = null; }
+    if (_livePolyline) { _liveMap.removeLayer(_livePolyline); _livePolyline = null; }
+    _liveMarker = L.circleMarker([startCoord.lat, startCoord.lng], { radius: 8, color: '#d97350', fillColor: '#d97350', fillOpacity: 1 }).addTo(_liveMap);
+    _livePolyline = L.polyline([], { color: '#d97350', weight: 4, opacity: 0.85 }).addTo(_liveMap);
+    setTimeout(() => _liveMap.invalidateSize(), 50);
+  }, 0);
+
+  const w = PawTracking.windowFor(live);
+  PawTracking.startTracking({
+    bookingId: live.id,
+    startCoord,
+    startsAt: w ? w.start : new Date(),
+    endsAt:   w ? w.end   : new Date(Date.now() + 60 * 60000),
+    service:  live.service
+  });
+
+  if (_liveTickListener) PawTracking.offTick(_liveTickListener);
+  _liveTickListener = (bid, path, state) => {
+    if (bid !== _liveBookingId || !_liveMap) return;
+    const latlngs = path.map(p => [p.lat, p.lng]);
+    if (_livePolyline) _livePolyline.setLatLngs(latlngs);
+    if (latlngs.length && _liveMarker) _liveMarker.setLatLng(latlngs[latlngs.length - 1]);
+    if (latlngs.length > 1) _liveMap.fitBounds(_livePolyline.getBounds(), { padding: [24, 24] });
+
+    // Stats
+    const distEl = document.getElementById('gps-live-distance');
+    const durEl  = document.getElementById('gps-live-duration');
+    const statEl = document.getElementById('gps-live-status');
+    if (distEl) distEl.textContent = metersToKmStr(pathMeters(path));
+    if (durEl)  durEl.textContent  = msToMinutesStr(Date.now() - state.startedAt);
+    if (statEl) statEl.textContent = Date.now() >= state.endsAt ? 'Completed' : 'Active';
+
+    // When the walk ends, refresh past routes so the new one appears immediately.
+    if (Date.now() >= state.endsAt) {
+      renderPastRoutes();
+      initLiveTracking(allBookingsCache); // hide the card & look for the next live booking
+    }
+  };
+  PawTracking.onTick(_liveTickListener);
+}
+
+function scheduleLiveWatchdog(bookings) {
+  if (_liveWatchdog) return;
+  _liveWatchdog = setInterval(() => {
+    // If we already have a live booking running, leave it.
+    if (_liveBookingId && PawTracking.isTracking(_liveBookingId)) return;
+    initLiveTracking(allBookingsCache || bookings || []);
+  }, 30000);
+}
+
+// ===== Past-routes rendering =====
+async function renderPastRoutes() {
+  const host = document.getElementById('bookings-past-routes-list');
+  if (!host) return;
+  let routes = [];
+  try { routes = await api._req('GET', '/routes'); } catch { routes = []; }
+  if (!routes || !routes.length) {
+    host.innerHTML = '<p style="font-size:13px;color:var(--bark-light);margin:8px 0">No recorded walks yet.</p>';
+    return;
+  }
+  const byBooking = {};
+  (allBookingsCache || []).forEach(b => { byBooking[b.id] = b; });
+  routes.sort((a, b) => new Date(b.endedAt) - new Date(a.endedAt));
+  host.innerHTML = routes.map(r => {
+    const b = byBooking[r.bookingId] || {};
+    const distM = pathMeters(r.path || []);
+    const firstT = r.path && r.path[0] && r.path[0].t;
+    const lastT  = r.path && r.path[r.path.length - 1] && r.path[r.path.length - 1].t;
+    const durMs = (firstT && lastT) ? (lastT - firstT) : 0;
+    const title = (b.petNames || 'Walk') + (b.minderName ? ' with ' + b.minderName : '');
+    const date  = (b.bookingDate || (r.endedAt || '').slice(0, 10));
+    return '<div class="gps-route-card" onclick="openRouteViewModal(' + r.bookingId + ')"><div class="gps-route-icon">🗺️</div><div class="gps-route-info"><div class="gps-route-date">' + escapeHTML(date + ' – ' + title) + '</div><div class="gps-route-detail">' + metersToKmStr(distM) + ' · ' + msToMinutesStr(durMs) + '</div></div><span style="color:var(--bark-light);font-size:16px">›</span></div>';
+  }).join('');
+}
+
+function escapeHTML(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+let _routeViewMap = null;
+
+async function openRouteViewModal(bookingId) {
+  const modal = document.getElementById('route-view-modal');
+  if (!modal) return;
+  modal.classList.add('open');
+  let route = null;
+  try { route = await api._req('GET', '/routes/' + bookingId); } catch { showToast('❌ Could not load route'); return; }
+  if (!route || !route.path || !route.path.length) { showToast('Route is empty'); return; }
+
+  const b = (allBookingsCache || []).find(x => x.id === Number(bookingId)) || {};
+  const title = document.getElementById('route-view-title');
+  if (title) title.textContent = (b.bookingDate || '') + ' – ' + (b.petNames || 'Walk') + (b.minderName ? ' with ' + b.minderName : '');
+
+  const distEl = document.getElementById('route-view-distance');
+  const durEl  = document.getElementById('route-view-duration');
+  if (distEl) distEl.textContent = metersToKmStr(pathMeters(route.path));
+  const firstT = route.path[0].t, lastT = route.path[route.path.length - 1].t;
+  if (durEl)  durEl.textContent  = msToMinutesStr(lastT - firstT);
+
+  // Build/refresh the modal's own map.
+  setTimeout(() => {
+    const el = document.getElementById('route-view-map');
+    if (!el) return;
+    if (_routeViewMap) { _routeViewMap.remove(); _routeViewMap = null; }
+    _routeViewMap = L.map(el, { zoomControl: true, attributionControl: false });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(_routeViewMap);
+    const latlngs = route.path.map(p => [p.lat, p.lng]);
+    const line = L.polyline(latlngs, { color: '#d97350', weight: 4, opacity: 0.9 }).addTo(_routeViewMap);
+    L.marker(latlngs[0]).addTo(_routeViewMap).bindTooltip('Start', { permanent: false });
+    L.marker(latlngs[latlngs.length - 1]).addTo(_routeViewMap).bindTooltip('End', { permanent: false });
+    _routeViewMap.fitBounds(line.getBounds(), { padding: [24, 24] });
+    setTimeout(() => _routeViewMap.invalidateSize(), 50);
+  }, 50);
+}
+
+function closeRouteViewModal() {
+  const modal = document.getElementById('route-view-modal');
+  if (modal) modal.classList.remove('open');
+  if (_routeViewMap) { _routeViewMap.remove(); _routeViewMap = null; }
+}

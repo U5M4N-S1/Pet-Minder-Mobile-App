@@ -15,6 +15,10 @@ let chatListCache = [];
 let regPendingCerts = [];
 let regCertNextId   = 1;
 
+// Registration pets (staged before account exists)
+let regPendingPets = [];
+let regPetNextId   = 1;
+
 // Report modal
 let currentReportTarget = null;
 
@@ -1104,6 +1108,10 @@ function resetComplete() {
 }
 
 async function handleRegister() {
+  const showRegError = (msg) => {
+    showToast('❌ ' + msg);
+  };
+
   const firstName = document.getElementById('reg-first-name').value.trim();
   const lastName  = document.getElementById('reg-last-name').value.trim();
   const email     = document.getElementById('reg-email').value.trim();
@@ -1115,9 +1123,9 @@ async function handleRegister() {
     pMax = document.getElementById('bm-price-max').value;
   }
 
-  if (!firstName || !lastName || !email) { showToast('❌ Please fill in all fields'); return; }
+  if (!firstName || !lastName || !email) { showRegError('Please fill in all fields'); return; }
   if (pwd !== confirm) {
-    showToast('❌ Passwords do not match');
+    showRegError('Passwords do not match');
     document.getElementById('reg-confirm-password').style.borderColor = 'var(--terra)';
     return;
   }
@@ -1125,7 +1133,7 @@ async function handleRegister() {
 
   // Owners must add at least one pet before registering
   if (selectedRole === 'owner' && regPendingPets.length === 0) {
-    showToast('❌ Please add at least one pet to create an owner account');
+    showRegError('Please add at least one pet to create an owner account');
     const petBox = document.querySelector('#reg-owner-extras .reg-extras-box');
     if (petBox) {
       petBox.style.outline = '2px solid var(--terra)';
@@ -1154,7 +1162,7 @@ async function handleRegister() {
 
     goToHome();
   } catch (err) {
-    showToast('❌ ' + err.message);
+    showRegError(err.message || 'Could not create account');
   }
 }
 
@@ -1216,21 +1224,32 @@ function closeBecomeMinder() {
   document.getElementById('become-minder-modal').classList.remove('open');
 }
 
+let _qualsSelectedFile = null; // staged file before submit
+
 function openQualifications() {
   const modal = document.getElementById('quals-modal');
   if (!modal) return;
-  modal.style.display = 'flex';
+  modal.classList.add('open');
   renderQualsModalGrid();
-  // Reset upload input
+  _qualsSelectedFile = null;
   const inp = document.getElementById('quals-file-input');
   const status = document.getElementById('quals-upload-status');
   if (inp) inp.value = '';
   if (status) status.textContent = '';
+  // Reset service checkboxes
+  document.querySelectorAll('#quals-service-checkboxes input[type="checkbox"]').forEach(cb => { cb.checked = false; });
 }
 
 function closeQualsModal() {
   const modal = document.getElementById('quals-modal');
-  if (modal) modal.style.display = 'none';
+  if (modal) modal.classList.remove('open');
+  // Clear staged file and inputs
+  _qualsSelectedFile = null;
+  const inp = document.getElementById('quals-file-input');
+  const status = document.getElementById('quals-upload-status');
+  if (inp) inp.value = '';
+  if (status) status.textContent = '';
+  document.querySelectorAll('#quals-service-checkboxes input[type="checkbox"]').forEach(cb => { cb.checked = false; });
 }
 
 function renderQualsModalGrid() {
@@ -1238,53 +1257,85 @@ function renderQualsModalGrid() {
   if (!grid) return;
   const quals = userProfile.qualificationImages || [];
   if (quals.length === 0) {
-    grid.innerHTML = '<p style="font-size:13px;color:var(--bark-light);width:100%">No qualifications uploaded yet.</p>';
+    grid.innerHTML = '';
     return;
   }
-  grid.innerHTML = quals.map(q =>
-    '<div style="position:relative;width:calc(50% - 5px)">' +
-      '<img src="' + q.image + '" alt="Qualification" style="width:100%;max-height:140px;object-fit:contain;border-radius:8px;border:1.5px solid var(--sand-light);cursor:zoom-in" onclick="openImagePreview(this.src)">' +
-      '<button onclick="deleteMyQual(\'' + q.id + '\')" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:24px;height:24px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1" title="Remove">×</button>' +
-    '</div>'
-  ).join('');
+  grid.innerHTML =
+    '<p style="font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px;width:100%;margin-bottom:4px">Previously Uploaded</p>' +
+    quals.map(q =>
+      '<div style="position:relative;width:calc(50% - 5px)">' +
+        '<img src="' + q.image + '" alt="Qualification" style="width:100%;max-height:120px;object-fit:contain;border-radius:8px;border:1.5px solid var(--sand-light);cursor:zoom-in" onclick="event.stopPropagation();previewQualImage(\'' + q.id + '\')">' +
+        '<button onclick="deleteMyQual(\'' + q.id + '\')" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:24px;height:24px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1" title="Remove">×</button>' +
+      '</div>'
+    ).join('');
 }
 
-async function handleQualsFileSelect(input) {
+function handleQualsFileSelect(input) {
   const file = input.files && input.files[0];
   const status = document.getElementById('quals-upload-status');
-  if (!file) return;
+  if (!file) { _qualsSelectedFile = null; return; }
   if (file.type !== 'image/png') {
     showToast('❌ Only PNG images are accepted');
     input.value = '';
+    _qualsSelectedFile = null;
+    if (status) status.textContent = '';
     return;
   }
   if (file.size > 3 * 1024 * 1024) {
     showToast('❌ Image must be under 3 MB');
     input.value = '';
+    _qualsSelectedFile = null;
+    if (status) status.textContent = '';
     return;
   }
+  _qualsSelectedFile = file;
+  if (status) status.textContent = '✅ ' + file.name;
+}
+
+async function submitQualUpload() {
+  if (!_qualsSelectedFile) {
+    showToast('❌ Please choose a PNG image first');
+    return;
+  }
+  const selected = Array.from(document.querySelectorAll('#quals-service-checkboxes input[type="checkbox"]:checked'))
+    .map(cb => cb.value);
+  if (selected.length === 0) {
+    showToast('❌ Please select at least one service to apply for');
+    return;
+  }
+
+  const status = document.getElementById('quals-upload-status');
   if (status) status.textContent = '⏳ Uploading…';
+
   try {
     const dataUri = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload  = () => resolve(reader.result);
       reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(_qualsSelectedFile);
     });
-    const result = await api.uploadQualification(dataUri);
-    userProfile.qualificationImages = [
-      ...(userProfile.qualificationImages || []),
-      { id: result.id, image: dataUri, uploadedAt: result.uploadedAt }
-    ];
-    if (status) status.textContent = '';
-    input.value = '';
-    renderQualsModalGrid();
-    showToast('✅ Qualification uploaded');
+
+    await Promise.all([
+      api.uploadQualification(dataUri).then(result => {
+        userProfile.qualificationImages = [
+          ...(userProfile.qualificationImages || []),
+          { id: result.id, image: dataUri, uploadedAt: result.uploadedAt }
+        ];
+      }),
+      api.applyForServices(selected)
+    ]);
+
+    closeQualsModal();
+    showToast('📨 Qualification uploaded! Admin will review your application.');
   } catch (err) {
     if (status) status.textContent = '';
     showToast('❌ ' + (err.message || 'Upload failed'));
-    input.value = '';
   }
+}
+
+function previewQualImage(qualId) {
+  const qual = (userProfile.qualificationImages || []).find(q => q.id === qualId);
+  if (qual) openImagePreview(qual.image);
 }
 
 async function deleteMyQual(imageId) {

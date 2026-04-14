@@ -283,22 +283,49 @@
 <!-- QUALIFICATIONS MODAL -->
 <div class="pet-modal-overlay" id="quals-modal" onclick="if(event.target===this)closeQualsModal()">
   <div class="pet-modal" style="max-height:85vh;overflow-y:auto">
-    <h3>📜 My Qualifications</h3>
-    <p style="font-size:13px;color:var(--bark-light);margin-bottom:16px">Upload PNG images of your certifications. Admins review these to approve advanced services.</p>
 
-    <!-- Existing images grid -->
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <h3 style="margin:0">📜 Upload Qualification</h3>
+      <button onclick="closeQualsModal()" style="background:var(--sand-light);border:none;border-radius:50%;width:32px;height:32px;font-size:16px;cursor:pointer;color:var(--bark);display:flex;align-items:center;justify-content:center">×</button>
+    </div>
+    <p style="font-size:13px;color:var(--bark-light);margin-bottom:16px">Upload a PNG of your certification and select the advanced services you'd like to apply for. Admins will review and approve.</p>
+
+    <!-- Existing uploaded images -->
     <div id="quals-modal-grid" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px"></div>
 
-    <!-- Upload new -->
-    <div class="reg-extras-box" style="margin-bottom:0">
+    <!-- Upload new (required) -->
+    <div class="reg-extras-box" style="margin-bottom:16px">
+      <p style="font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Qualification Image <span style="color:var(--terra)">*</span></p>
       <label class="file-upload-label" style="cursor:pointer">
         <input type="file" accept="image/png" id="quals-file-input" onchange="handleQualsFileSelect(this)" style="display:none">
-        ＋ Upload PNG
+        ＋ Choose PNG
       </label>
       <div id="quals-upload-status" style="margin-top:8px;font-size:12px;color:var(--moss)"></div>
     </div>
 
-    <button class="btn-outline" style="width:100%;margin-top:16px;padding:13px;color:var(--bark-light);border-color:var(--sand)" onclick="closeQualsModal()">Done</button>
+    <!-- Services to apply for -->
+    <div style="margin-bottom:16px">
+      <p style="font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Services to Apply For <span style="color:var(--terra)">*</span></p>
+      <p style="font-size:12px;color:var(--bark-light);margin-bottom:10px">Select which services this qualification covers. Admin will approve each one.</p>
+      <div style="display:flex;flex-direction:column;gap:8px" id="quals-service-checkboxes">
+        <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--sand-light);border-radius:var(--radius-sm);cursor:pointer">
+          <input type="checkbox" value="Grooming" style="width:16px;height:16px;accent-color:var(--terra);cursor:pointer">
+          <div><div style="font-weight:500;font-size:14px;color:var(--bark)">🛁 Grooming</div><div style="font-size:12px;color:var(--bark-light)">Full wash, dry &amp; brush</div></div>
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--sand-light);border-radius:var(--radius-sm);cursor:pointer">
+          <input type="checkbox" value="Vet" style="width:16px;height:16px;accent-color:var(--terra);cursor:pointer">
+          <div><div style="font-weight:500;font-size:14px;color:var(--bark)">🏥 Vet Assistance</div><div style="font-size:12px;color:var(--bark-light)">Vet visit support &amp; medication</div></div>
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--sand-light);border-radius:var(--radius-sm);cursor:pointer">
+          <input type="checkbox" value="Training" style="width:16px;height:16px;accent-color:var(--terra);cursor:pointer">
+          <div><div style="font-weight:500;font-size:14px;color:var(--bark)">🎓 Training</div><div style="font-size:12px;color:var(--bark-light)">Obedience &amp; behaviour training</div></div>
+        </label>
+      </div>
+    </div>
+
+    <button class="btn-primary" style="width:100%;padding:14px" onclick="submitQualUpload()">Submit Application →</button>
+    <button class="btn-outline" style="width:100%;margin-top:10px;padding:12px;color:var(--bark-light);border-color:var(--sand)" onclick="closeQualsModal()">← Back</button>
   </div>
 </div>
 

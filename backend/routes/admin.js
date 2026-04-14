@@ -126,6 +126,11 @@ router.delete('/users/:id', requireAuth, requireAdmin, (req, res) => {
 });
 
 // ─── DISPUTES ────────────────────────────────────────────────────────
+function nextNotifId() {
+  const last = db.get('notifications').maxBy('id').value();
+  return last ? last.id + 1 : 1;
+}
+
 function nextDisputeId() {
   const last = db.get('disputes').maxBy('id').value();
   return last ? last.id + 1 : 1;
@@ -144,13 +149,14 @@ router.post('/disputes', requireAuth, (req, res) => {
 
   const reporter = db.get('users').find({ id: req.user.userId }).value();
   const dispute = {
-    id:     nextDisputeId(),
-    status: 'Open',
-    date:   new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
-    from:   reporter ? (reporter.firstName + ' ' + reporter.lastName) : 'Unknown',
-    against: against || 'Unknown',
-    reason:  reason.trim(),
-    createdAt: new Date().toISOString()
+    id:         nextDisputeId(),
+    status:     'Open',
+    reporterId: req.user.userId,
+    date:       new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+    from:       reporter ? (reporter.firstName + ' ' + reporter.lastName) : 'Unknown',
+    against:    against || 'Unknown',
+    reason:     reason.trim(),
+    createdAt:  new Date().toISOString()
   };
   db.get('disputes').push(dispute).write();
   res.status(201).json(dispute);
@@ -166,7 +172,25 @@ router.patch('/disputes/:id', requireAuth, requireAdmin, (req, res) => {
   if (!status) return res.status(400).json({ error: 'Status is required' });
 
   row.assign({ status: status.trim() }).write();
-  res.json(row.value());
+  const dispute = row.value();
+
+  // Notify the reporter of the outcome
+  if (dispute.reporterId && (status === 'Resolved' || status === 'Dismissed')) {
+    const isResolved = status === 'Resolved';
+    db.get('notifications').push({
+      id:        nextNotifId(),
+      userId:    dispute.reporterId,
+      type:      'dispute_outcome',
+      title:     isResolved ? 'Your report has been resolved' : 'Your report has been dismissed',
+      message:   isResolved
+        ? 'An admin has reviewed your report against ' + dispute.against + ' and resolved it. Thank you for keeping PawPal safe.'
+        : 'An admin has reviewed your report against ' + dispute.against + ' and dismissed it. No further action will be taken.',
+      read:      false,
+      createdAt: new Date().toISOString()
+    }).write();
+  }
+
+  res.json(dispute);
 });
 
 

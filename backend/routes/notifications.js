@@ -55,20 +55,22 @@ function generateReminders(userId) {
   });
 }
 
-const SERVICE_UPDATE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
+const EXPIRING_TYPES    = ['service_update', 'dispute_outcome'];
+const NOTIFICATION_TTL  = 14 * 24 * 60 * 60 * 1000; // 14 days
 
-// Auto-expire read service_update notifications older than 14 days for a user.
+// Auto-expire read notifications of expiring types older than 14 days since read.
 // Called lazily on every GET so no background scheduler is needed.
-function expireServiceUpdates(userId) {
-  const cutoff = new Date(Date.now() - SERVICE_UPDATE_TTL_MS);
+function expireReadNotifications(userId) {
+  const cutoff = new Date(Date.now() - NOTIFICATION_TTL);
   const stale = db.get('notifications')
-    .filter(n =>
-      n.userId === userId &&
-      n.type === 'service_update' &&
-      n.read === true &&
-      n.createdAt &&
-      new Date(n.createdAt) < cutoff
-    )
+    .filter(n => {
+      if (n.userId !== userId) return false;
+      if (!EXPIRING_TYPES.includes(n.type)) return false;
+      if (!n.read) return false;
+      // Use readAt if available (14 days from when they read it), else fall back to createdAt
+      const anchor = n.readAt || n.createdAt;
+      return anchor && new Date(anchor) < cutoff;
+    })
     .value();
   if (stale.length) {
     stale.forEach(n => db.get('notifications').remove({ id: n.id }).write());
@@ -79,8 +81,8 @@ function expireServiceUpdates(userId) {
 router.get('/', requireAuth, (req, res) => {
   // Generate any pending reminders before returning the list
   generateReminders(req.user.userId);
-  // Clean up stale service update notifications
-  expireServiceUpdates(req.user.userId);
+  // Clean up stale expiring notifications
+  expireReadNotifications(req.user.userId);
 
   const list = db.get('notifications')
     .filter({ userId: req.user.userId })
@@ -97,7 +99,9 @@ router.patch('/:id', requireAuth, (req, res) => {
   const n   = row.value();
   if (!n) return res.status(404).json({ error: 'Notification not found' });
   if (n.userId !== req.user.userId) return res.status(403).json({ error: 'Not your notification' });
-  row.assign({ read: true }).write();
+  const update = { read: true };
+  if (!n.readAt) update.readAt = new Date().toISOString();
+  row.assign(update).write();
   res.json(row.value());
 });
 

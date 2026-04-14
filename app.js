@@ -3226,6 +3226,7 @@ function notifIcon(type) {
     case 'booking_confirmed': return '✅';
     case 'booking_declined':  return '❌';
     case 'booking_reminder':  return '⏰';
+    case 'dispute_outcome':   return '⚖️';
     default:                  return '🔔';
   }
 }

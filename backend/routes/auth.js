@@ -13,9 +13,44 @@ function nextId(collection) {
   return last ? last.id + 1 : 1;
 }
 
+// Canonical service catalogue — any service submitted by the client that
+// isn't in this list is silently dropped. Order matters for UI rendering.
+const SERVICE_KEYS = ['Walking', 'Home Visit', 'Grooming', 'Vet', 'Training'];
+const SERVICE_KEY_LOWER = SERVICE_KEYS.reduce((a, k) => (a[k.toLowerCase()] = k, a), {});
+
+// Clamp + whitelist-filter a service->price map. Prices are integers ≥ 0.
+// A price of 0 means the service is not offered. Returns a clean object.
+function sanitiseServicePrices(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const key of Object.keys(raw)) {
+    const canonical = SERVICE_KEY_LOWER[String(key).toLowerCase()];
+    if (!canonical) continue;
+    const n = Math.floor(Number(raw[key]));
+    if (!isFinite(n) || n < 0) continue;
+    out[canonical] = Math.min(n, 999);
+  }
+  return out;
+}
+// Keep the CSV `services` string in sync with the priced services (> 0).
+function servicesCsvFromPrices(prices) {
+  return SERVICE_KEYS.filter(k => Number(prices && prices[k]) > 0).join(', ');
+}
+// True if the minder offers at least one service with a price > 0.
+function hasAnyService(prices) {
+  if (!prices || typeof prices !== 'object') return false;
+  return SERVICE_KEYS.some(k => Number(prices[k]) > 0);
+}
+// True if the availability object has at least one day with at least one slot.
+function hasAnyAvailability(avail) {
+  if (!avail || typeof avail !== 'object') return false;
+  return Object.keys(avail).some(d => Array.isArray(avail[d]) && avail[d].length);
+}
+
 // ── Shared DTO builder ────────────────────────────────────────────────
 // Returns a safe public user object (no passwordHash).
 function userDTO(u) {
+  const servicePrices = sanitiseServicePrices(u.servicePrices);
   return {
     id:           u.id,
     firstName:    u.firstName,
@@ -31,11 +66,10 @@ function userDTO(u) {
     // Minder-specific (empty/zero for owners — frontend ignores them)
     serviceArea:  u.serviceArea  || '',
     petsCaredFor: u.petsCaredFor || '',
-    services:     u.services     || '',
+    services:     servicesCsvFromPrices(servicePrices),
     rate:         u.rate         || '',
     experience:   u.experience   || '',
-    priceMin:     u.priceMin != null ? u.priceMin : 0,
-    priceMax:     u.priceMax != null ? u.priceMax : 50,
+    servicePrices,
     // Availability (per-day object; backward-compat with legacy flat arrays)
     availability:   normalizeAvailability(u),
     certifications: u.certifications || ''
@@ -70,7 +104,7 @@ function sanitisePayout(input) {
 
 // POST /api/auth/signup
 router.post('/signup', async (req, res) => {
-  const { firstName, lastName, email, password, role, location, locationLat, locationLng, payout } = req.body;
+  const { firstName, lastName, email, password, role, location, locationLat, locationLng, payout, servicePrices } = req.body;
 
   if (!firstName || !lastName || !email || !password) {
     return res.status(400).json({ error: 'All fields are required' });
@@ -82,10 +116,15 @@ router.post('/signup', async (req, res) => {
   // Minder accounts must provide valid payout details at registration;
   // owner accounts skip the payout flow entirely.
   let payoutForUser = null;
+  let pricesForUser = null;
   if (role === 'minder') {
     payoutForUser = sanitisePayout(payout);
     if (!payoutForUser) {
       return res.status(400).json({ error: 'Payout details are required for Pet Minder accounts (sort code 6 digits, account 8 digits)' });
+    }
+    pricesForUser = sanitiseServicePrices(servicePrices);
+    if (!hasAnyService(pricesForUser)) {
+      return res.status(400).json({ error: 'Please set a price for at least one service (price of 0 means the service is not offered)' });
     }
   }
 
@@ -113,6 +152,10 @@ router.post('/signup', async (req, res) => {
       user.locationLng = locationLng;
     }
     if (payoutForUser) user.payout = payoutForUser;
+    if (pricesForUser) {
+      user.servicePrices = pricesForUser;
+      user.services = servicesCsvFromPrices(pricesForUser);
+    }
     user.online     = true;
     user.lastSeenAt = new Date().toISOString();
     db.get('users').push(user).write();
@@ -231,8 +274,8 @@ router.patch('/me', requireAuth, (req, res) => {
   if (!user.value()) return res.status(404).json({ error: 'User not found' });
 
   const { firstName, lastName, email, phone, location, locationLat, locationLng, bio,
-          serviceArea, petsCaredFor, services, rate, experience,
-          priceMin, priceMax,
+          serviceArea, petsCaredFor, rate, experience,
+          servicePrices,
           availability, certifications } = req.body;
   const updates = {};
   if (typeof firstName    === 'string' && firstName.trim()) updates.firstName    = firstName.trim();
@@ -248,12 +291,15 @@ router.patch('/me', requireAuth, (req, res) => {
   // Minder-specific fields
   if (typeof serviceArea  === 'string') updates.serviceArea  = serviceArea.trim();
   if (typeof petsCaredFor === 'string') updates.petsCaredFor = petsCaredFor.trim();
-  if (typeof services     === 'string') updates.services     = services.trim();
   if (typeof rate         === 'string') updates.rate         = rate.trim();
   if (typeof experience   === 'string') updates.experience   = experience.trim();
-  // Price range (clamped 0–50)
-  if (priceMin != null) updates.priceMin = Math.max(0, Math.min(50, Number(priceMin) || 0));
-  if (priceMax != null) updates.priceMax = Math.max(0, Math.min(50, Number(priceMax) || 50));
+  // Per-service pricing: 0 = not offered. Derive the CSV `services` string
+  // from the whitelisted + clamped price map so the two stay in sync.
+  if (servicePrices && typeof servicePrices === 'object') {
+    const prices = sanitiseServicePrices(servicePrices);
+    updates.servicePrices = prices;
+    updates.services      = servicesCsvFromPrices(prices);
+  }
   // Availability: per-day object { mon: ['morning','evening'], ... }
   // Validate each key is a known day and each value only contains known slots.
   if (availability != null && typeof availability === 'object' && !Array.isArray(availability)) {
@@ -404,21 +450,27 @@ router.get('/minders', (req, res) => {
   const minders = db.get('users')
     .filter(u => u.role === 'minder' && u.status !== 'Suspended' && u.status !== 'Banned')
     .value()
-    .map(u => ({
-      id:           u.id,
-      name:         ((u.firstName || '') + ' ' + (u.lastName || '')).trim(),
-      profileImage: u.profileImage || '',
-      location:     u.serviceArea || u.location || '',
-      bio:          u.bio          || '',
-      petsCaredFor: u.petsCaredFor || '',
-      services:     u.services     || '',
-      rate:         u.rate         || '',
-      experience:   u.experience   || '',
-      priceMin:     u.priceMin != null ? u.priceMin : 0,
-      priceMax:     u.priceMax != null ? u.priceMax : 50,
-      availability:   normalizeAvailability(u),
-      certifications: u.certifications || ''
-    }));
+    .map(u => {
+      const servicePrices = sanitiseServicePrices(u.servicePrices);
+      const availability  = normalizeAvailability(u);
+      return {
+        id:           u.id,
+        name:         ((u.firstName || '') + ' ' + (u.lastName || '')).trim(),
+        profileImage: u.profileImage || '',
+        location:     u.serviceArea || u.location || '',
+        bio:          u.bio          || '',
+        petsCaredFor: u.petsCaredFor || '',
+        services:     servicesCsvFromPrices(servicePrices),
+        servicePrices,
+        rate:         u.rate         || '',
+        experience:   u.experience   || '',
+        availability,
+        certifications: u.certifications || ''
+      };
+    })
+    // Hide minders who haven't finished setting up — no priced services OR
+    // no availability slots means they can't actually be booked.
+    .filter(m => hasAnyService(m.servicePrices) && hasAnyAvailability(m.availability));
   res.json(minders);
 });
 

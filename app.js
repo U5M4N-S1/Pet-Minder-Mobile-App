@@ -22,9 +22,60 @@ let userProfile = {
   role: 'owner', profileImage: '',
   // Minder-specific (blank for owners)
   serviceArea: '', petsCaredFor: '', services: '', rate: '', experience: '',
-  priceMin: 0, priceMax: 50,
+  servicePrices: {},
   availability: {}, certifications: ''
 };
+
+// Canonical minder services — mirrored server-side in backend/routes/auth.js.
+// Used to build signup/edit pricing inputs and to read them back into a
+// { Walking: 15, ... } map where 0 means "service not offered".
+const MINDER_SERVICES = ['Walking', 'Home Visit', 'Grooming', 'Vet', 'Training'];
+// Emoji + colour-theme per service — kept next to the canonical list so the
+// visual token styling stays in sync with the service keys. Each theme maps
+// to a `.svc-chip--<theme>` class in css/shared.css.
+const SERVICE_META = {
+  'Walking':    { emoji: '🚶', theme: 'walk'  },
+  'Home Visit': { emoji: '🏠', theme: 'home'  },
+  'Grooming':   { emoji: '✂️', theme: 'groom' },
+  'Vet':        { emoji: '🩺', theme: 'vet'   },
+  'Training':   { emoji: '🎾', theme: 'train' }
+};
+function servicePriceChip(name, price) {
+  const meta = SERVICE_META[name] || { emoji: '🐾', theme: 'walk' };
+  return '<span class="svc-chip svc-chip--' + meta.theme + '">' +
+           '<span class="svc-chip-emoji">' + meta.emoji + '</span>' +
+           '<span class="svc-chip-name">' + escapeHTML(name) + '</span>' +
+           '<span class="svc-chip-price">£' + Number(price) + '/hr</span>' +
+         '</span>';
+}
+function buildServicePricesHTML(prefix, current) {
+  const c = current || {};
+  return MINDER_SERVICES.map(name => {
+    const id  = prefix + '-price-' + name.toLowerCase().replace(/\s+/g, '-');
+    const val = Number(c[name]) > 0 ? Number(c[name]) : '';
+    return (
+      '<div class="service-price-row">' +
+        '<label for="' + id + '">' + name + '</label>' +
+        '<div class="service-price-input">' +
+          '<span class="currency">£</span>' +
+          '<input type="number" id="' + id + '" min="0" max="999" step="1" placeholder="0" value="' + val + '">' +
+          '<span class="per">/ hr</span>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+}
+function readServicePrices(prefix) {
+  const out = {};
+  MINDER_SERVICES.forEach(name => {
+    const id = prefix + '-price-' + name.toLowerCase().replace(/\s+/g, '-');
+    const el = document.getElementById(id);
+    if (!el) return;
+    const n = Math.floor(Number(el.value));
+    out[name] = (isFinite(n) && n > 0) ? Math.min(n, 999) : 0;
+  });
+  return out;
+}
 
 // ===== LOCAL STORE =====
 // Thin wrapper around localStorage. The current session is stored under a
@@ -157,8 +208,8 @@ function hydrateUserProfile(u) {
   userProfile.services     = u.services     || '';
   userProfile.rate         = u.rate         || '';
   userProfile.experience   = u.experience   || '';
-  userProfile.priceMin     = u.priceMin != null ? u.priceMin : 0;
-  userProfile.priceMax     = u.priceMax != null ? u.priceMax : 50;
+  userProfile.servicePrices = (u.servicePrices && typeof u.servicePrices === 'object')
+    ? JSON.parse(JSON.stringify(u.servicePrices)) : {};
   userProfile.availability = (u.availability && typeof u.availability === 'object' && !Array.isArray(u.availability))
     ? JSON.parse(JSON.stringify(u.availability)) : {};
   userProfile.certifications = u.certifications || '';
@@ -541,6 +592,7 @@ async function initActiveBookingPage() {
           name:         match.name || 'Minder',
           avatar:       '🧑‍🦱',              // emoji fallback for cards
           profileImage: match.profileImage || '', // real picture (data URI)
+          servicePrices: (match.servicePrices && typeof match.servicePrices === 'object') ? match.servicePrices : {},
           availability: (match.availability && typeof match.availability === 'object') ? match.availability : {}
         };
       }
@@ -556,10 +608,35 @@ async function initActiveBookingPage() {
   if (header) header.textContent = 'Book ' + resolved.name;
   const summaryMinder = document.getElementById('summary-minder');
   if (summaryMinder) summaryMinder.textContent = resolved.name;
+  renderBookingServicePicker(resolved);
   generateDateChips();
   renderBookingPetPicker();
   updateBookingSummary();
   await refreshBookingTimeAvailability();
+}
+
+// Render service options on the active-booking page from the minder's
+// priced services. Services with price 0 (or missing) are never shown.
+function renderBookingServicePicker(minder) {
+  const host = document.getElementById('booking-service-list');
+  if (!host) return;
+  const prices = (minder && minder.servicePrices) || {};
+  const offered = MINDER_SERVICES.filter(k => Number(prices[k]) > 0);
+  if (!offered.length) {
+    host.innerHTML = '<div style="padding:16px;background:var(--sand-light);border-radius:var(--radius-sm);font-size:13px;color:var(--bark-light);text-align:center">This minder hasn\'t set up any services yet.</div>';
+    return;
+  }
+  host.className = 'service-list svc-chip-group svc-chip-picker';
+  host.innerHTML = offered.map((name, i) => {
+    const meta = SERVICE_META[name] || { emoji: '🐾', theme: 'walk' };
+    return (
+      '<button type="button" class="svc-chip svc-chip--' + meta.theme + ' service-option' + (i === 0 ? ' selected' : '') + '" onclick="selectService(this)">' +
+        '<span class="svc-chip-emoji service-icon">' + meta.emoji + '</span>' +
+        '<span class="svc-chip-name service-name">' + escapeHTML(name) + '</span>' +
+        '<span class="svc-chip-price service-price">£' + Number(prices[name]) + '/hr</span>' +
+      '</button>'
+    );
+  }).join('');
 }
 
 // Render the pet picker on the active-booking page from the logged-in
@@ -1003,6 +1080,7 @@ async function handleRegister() {
     return;
   }
   let payoutForSignup = null;
+  let pricesForSignup = null;
   if (selectedRole === 'minder') {
     const certBox = document.getElementById('reg-minder-extras-box');
     if (regPendingCerts.length === 0) {
@@ -1024,6 +1102,15 @@ async function handleRegister() {
     }
     if (payoutBox) payoutBox.style.borderColor = 'var(--sand)';
     payoutForSignup = { accountHolderName: pName.trim(), bankName: pBank.trim(), sortCode: pSort, accountNumber: pAccount };
+
+    pricesForSignup = readServicePrices('reg');
+    const pricesBox = document.getElementById('reg-minder-prices-box');
+    if (!MINDER_SERVICES.some(k => Number(pricesForSignup[k]) > 0)) {
+      showToast('❌ Please set a price for at least one service (price of 0 means not offered)');
+      if (pricesBox) pricesBox.style.borderColor = 'var(--terra)';
+      return;
+    }
+    if (pricesBox) pricesBox.style.borderColor = 'var(--sand)';
   }
 
   try {
@@ -1033,6 +1120,7 @@ async function handleRegister() {
       signupPayload.locationLng = _pickedRegLocationCoord.lng;
     }
     if (payoutForSignup) signupPayload.payout = payoutForSignup;
+    if (pricesForSignup) signupPayload.servicePrices = pricesForSignup;
     const { token, user } = await api.signup(signupPayload);
     api.setToken(token);
     store.setUser(user);
@@ -1072,6 +1160,12 @@ function selectRole(el, role) {
   selectedRole = role;
   document.getElementById('reg-owner-extras').style.display = role === 'owner' ? 'block' : 'none';
   document.getElementById('reg-minder-extras').style.display = role === 'minder' ? 'block' : 'none';
+  if (role === 'minder') {
+    const priceHost = document.getElementById('reg-service-prices');
+    if (priceHost && !priceHost.childElementCount) {
+      priceHost.innerHTML = buildServicePricesHTML('reg', {});
+    }
+  }
 }
 
 function handleCertUpload() {
@@ -1290,13 +1384,17 @@ function renderMinderProfileInto(minder) {
 
   const details = document.getElementById('mp-details');
   const isRealMinder = typeof minder.id === 'number';
-  if (details && (isRealMinder || minder.experience || minder.petsCaredFor || minder.services || minder.rate || minder.priceMin != null)) {
+  const pricedList = MINDER_SERVICES.filter(k => Number(minder.servicePrices && minder.servicePrices[k]) > 0);
+  if (details && (isRealMinder || minder.experience || minder.petsCaredFor || minder.services || pricedList.length)) {
     let html = '';
     if (minder.experience)   html += '<div class="info-row"><span class="info-label">Experience</span><span class="info-value">' + escapeHTML(minder.experience) + '</span></div>';
     if (minder.petsCaredFor) html += '<div class="info-row"><span class="info-label">Pets accepted</span><span class="info-value">' + escapeHTML(minder.petsCaredFor) + '</span></div>';
-    if (minder.services)     html += '<div class="info-row"><span class="info-label">Services</span><span class="info-value">' + escapeHTML(minder.services) + '</span></div>';
-    const priceStr = (minder.priceMin != null && minder.priceMax != null) ? '£' + minder.priceMin + ' – £' + minder.priceMax + '/hr' : (minder.rate || '');
-    if (priceStr) html += '<div class="info-row"><span class="info-label">Rate</span><span class="info-value">' + escapeHTML(priceStr) + '</span></div>';
+    if (pricedList.length) {
+      const svcHtml = pricedList.map(k => servicePriceChip(k, minder.servicePrices[k])).join('');
+      html += '<div class="info-row info-row--svc"><span class="info-label">Services</span><span class="info-value svc-chip-group">' + svcHtml + '</span></div>';
+    } else if (minder.services) {
+      html += '<div class="info-row"><span class="info-label">Services</span><span class="info-value">' + escapeHTML(minder.services) + '</span></div>';
+    }
     if (minder.certifications) html += '<div class="info-row"><span class="info-label">Certifications</span><span class="info-value" style="white-space:pre-wrap;text-align:right;max-width:60%">' + escapeHTML(minder.certifications) + '</span></div>';
     if (!html && isRealMinder) html = '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:8px 0">This minder hasn\'t added service details yet.</p>';
     details.innerHTML = html;
@@ -1652,7 +1750,7 @@ function toggleFilterModal() { document.getElementById('filter-modal').classList
 
 // ===== SEARCH & FILTER SYSTEM =====
 // Saved filter state — only updated when user clicks Save or Clear All.
-let savedFilters = { petTypes: [], serviceTypes: [], priceMin: null, priceMax: null, minRating: null };
+let savedFilters = { petTypes: [], serviceTypes: [], minRating: null };
 
 // Helper: read the text label from a filter-opt, strip its emoji prefix, return lowercase.
 function filterOptLabel(el) { return el.textContent.replace(/^[^\w]*/u, '').trim().toLowerCase(); }
@@ -1688,18 +1786,16 @@ function runSearch() {
       if (!savedFilters.petTypes.some(p => minderPets.includes(p))) return false;
     }
 
-    // 3. Service type filter
+    // 3. Service type filter — match against the minder's real priced services
     if (savedFilters.serviceTypes.length > 0) {
-      if (!m.services) return false;
-      const minderSvcs = m.services.split(',').map(s => s.trim().toLowerCase());
-      if (!savedFilters.serviceTypes.some(s => minderSvcs.includes(s))) return false;
+      const offered = MINDER_SERVICES
+        .filter(k => Number(m.servicePrices && m.servicePrices[k]) > 0)
+        .map(k => k.toLowerCase());
+      if (!offered.length) return false;
+      if (!savedFilters.serviceTypes.some(s => offered.includes(s))) return false;
     }
 
-    // 4. Price range filter — minder's range must overlap with the user's range
-    if (savedFilters.priceMin !== null && m.priceMax != null && m.priceMax < savedFilters.priceMin) return false;
-    if (savedFilters.priceMax !== null && m.priceMin != null && m.priceMin > savedFilters.priceMax) return false;
-
-    // 5. Rating filter — only show minders whose avg rating >= selected minimum.
+    // 4. Rating filter — only show minders whose avg rating >= selected minimum.
     //    Minders with zero reviews are excluded when a rating filter is active.
     if (savedFilters.minRating !== null) {
       if (!m._reviewCount || m._avgRating < savedFilters.minRating) return false;
@@ -1723,11 +1819,7 @@ function runSearch() {
 // Clear All — reset modal UI, clear saved filters, re-run search (location still applies)
 function clearAllFilters() {
   document.querySelectorAll('#filter-modal .filter-opt').forEach(o => o.classList.remove('active'));
-  const minEl = document.getElementById('filter-price-min');
-  const maxEl = document.getElementById('filter-price-max');
-  if (minEl) minEl.value = '';
-  if (maxEl) maxEl.value = '';
-  savedFilters = { petTypes: [], serviceTypes: [], priceMin: null, priceMax: null, minRating: null };
+  savedFilters = { petTypes: [], serviceTypes: [], minRating: null };
   runSearch();
   toggleFilterModal();
   showToast('✅ Filters cleared');
@@ -1740,11 +1832,6 @@ function applyFilters() {
 
   const serviceEls = document.querySelectorAll('#filter-service-type .filter-opt.active');
   savedFilters.serviceTypes = Array.from(serviceEls).map(filterOptLabel);
-
-  const minEl = document.getElementById('filter-price-min');
-  const maxEl = document.getElementById('filter-price-max');
-  savedFilters.priceMin = minEl && minEl.value !== '' ? Number(minEl.value) : null;
-  savedFilters.priceMax = maxEl && maxEl.value !== '' ? Number(maxEl.value) : null;
 
   const activeRating = document.querySelector('#filter-rating .filter-opt.active');
   savedFilters.minRating = activeRating ? Number(activeRating.dataset.rating) : null;
@@ -1768,9 +1855,11 @@ function renderMinders(minders) {
       ? '<img src="' + m.profileImage + '" alt="' + m.name + '" class="avatar-img" style="width:100%;height:100%;object-fit:cover;border-radius:14px">'
       : '👤';
     const loc  = m.location ? '📍 ' + m.location : '';
-    const price = (m.priceMin != null && m.priceMax != null) ? '£' + m.priceMin + ' – £' + m.priceMax + '/hr' : (m.rate || '');
+    const priced = MINDER_SERVICES.filter(k => Number(m.servicePrices && m.servicePrices[k]) > 0);
+    const priceHTML = priced.length
+      ? '<div class="svc-chip-group">' + priced.map(k => servicePriceChip(k, m.servicePrices[k])).join('') + '</div>'
+      : '';
     const tags = [];
-    if (m.services) m.services.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
     if (m.petsCaredFor) m.petsCaredFor.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
     const dayCount = (m.availability && typeof m.availability === 'object') ? Object.keys(m.availability).length : 0;
     const availLine = dayCount ? '🗓 Available ' + dayCount + ' day' + (dayCount === 1 ? '' : 's') + '/week' : '';
@@ -1790,7 +1879,7 @@ function renderMinders(minders) {
         (loc ? '<div class="minder-list-loc">' + loc + '</div>' : '') +
         (tags.length ? '<div class="minder-list-tags">' + tags.join('') + '</div>' : '') +
         (availLine ? '<div class="minder-list-loc" style="margin-top:2px">' + availLine + '</div>' : '') +
-        (price ? '<div class="minder-list-rate">' + price + '</div>' : '') +
+        (priceHTML ? '<div class="minder-list-rate">' + priceHTML + '</div>' : '') +
         '<div class="minder-btns">' +
           '<button class="btn-msg-minder" onclick="event.stopPropagation();showToast(\'Chat coming soon!\')">💬 Message</button>' +
           '<button class="btn-book-sm" onclick="event.stopPropagation();window.location.href=\'active-booking.html?minder=' + m.id + '\'">Book Now</button>' +
@@ -2583,15 +2672,6 @@ function readAvailabilityGrid() {
   return avail;
 }
 
-// Clamp price input value to 0–50
-function clampPrice(input) {
-  if (!input) return 0;
-  let v = parseInt(input.value, 10);
-  if (isNaN(v) || v < 0) v = 0;
-  if (v > 50) v = 50;
-  return v;
-}
-
 function openEditProfileModal() {
   document.getElementById('edit-first-name').value = userProfile.firstName;
   document.getElementById('edit-last-name').value = userProfile.lastName;
@@ -2610,9 +2690,8 @@ function openEditProfileModal() {
     if (userProfile.role === 'minder') {
       document.getElementById('edit-service-area').value = userProfile.serviceArea || '';
       setSelectedChips('edit-pet-type-chips', userProfile.petsCaredFor || '');
-      setSelectedChips('edit-service-type-chips', userProfile.services || '');
-      document.getElementById('edit-price-min').value = userProfile.priceMin != null ? userProfile.priceMin : 0;
-      document.getElementById('edit-price-max').value = userProfile.priceMax != null ? userProfile.priceMax : 50;
+      const pricesHost = document.getElementById('edit-service-prices');
+      if (pricesHost) pricesHost.innerHTML = buildServicePricesHTML('edit', userProfile.servicePrices || {});
       document.getElementById('edit-experience').value = userProfile.experience || '';
       loadAvailabilityGrid(userProfile.availability || {});
       const certEl = document.getElementById('edit-certifications');
@@ -2643,9 +2722,7 @@ function saveProfile() {
     if (userProfile.role === 'minder') {
       updates.serviceArea  = (document.getElementById('edit-service-area') || {}).value || '';
       updates.petsCaredFor = getSelectedChips('edit-pet-type-chips');
-      updates.services     = getSelectedChips('edit-service-type-chips');
-      updates.priceMin     = clampPrice(document.getElementById('edit-price-min'));
-      updates.priceMax     = clampPrice(document.getElementById('edit-price-max'));
+      updates.servicePrices = readServicePrices('edit');
       updates.experience   = (document.getElementById('edit-experience') || {}).value || '';
       updates.availability = readAvailabilityGrid();
       updates.certifications = ((document.getElementById('edit-certifications') || {}).value || '').trim();

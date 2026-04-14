@@ -82,6 +82,11 @@
           <div class="field-group"><label>Sort code</label><input type="text" id="reg-payout-sort" inputmode="numeric" placeholder="12-34-56" maxlength="8"></div>
           <div class="field-group"><label>Account number</label><input type="text" id="reg-payout-account" inputmode="numeric" placeholder="12345678" maxlength="8"></div>
         </div>
+        <div class="reg-extras-box" id="reg-minder-prices-box" style="margin-top:12px">
+          <p class="reg-extras-title">💷 Your Services &amp; Prices <span style="color:var(--terra)">*</span></p>
+          <p class="reg-extras-sub">Set an hourly price for each service you offer. Leave at 0 for services you don't provide — at least one must be &gt; 0.</p>
+          <div id="reg-service-prices" class="service-prices-grid"></div>
+        </div>
       </div>
       <button class="btn-primary" onclick="handleRegister()">Create Account</button>
     </div>

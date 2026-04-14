@@ -311,7 +311,7 @@ router.patch('/:id', requireAuth, (req, res) => {
 
   // Minder marks a confirmed booking as completed
   if (isMinder && status === 'completed' && booking.status === 'confirmed') {
-    row.assign({ status: 'completed' }).write();
+    row.assign({ status: 'completed', liveLocation: null }).write();
     const minderUser    = db.get('users').find({ id: Number(booking.minderKey) }).value();
     const minderFullName = minderUser ? ((minderUser.firstName || '') + ' ' + (minderUser.lastName || '')).trim() : (booking.minderName || 'Your minder');
     db.get('notifications').push({
@@ -355,6 +355,32 @@ router.get('/minder/:id/taken', requireAuth, (req, res) => {
     if (mu) availability = normalizeAvailability(mu);
   }
   res.json({ minderId, date, taken, availability });
+});
+
+// PUT /api/bookings/:id/location — minder pushes live GPS coordinates
+router.put('/:id/location', requireAuth, (req, res) => {
+  const id      = Number(req.params.id);
+  const booking = db.get('bookings').find({ id }).value();
+  if (!booking) return res.status(404).json({ error: 'Booking not found' });
+  if (Number(booking.minderKey) !== req.user.userId)
+    return res.status(403).json({ error: 'Only the minder can update location' });
+  const { lat, lng } = req.body;
+  if (lat == null || lng == null) return res.status(400).json({ error: 'lat and lng required' });
+  db.get('bookings').find({ id }).assign({
+    liveLocation: { lat: Number(lat), lng: Number(lng), updatedAt: new Date().toISOString() }
+  }).write();
+  res.json({ ok: true });
+});
+
+// GET /api/bookings/:id/location — owner or minder polls current live location
+router.get('/:id/location', requireAuth, (req, res) => {
+  const id      = Number(req.params.id);
+  const booking = db.get('bookings').find({ id }).value();
+  if (!booking) return res.status(404).json({ error: 'Booking not found' });
+  const isParty = booking.ownerId === req.user.userId ||
+                  Number(booking.minderKey) === req.user.userId;
+  if (!isParty) return res.status(403).json({ error: 'Forbidden' });
+  res.json(booking.liveLocation || null);
 });
 
 module.exports = router;

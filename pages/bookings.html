@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="../css/auth.css">
 <link rel="stylesheet" href="../css/bookings.css">
 <link rel="stylesheet" href="../css/responsive.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 </head>
 <body>
 
@@ -75,6 +76,22 @@
 <!-- CONFIRM MODAL -->
 <div class="confirm-modal-overlay" id="confirm-modal" onclick="if(event.target===this)closeConfirmModal()"><div class="confirm-modal"><div class="confirm-modal-icon" id="confirm-modal-icon">⚠️</div><h3 id="confirm-modal-title">Are you sure?</h3><p id="confirm-modal-message">This action cannot be undone.</p><div class="confirm-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:12px" onclick="closeConfirmModal()">Cancel</button><button class="btn-primary" style="flex:1;padding:12px" id="confirm-modal-btn">Confirm</button></div></div></div>
 
+<!-- LIVE TRACKING MODAL -->
+<div id="tracking-modal" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.55);align-items:flex-end;justify-content:center">
+  <div style="background:var(--warm-white);border-radius:24px 24px 0 0;width:100%;max-width:520px;overflow:hidden;display:flex;flex-direction:column">
+    <div style="padding:18px 20px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--sand-light)">
+      <div>
+        <div style="font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:var(--bark)">📍 Live Location</div>
+        <div id="tracking-status" style="font-size:12px;color:var(--bark-light);margin-top:3px">Connecting…</div>
+      </div>
+      <button onclick="closeLiveTracking()" style="background:var(--sand-light);border:none;border-radius:50%;width:34px;height:34px;font-size:18px;cursor:pointer;color:var(--bark);line-height:1">×</button>
+    </div>
+    <div id="tracking-map" style="width:100%;height:360px"></div>
+    <div style="padding:12px 20px 22px;font-size:12px;color:var(--bark-light);text-align:center">Updates every 5 seconds · <a href="https://www.openstreetmap.org" target="_blank" style="color:var(--terra)">© OpenStreetMap</a></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="../app.js"></script>
 <script>
 (async () => {

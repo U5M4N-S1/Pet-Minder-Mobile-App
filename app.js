@@ -118,6 +118,8 @@ const api = {
   getBookings()             { return this._req('GET',    '/bookings'); },
   getBookingRequests()      { return this._req('GET',    '/bookings/requests'); },
   updateBooking(id, data)   { return this._req('PATCH',  '/bookings/' + id, data); },
+  pushLocation(id, lat, lng){ return this._req('PUT',    '/bookings/' + id + '/location', { lat, lng }); },
+  getLocation(id)           { return this._req('GET',    '/bookings/' + id + '/location'); },
   getMinderTakenTimes(minderId, date) { return this._req('GET', '/bookings/minder/' + minderId + '/taken?date=' + encodeURIComponent(date)); },
   getNotifications()        { return this._req('GET',    '/notifications'); },
   markNotificationRead(id)  { return this._req('PATCH',  '/notifications/' + id, { read: true }); },
@@ -254,10 +256,13 @@ function openBookingDetail(bookingId) {
   if (!b) return;
   const el = document.getElementById('booking-detail-content');
   if (!el) return;
-  const canCancel  = (b.status === 'pending' || b.status === 'confirmed') && String(b.ownerId) === String(store.currentUserId());
-  const isMinder   = String(b.minder) === String(store.currentUserId());
-  const canComplete = isMinder && b.status === 'confirmed';
+  const canCancel       = (b.status === 'pending' || b.status === 'confirmed') && String(b.ownerId) === String(store.currentUserId());
+  const isMinder        = String(b.minder) === String(store.currentUserId());
+  const canComplete     = isMinder && b.status === 'confirmed';
   const minderCanCancel = isMinder && (b.status === 'pending' || b.status === 'confirmed');
+  const canStartWalk    = isMinder && b.status === 'confirmed';
+  const canLiveTrack    = !isMinder && b.status === 'confirmed' && String(b.ownerId) === String(store.currentUserId());
+  const isTracking      = activeTrackingBookingId === b.id;
 
   el.innerHTML =
     '<div style="background:white;border-radius:var(--radius);padding:20px;box-shadow:0 2px 12px var(--shadow)">' +
@@ -274,14 +279,22 @@ function openBookingDetail(bookingId) {
         (b.price ? '<div class="info-row" style="display:flex;justify-content:space-between;padding:10px 0"><span style="color:var(--bark-light);font-size:13px">Price</span><span style="font-weight:700;font-size:16px;color:var(--terra)">' + b.price + '</span></div>' : '') +
       '</div>' +
     '</div>' +
-    // Minder actions
-    (canComplete ?
-      '<button class="btn-primary" style="width:100%;margin-top:16px;padding:14px;font-size:14px" onclick="markBookingComplete(' + b.id + ')">✅ Mark Complete</button>'
+    // Minder: walk tracking + complete
+    (canStartWalk ?
+      '<div style="display:flex;gap:10px;margin-top:16px">' +
+        '<button class="btn-outline" style="flex:1;padding:13px;font-size:14px;' + (isTracking ? 'background:#fff3e0;border-color:#f57c00;color:#f57c00' : '') + '" id="walk-track-btn" onclick="toggleWalkTracking(' + b.id + ')">' +
+          (isTracking ? '⏹ Stop Walk' : '🟢 Start Walk') +
+        '</button>' +
+        '<button class="btn-primary" style="flex:1;padding:13px;font-size:14px" onclick="markBookingComplete(' + b.id + ')">✅ Mark Complete</button>' +
+      '</div>'
     : '') +
     (minderCanCancel ?
       '<button class="btn-outline" style="width:100%;margin-top:10px;padding:13px;color:#e53935;border-color:#e53935;font-size:14px" onclick="minderCancelBooking(' + b.id + ')">Cancel Booking</button>'
     : '') +
-    // Owner: cancel
+    // Owner: live track + cancel
+    (canLiveTrack ?
+      '<button class="btn-primary" style="width:100%;margin-top:16px;padding:14px;font-size:14px" onclick="openLiveTracking(' + b.id + ')">📍 View Live Location</button>'
+    : '') +
     (canCancel ?
       '<button class="btn-outline" style="width:100%;margin-top:10px;padding:13px;color:#e53935;border-color:#e53935;font-size:14px" onclick="cancelBooking(' + b.id + ')">Cancel Booking</button>'
     : '');
@@ -294,9 +307,112 @@ function closeBookingDetail() {
   document.getElementById('bookings-main-section').style.display = 'block';
 }
 
+// ===== WALK TRACKING — MINDER SIDE =====
+
+function toggleWalkTracking(bookingId) {
+  if (activeTrackingBookingId === bookingId) {
+    stopWalkTracking();
+  } else {
+    startWalkTracking(bookingId);
+  }
+  // Refresh button label in place without closing the detail panel
+  const btn = document.getElementById('walk-track-btn');
+  if (btn) {
+    const isNowTracking = activeTrackingBookingId === bookingId;
+    btn.textContent  = isNowTracking ? '⏹ Stop Walk' : '🟢 Start Walk';
+    btn.style.cssText = isNowTracking
+      ? 'flex:1;padding:13px;font-size:14px;background:#fff3e0;border-color:#f57c00;color:#f57c00'
+      : 'flex:1;padding:13px;font-size:14px';
+  }
+}
+
+function startWalkTracking(bookingId) {
+  if (!navigator.geolocation) {
+    showToast('❌ GPS not available on this device');
+    return;
+  }
+  if (activeWatchId !== null) navigator.geolocation.clearWatch(activeWatchId);
+  activeTrackingBookingId = bookingId;
+  showToast('📍 Walk tracking started');
+  activeWatchId = navigator.geolocation.watchPosition(
+    async pos => {
+      try {
+        await api.pushLocation(bookingId, pos.coords.latitude, pos.coords.longitude);
+      } catch { /* silent — don't spam toasts on transient network hiccup */ }
+    },
+    () => showToast('❌ GPS signal lost'),
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+  );
+}
+
+function stopWalkTracking() {
+  if (activeWatchId !== null) {
+    navigator.geolocation.clearWatch(activeWatchId);
+    activeWatchId = null;
+  }
+  activeTrackingBookingId = null;
+  showToast('⏹ Walk tracking stopped');
+}
+
+// ===== LIVE TRACKING — OWNER SIDE =====
+
+function openLiveTracking(bookingId) {
+  const modal = document.getElementById('tracking-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+
+  // Initialise Leaflet map once
+  if (!trackingMap) {
+    trackingMap = L.map('tracking-map').setView([51.515, -0.092], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19
+    }).addTo(trackingMap);
+  }
+
+  clearInterval(trackingPollInterval);
+  pollTrackingLocation(bookingId);
+  trackingPollInterval = setInterval(() => pollTrackingLocation(bookingId), 5000);
+}
+
+async function pollTrackingLocation(bookingId) {
+  try {
+    const loc = await api.getLocation(bookingId);
+    const statusEl = document.getElementById('tracking-status');
+    if (loc && loc.lat != null) {
+      const latlng = [loc.lat, loc.lng];
+      if (!trackingMarker) {
+        const pawIcon = L.divIcon({
+          html: '<div style="font-size:28px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3))">🐾</div>',
+          className: '',
+          iconAnchor: [14, 14]
+        });
+        trackingMarker = L.marker(latlng, { icon: pawIcon }).addTo(trackingMap);
+      } else {
+        trackingMarker.setLatLng(latlng);
+      }
+      trackingMap.setView(latlng, 16);
+      if (statusEl) {
+        const updated = new Date(loc.updatedAt);
+        statusEl.innerHTML = '<span style="color:#4caf50;font-weight:600">● Live</span> · Updated ' +
+          updated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+    } else {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--bark-light)">● Waiting for minder to start walk…</span>';
+    }
+  } catch { /* silent */ }
+}
+
+function closeLiveTracking() {
+  clearInterval(trackingPollInterval);
+  const modal = document.getElementById('tracking-modal');
+  if (modal) modal.style.display = 'none';
+}
+
 async function markBookingComplete(bookingId) {
   showConfirmModal('✅', 'Mark as Complete?', 'Confirm the service is finished. The owner will be notified and can leave a review.', async function() {
     try {
+      if (activeTrackingBookingId === bookingId) stopWalkTracking();
       await api.updateBooking(bookingId, { status: 'completed' });
       showToast('✅ Booking marked as complete!');
       closeBookingDetail();
@@ -1317,6 +1433,11 @@ async function handleAvatarUpload(event) {
 // ===== FIND MINDERS =====
 // Cached array of minders loaded from the API (used by search + profile view).
 let loadedMinders = [];
+let activeWatchId           = null;  // geolocation watchPosition handle (minder)
+let activeTrackingBookingId = null;  // booking currently being GPS-tracked
+let trackingPollInterval    = null;  // owner-side poll timer
+let trackingMap             = null;  // Leaflet map instance
+let trackingMarker          = null;  // Leaflet 🐾 marker
 let userCoords = null;          // { lat, lng } once geolocation granted
 const geocodeCache = {};        // locationString -> { lat, lng } | null
 

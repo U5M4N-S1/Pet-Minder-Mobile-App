@@ -38,7 +38,7 @@ function userDTO(u) {
     enabledServices:  Array.isArray(u.enabledServices) ? u.enabledServices : [],
     // Per-day availability schedule (used for booking validation)
     availability:     normalizeAvailability(u),
-    certifications:   u.certifications || '',
+    certificationTags: Array.isArray(u.certificationTags) ? u.certificationTags : [],
     qualificationImages: Array.isArray(u.qualificationImages) ? u.qualificationImages : [],
     online:           u.online === true && u.lastSeenAt &&
                       (Date.now() - new Date(u.lastSeenAt).getTime()) < 2 * 60 * 1000,
@@ -144,7 +144,7 @@ router.patch('/me', requireAuth, (req, res) => {
   const { firstName, lastName, email, phone, location, bio,
           serviceArea, petsCaredFor, services, rate, experience,
           priceMin, priceMax, addMinderRole, minderServices, availableForBooking,
-          certifications, availability } = req.body;
+          certifications, certificationTags, availability } = req.body;
   const updates = {};
   if (typeof firstName    === 'string' && firstName.trim()) updates.firstName    = firstName.trim();
   if (typeof lastName     === 'string') updates.lastName     = lastName.trim();
@@ -173,8 +173,8 @@ router.patch('/me', requireAuth, (req, res) => {
   if (Array.isArray(minderServices)) updates.minderServices = minderServices;
   // Toggle minder availability (on/off switch)
   if (availableForBooking !== undefined) updates.availableForBooking = !!availableForBooking;
-  // Certifications text
-  if (typeof certifications === 'string') updates.certifications = certifications.trim();
+  // Certifications stored as array only
+  if (Array.isArray(certificationTags)) updates.certificationTags = certificationTags;
   // Per-day availability schedule
   if (availability && typeof availability === 'object' && !Array.isArray(availability)) updates.availability = availability;
 
@@ -376,8 +376,8 @@ router.get('/minders', requireAuth, (req, res) => {
         priceMax:       u.priceMax != null ? u.priceMax : 10000,
         avgRating,
         reviewCount,
-        availability:   normalizeAvailability(u),
-        certifications: u.certifications || '',
+        availability:       normalizeAvailability(u),
+        certificationTags:  Array.isArray(u.certificationTags) ? u.certificationTags : [],
         online:         u.online === true && u.lastSeenAt &&
                         (Date.now() - new Date(u.lastSeenAt).getTime()) < 2 * 60 * 1000,
       };

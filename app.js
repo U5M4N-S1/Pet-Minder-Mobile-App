@@ -147,11 +147,6 @@ const api = {
   createChat(otherUserId)   { return this._req('POST',   '/chats', { otherUserId }); },
   deleteMessage(chatId, msgId) { return this._req('DELETE', '/chats/' + chatId + '/messages/' + msgId); },
   hideChat(chatId)          { return this._req('DELETE', '/chats/' + chatId); },
-  // Admin chats
-  getAdminChats()                        { return this._req('GET',    '/admin/chats'); },
-  getAdminChatMessages(id)               { return this._req('GET',    '/admin/chats/' + id + '/messages'); },
-  adminDeleteMessage(chatId, msgId)      { return this._req('DELETE', '/admin/chats/' + chatId + '/messages/' + msgId); },
-  adminDeleteChat(chatId)                { return this._req('DELETE', '/admin/chats/' + chatId); },
   adminDeleteQualification(userId, imgId){ return this._req('DELETE', '/admin/qualifications/' + userId + '/' + imgId); },
   // Reviews
   getMinderReviews(minderId) { return this._req('GET',    '/reviews/minder/' + minderId); },
@@ -190,7 +185,8 @@ function hydrateUserProfile(u) {
   userProfile.priceMax         = u.priceMax != null ? u.priceMax : 50;
   userProfile.availableForBooking = u.availableForBooking !== false;
   userProfile.enabledServices  = Array.isArray(u.enabledServices) ? u.enabledServices : [];
-  userProfile.qualificationImages = Array.isArray(u.qualificationImages) ? u.qualificationImages : [];
+  userProfile.qualificationImages  = Array.isArray(u.qualificationImages) ? u.qualificationImages : [];
+  userProfile.certificationTags = Array.isArray(u.certificationTags) ? u.certificationTags : [];
 }
 (function initUserFromCache() { hydrateUserProfile(store.getUser()); }());
 
@@ -1488,14 +1484,12 @@ async function bmConfirm() {
 // ===== MINDER AVAILABILITY TOGGLE =====
 async function toggleMinderAvailability() {
   const newVal = !userProfile.availableForBooking;
-  const toggleIcon = document.getElementById('availability-icon');
   try {
     const saved = await api.setAvailability(newVal);
     hydrateUserProfile(saved);
     store.setUser(userProfile);
     renderProfileAvatar();
     showToast(newVal ? '✅ You are now visible to pet owners' : '🌴 You are now hidden from Find Minders');
-    toggleIcon.textContent = newVal ? '🏠' : '🌴';
   } catch (err) {
     showToast('❌ ' + (err.message || 'Could not update availability'));
   }
@@ -1536,6 +1530,7 @@ const AVATAR_MIME_OK   = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 function renderProfileAvatar() {
   const el = document.getElementById('profile-avatar-display');
+  const toggleIcon = document.getElementById('availability-icon');
   if (!el) return;
   if (userProfile.profileImage) {
     el.innerHTML = '<img src="' + userProfile.profileImage + '" alt="avatar" class="avatar-img avatar-profile">';
@@ -1572,6 +1567,7 @@ function renderProfileAvatar() {
       toggleLabel.textContent = userProfile.availableForBooking !== false
         ? 'Available for bookings'
         : 'Not taking bookings';
+      toggleIcon.textContent =  userProfile.availableForBooking !== false ? '🏠' : '🌴';
       toggleLabel.style.color = userProfile.availableForBooking !== false
         ? 'var(--bark)'
         : 'var(--bark-light)';
@@ -2104,31 +2100,6 @@ function renderMinders(minders) {
 }
 
 // ===== PET MANAGEMENT =====
-function populatePetAgeOptions() {
-  const ageSelects = document.querySelectorAll('#pet-age-input');
-  if (!ageSelects.length) return;
-
-  const fragment = document.createDocumentFragment();
-  const placeholder = document.createElement('option');
-  placeholder.value = '';
-  placeholder.disabled = true;
-  placeholder.selected = true;
-  placeholder.textContent = 'Select age';
-  fragment.appendChild(placeholder);
-
-  for (let i = 1; i <= 99; i++) {
-    const option = document.createElement('option');
-    option.value = i;
-    option.textContent = i;
-    fragment.appendChild(option);
-  }
-
-  ageSelects.forEach(select => {
-    select.innerHTML = '';
-    select.appendChild(fragment.cloneNode(true));
-  });
-}
-
 function openPetModal(petId) {
   const modal = document.getElementById('pet-modal');
   const title = document.getElementById('pet-modal-title');
@@ -2163,7 +2134,9 @@ async function savePet() {
   const medical = document.getElementById('pet-medical-input').value.trim();
   const care    = document.getElementById('pet-care-input').value.trim();
   if (!name) { showToast('❌ Please enter a pet name'); return; }
-  if (!age) { showToast('❌ Please select your pet age'); return; }
+  if (!age) { showToast('❌ Please enter your pet\'s age'); return; }
+  const ageNum = Number(age);
+  if (isNaN(ageNum) || ageNum < 0 || ageNum > 100) { showToast('❌ Age must be between 0 and 100'); return; }
   const body = { name, type, breed, age, medical, care, emoji: petEmojis[type] || '🐾' };
 
   // On the auth page the registration form exists — pets must be staged locally
@@ -2702,6 +2675,42 @@ function clampPrice(input) {
   return v;
 }
 
+// ===== CERTIFICATIONS TAG SYSTEM =====
+let _certTags = [];
+
+function escapeHTML(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function renderCertTags(tags) {
+  _certTags = tags ? [...tags] : [];
+  const list = document.getElementById('cert-tags-list');
+  if (!list) return;
+  if (_certTags.length === 0) { list.innerHTML = ''; return; }
+  list.innerHTML = _certTags.map((tag, i) =>
+    '<span style="display:inline-flex;align-items:center;gap:6px;background:var(--sand-light);color:var(--bark);border-radius:20px;padding:5px 10px 5px 14px;font-size:13px;margin-bottom:2px">' +
+      escapeHTML(tag) +
+      '<button type="button" onclick="removeCertTag(' + i + ')" style="background:none;border:none;color:#e53935;cursor:pointer;font-size:16px;line-height:1;padding:0;display:flex;align-items:center" title="Remove">🗑</button>' +
+    '</span>'
+  ).join('');
+}
+
+function addCertTag() {
+  const input = document.getElementById('cert-tag-input');
+  if (!input) return;
+  const val = input.value.trim();
+  if (!val) { showToast('❌ Please type a certification first'); return; }
+  if (_certTags.includes(val)) { showToast('❌ Already added'); return; }
+  _certTags.push(val);
+  input.value = '';
+  renderCertTags(_certTags);
+}
+
+function removeCertTag(index) {
+  _certTags.splice(index, 1);
+  renderCertTags(_certTags);
+}
+
 function openEditProfileModal() {
   document.getElementById('edit-first-name').value = userProfile.firstName;
   document.getElementById('edit-last-name').value = userProfile.lastName;
@@ -2740,8 +2749,8 @@ function openEditProfileModal() {
       document.getElementById('edit-price-min').value = userProfile.priceMin != null ? userProfile.priceMin : 0;
       document.getElementById('edit-price-max').value = userProfile.priceMax != null ? userProfile.priceMax : 10000;
       document.getElementById('edit-experience').value = userProfile.experience || '';
-      const certEl = document.getElementById('edit-certifications');
-      if (certEl) certEl.value = userProfile.certifications || '';
+      // Load certifications tags
+      renderCertTags(Array.isArray(userProfile.certificationTags) ? userProfile.certificationTags : (userProfile.certifications ? userProfile.certifications.split('\n').filter(Boolean) : []));
       // Load availability grid
       loadAvailabilityGrid(userProfile.availability || {});
 
@@ -2771,7 +2780,7 @@ function saveProfile() {
         updates.priceMin     = clampPrice(document.getElementById('edit-price-min'));
         updates.priceMax     = clampPrice(document.getElementById('edit-price-max'));
         updates.experience   = (document.getElementById('edit-experience') || {}).value || '';
-        updates.certifications = (document.getElementById('edit-certifications') || {}).value || '';
+        updates.certificationTags = [..._certTags];
         updates.availability = readAvailabilityGrid();
       }
     // Optimistic local update so the UI feels instant
@@ -2850,22 +2859,30 @@ function openAdminUserDetail(userId) {
 
   let minderSection = '';
   if (isMinder) {
-    const enabled = Array.isArray(u.enabledServices) ? u.enabledServices : [];
-    const basicList = (u.services || '').split(',').map(s => s.trim()).filter(s => s && !ADVANCED_SERVICES.includes(s));
-    const allServices = [...basicList, ...enabled];
-    const serviceChips = allServices.length
-      ? allServices.map(s => '<span style="background:var(--sand-light);color:var(--bark);padding:3px 10px;border-radius:12px;font-size:12px;font-weight:500">' + s + '</span>').join(' ')
+    const enabled    = Array.isArray(u.enabledServices) ? u.enabledServices : [];
+    const BASIC_SERVICES   = ['Walking', 'Home Visit'];
+    const basicList  = (u.services || '').split(',').map(s => s.trim()).filter(Boolean);
+    // Always include the two basic services every minder can offer,
+    // plus whatever is in their services string, plus admin-enabled services
+    const allOffered = [...new Set([...BASIC_SERVICES, ...basicList, ...enabled])];
+    const serviceChips = allOffered.length
+      ? allOffered.map(s =>
+          '<span style="padding:4px 12px;border-radius:12px;font-size:12px;font-weight:500;background:var(--sand-light);color:var(--bark)">' + s + '</span>'
+        ).join(' ')
       : '<span style="color:var(--bark-light);font-size:13px">No services yet</span>';
     // Pending service applications from the minder
     const pending = Array.isArray(u.pendingServices) ? u.pendingServices : [];
     const pendingSection = pending.length
-      ? '<div style="background:#fff8e1;border:1.5px solid #f5a623;border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:14px">' +
-          '<div style="font-size:12px;font-weight:600;color:#e65100;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📋 Pending Service Applications</div>' +
-          '<div style="font-size:13px;color:var(--bark);margin-bottom:6px">This minder has applied to offer:</div>' +
-          '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">' +
-            pending.map(s => '<span style="background:#f5a623;color:white;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600">' + s + '</span>').join('') +
-          '</div>' +
-          '<div style="font-size:12px;color:var(--bark-light)">Use the toggles below to approve or deny each service.</div>' +
+      ? '<div style="background:#fff8e1;border:1.5px solid #f5a623;border-radius:var(--radius-sm);margin-bottom:14px;overflow:hidden">' +
+          '<button onclick="adminDismissPending(' + u.id + ')" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:transparent;border:none;cursor:pointer;text-align:left">' +
+            '<div>' +
+              '<div style="font-size:12px;font-weight:600;color:#e65100;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">📋 Pending Service Applications</div>' +
+              '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+                pending.map(s => '<span style="background:#f5a623;color:white;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600">' + s + '</span>').join('') +
+              '</div>' +
+            '</div>' +
+            '<span style="font-size:11px;color:#e65100;flex-shrink:0;margin-left:10px">✕ Dismiss</span>' +
+          '</button>' +
         '</div>'
       : '';
 
@@ -2887,7 +2904,7 @@ function openAdminUserDetail(userId) {
             '<span>📎 Uploaded Qualifications (' + quals.length + ')</span>' +
             '<span class="quals-chevron" style="transition:transform 0.2s;display:inline-block">▼</span>' +
           '</button>' +
-          '<div class="quals-body" style="display:none;padding:12px;display:none;flex-wrap:wrap;gap:10px">' +
+          '<div class="quals-body" style="display:none;flex-wrap:wrap;gap:10px;padding:12px">' +
             quals.map(q =>
               '<div style="position:relative;width:calc(50% - 5px)">' +
                 '<img src="' + q.image + '" alt="Qualification" style="width:100%;border-radius:8px;object-fit:contain;border:1px solid var(--sand-light);cursor:zoom-in;max-height:160px" onclick="openImagePreview(this.src)">' +
@@ -2896,7 +2913,7 @@ function openAdminUserDetail(userId) {
             ).join('') +
           '</div>' +
         '</div>'
-      : '<div style="margin-top:14px;padding:10px 14px;background:var(--sand-light);border-radius:var(--radius-sm);font-size:13px;color:var(--bark-light)">📎 No qualifications uploaded yet.</div>';
+      : '<div style="margin-top:14px;padding:10px 14px;background:var(--sand-light);border-radius:var(--radius-sm);font-size:13px;color:var(--bark-light)">📎 No qualifications to view.</div>';
 
     minderSection =
       '<div style="margin-top:18px">' +
@@ -2955,6 +2972,19 @@ function toggleAdminQuals(btn) {
   if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
 }
 
+async function adminDismissPending(userId) {
+  try {
+    await api.updateAdminUser(userId, { pendingServices: [] });
+    const u = adminUsers.find(x => x.id === userId);
+    if (u) u.pendingServices = [];
+    showToast('✅ Pending applications dismissed');
+    openAdminUserDetail(userId);
+    renderAdminPanels();
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Could not dismiss'));
+  }
+}
+
 async function adminDeleteQual(userId, imageId) {
   showConfirmModal('🗑', 'Delete Qualification?', 'This will permanently remove this qualification image.', async function() {
     try {
@@ -2966,103 +2996,6 @@ async function adminDeleteQual(userId, imageId) {
       openAdminUserDetail(userId);
     } catch (err) {
       showToast('❌ ' + (err.message || 'Failed to delete qualification'));
-    }
-  });
-}
-
-// ===== ADMIN CHATS =====
-let adminChatsCache = [];
-let adminOpenChatId = null;
-
-async function loadAdminChats() {
-  const panel = document.getElementById('admin-chats');
-  if (!panel) return;
-  panel.innerHTML = '<div style="padding:20px;text-align:center;color:var(--bark-light);font-size:13px">Loading chats…</div>';
-  try {
-    adminChatsCache = await api.getAdminChats();
-    renderAdminChatList();
-  } catch {
-    panel.innerHTML = '<div style="padding:20px;text-align:center;color:var(--bark-light);font-size:13px">Could not load chats.</div>';
-  }
-}
-
-function renderAdminChatList() {
-  const panel = document.getElementById('admin-chats');
-  if (!panel) return;
-  if (adminChatsCache.length === 0) {
-    panel.innerHTML = '<div style="padding:20px;text-align:center;color:var(--bark-light);font-size:13px">No chats yet.</div>';
-    return;
-  }
-  panel.innerHTML = '<div class="admin-section-title">All Conversations (' + adminChatsCache.length + ')</div>' +
-    adminChatsCache.map(c =>
-      '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--sand-light);cursor:pointer;background:white" onclick="openAdminChat(' + c.id + ')">' +
-        '<div style="flex:1;min-width:0">' +
-          '<div style="font-weight:600;font-size:13px;color:var(--bark)">' + escapeHTML(c.nameA) + ' & ' + escapeHTML(c.nameB) + '</div>' +
-          '<div style="font-size:12px;color:var(--bark-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHTML(c.lastPreview || '(no messages)') + '</div>' +
-        '</div>' +
-        '<span style="font-size:11px;color:var(--bark-light);flex-shrink:0">' + c.msgCount + ' msg' + (c.msgCount !== 1 ? 's' : '') + '</span>' +
-        '<button class="admin-btn remove" onclick="event.stopPropagation();adminHardDeleteChat(' + c.id + ')" style="padding:6px 10px;font-size:11px;flex-shrink:0">🗑 Delete</button>' +
-      '</div>'
-    ).join('');
-}
-
-async function openAdminChat(chatId) {
-  adminOpenChatId = chatId;
-  const chat = adminChatsCache.find(c => c.id === chatId);
-  const panel = document.getElementById('admin-chats');
-  panel.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--sand-light);background:white;position:sticky;top:0;z-index:1">' +
-    '<button onclick="renderAdminChatList()" style="background:var(--sand-light);border:none;border-radius:20px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--bark)">← Back</button>' +
-    '<div style="flex:1;font-weight:600;font-size:14px;color:var(--bark)">' + (chat ? escapeHTML(chat.nameA) + ' & ' + escapeHTML(chat.nameB) : 'Chat') + '</div>' +
-    '<button class="admin-btn remove" onclick="adminHardDeleteChat(' + chatId + ')" style="padding:6px 10px;font-size:11px">🗑 Delete chat</button>' +
-    '</div>' +
-    '<div id="admin-chat-messages" style="padding:12px 16px;display:flex;flex-direction:column;gap:8px"><div style="text-align:center;color:var(--bark-light);font-size:13px">Loading…</div></div>';
-
-  try {
-    const msgs = await api.getAdminChatMessages(chatId);
-    const msgEl = document.getElementById('admin-chat-messages');
-    if (!msgEl) return;
-    if (msgs.length === 0) { msgEl.innerHTML = '<div style="text-align:center;color:var(--bark-light);font-size:13px">No messages.</div>'; return; }
-    msgEl.innerHTML = msgs.map(m =>
-      '<div style="display:flex;align-items:flex-start;gap:8px;padding:8px;border-radius:8px;background:white;border:1px solid var(--sand-light)" id="admin-msg-' + m.id + '">' +
-        '<div style="flex:1;min-width:0">' +
-          '<span style="font-size:11px;font-weight:600;color:var(--terra)">User #' + m.fromUserId + '</span>' +
-          '<span style="font-size:11px;color:var(--bark-light);margin-left:8px">' + new Date(m.createdAt).toLocaleString() + '</span>' +
-          (m.deleted ? '<div style="font-style:italic;color:var(--bark-light);font-size:13px">Message deleted</div>'
-            : (m.image ? '<div><img src="' + m.image + '" style="max-width:160px;border-radius:6px;margin-top:4px;cursor:zoom-in" onclick="openImagePreview(this.src)"></div>' : '') +
-              (m.text ? '<div style="font-size:13px;color:var(--bark);margin-top:2px">' + escapeHTML(m.text) + '</div>' : '')) +
-        '</div>' +
-        (!m.deleted ? '<button onclick="adminHardDeleteMessage(' + chatId + ',' + m.id + ')" style="background:none;border:none;color:#e53935;font-size:16px;cursor:pointer;flex-shrink:0;padding:2px 6px" title="Delete message">×</button>' : '') +
-      '</div>'
-    ).join('');
-  } catch {
-    const msgEl = document.getElementById('admin-chat-messages');
-    if (msgEl) msgEl.innerHTML = '<div style="text-align:center;color:var(--bark-light);font-size:13px">Could not load messages.</div>';
-  }
-}
-
-async function adminHardDeleteMessage(chatId, msgId) {
-  try {
-    await api.adminDeleteMessage(chatId, msgId);
-    const el = document.getElementById('admin-msg-' + msgId);
-    if (el) el.querySelector('div').innerHTML += '<div style="font-style:italic;color:var(--bark-light);font-size:13px">Message deleted</div>';
-    showToast('✅ Message deleted');
-    // Update cache count
-    const c = adminChatsCache.find(x => x.id === chatId);
-    if (c) c.msgCount = Math.max(0, c.msgCount - 1);
-  } catch (err) {
-    showToast('❌ ' + (err.message || 'Failed to delete message'));
-  }
-}
-
-async function adminHardDeleteChat(chatId) {
-  showConfirmModal('🗑', 'Delete Chat?', 'This permanently deletes the conversation and all its messages for everyone.', async function() {
-    try {
-      await api.adminDeleteChat(chatId);
-      adminChatsCache = adminChatsCache.filter(c => c.id !== chatId);
-      showToast('✅ Chat permanently deleted');
-      renderAdminChatList();
-    } catch (err) {
-      showToast('❌ ' + (err.message || 'Failed to delete chat'));
     }
   });
 }
@@ -3102,12 +3035,18 @@ function renderAdminPanels() {
       const isMinder = u.rawRoles ? u.rawRoles.includes('minder') : u.role.toLowerCase().includes('minder');
       const minderBadge = isMinder ? ' <span style="background:var(--terra);color:white;font-size:10px;padding:2px 6px;border-radius:8px;margin-left:4px">Minder</span>' : '';
       const hasPending = isMinder && Array.isArray(u.pendingServices) && u.pendingServices.length > 0;
-      const pendingBadge = hasPending ? ' <span style="background:#f5a623;color:white;font-size:10px;padding:2px 6px;border-radius:8px;margin-left:4px" title="Pending service application">📋 ' + u.pendingServices.length + ' pending</span>' : '';
+      const hasQuals   = isMinder && Array.isArray(u.qualificationImages) && u.qualificationImages.length > 0;
+      const needsAttention = hasPending || hasQuals;
       const avatar = u.profileImage
         ? '<img src="' + u.profileImage + '" alt="" style="width:38px;height:38px;border-radius:50%;object-fit:cover">'
         : '<span style="font-size:22px">' + (u.avatar || '👤') + '</span>';
+      const avatarWrapper =
+        '<div style="position:relative;flex-shrink:0">' +
+          avatar +
+          (needsAttention ? '<span style="position:absolute;top:0;right:0;width:10px;height:10px;background:#f5a623;border-radius:50%;border:2px solid white" title="Needs review"></span>' : '') +
+        '</div>';
       card.innerHTML =
-        '<div class="admin-user-avatar">' + avatar + '</div>' +
+        '<div class="admin-user-avatar">' + avatarWrapper + '</div>' +
         '<div class="admin-user-info"><div class="admin-user-name">' + u.name + statusBadge + minderBadge + '</div>' +
         '<div class="admin-user-role">' + u.role + ' · ' + u.email + '</div></div>' +
         '<div class="admin-user-actions">' +
@@ -3445,7 +3384,13 @@ function renderMinderProfileInto(minder) {
     if (minder.services)     html += '<div class="info-row"><span class="info-label">Services</span><span class="info-value">' + escapeHTML(minder.services) + '</span></div>';
     const priceStr = (minder.priceMin != null && minder.priceMax != null) ? '£' + minder.priceMin + ' – £' + minder.priceMax + '/hr' : (minder.rate || '');
     if (priceStr) html += '<div class="info-row"><span class="info-label">Rate</span><span class="info-value">' + escapeHTML(priceStr) + '</span></div>';
-    if (minder.certifications) html += '<div class="info-row"><span class="info-label">Certifications</span><span class="info-value" style="white-space:pre-wrap;text-align:right;max-width:60%">' + escapeHTML(minder.certifications) + '</span></div>';
+    const certTags = Array.isArray(minder.certificationTags) ? minder.certificationTags : [];
+    if (certTags.length) {
+      html += '<div class="info-row" style="flex-direction:column;align-items:flex-start;gap:6px"><span class="info-label">Certifications</span>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+        certTags.map(t => '<span style="background:var(--sand-light);color:var(--bark);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:500">' + escapeHTML(t) + '</span>').join('') +
+        '</div></div>';
+    }
     if (!html && isRealMinder) html = '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:8px 0">This minder hasn\'t added service details yet.</p>';
     details.innerHTML = html;
   }
@@ -3768,7 +3713,6 @@ function showToast(msg) {
 
 // Initial render
 refreshPetsUI();
-populatePetAgeOptions();
 if (document.getElementById('admin-users')) loadAdminData();
 if (document.getElementById('minders-list')) loadMinders();
 // Load notification count for minders on the profile page

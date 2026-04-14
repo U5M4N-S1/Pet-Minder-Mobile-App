@@ -1,5 +1,8 @@
-/* Messages layout */
-.messages-container { display: flex; flex: 1; min-height: 0; }
+/* Messages layout — pin the chat area between the sticky top nav and
+   the bottom of the viewport so the input bar is always visible on
+   screen and the chat list scrolls internally, not the page. */
+#screen-messages.active { height: 100vh; max-height: 100vh; overflow: hidden; position: relative; }
+.messages-container { display: flex; position: fixed; top: 60px; left: 0; right: 0; bottom: 0; min-height: 0; }
 .messages-sidebar { width: 340px; border-right: 1px solid var(--sand-light); background: var(--warm-white); display: flex; flex-direction: column; flex-shrink: 0; }
 .messages-sidebar-header { padding: 20px 24px 12px; }
 .messages-sidebar-header h2 { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--bark); }
@@ -37,3 +40,20 @@
 .send-btn { background: var(--terra); color: white; border: none; width: 42px; height: 42px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s; flex-shrink: 0; }
 .send-btn:hover { background: var(--terra-light); }
 .chat-active-status { font-size: 12px; color: #4caf50; }
+
+/* Image attachment button in the input bar */
+.chat-image-btn { background: var(--sand-light); color: var(--bark); border: none; width: 42px; height: 42px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s; flex-shrink: 0; }
+.chat-image-btn:hover { background: var(--sand); }
+
+/* Inline image inside a message bubble */
+.msg-bubble .msg-image { display: block; max-width: 100%; width: auto; max-height: 280px; border-radius: 12px; cursor: zoom-in; object-fit: cover; }
+.msg-bubble .msg-image + .msg-time { margin-top: 6px; }
+.msg-bubble:has(.msg-image) { padding: 6px; max-width: 260px; }
+.msg-bubble.sent:has(.msg-image) { background: var(--terra); }
+.msg-bubble.received:has(.msg-image) { background: white; }
+
+/* Full-screen image preview overlay */
+.image-preview-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 400; display: flex; align-items: center; justify-content: center; padding: 20px; cursor: zoom-out; }
+.image-preview-img { max-width: 100%; max-height: 100%; border-radius: 8px; object-fit: contain; }
+.image-preview-close { position: absolute; top: 16px; right: 16px; background: rgba(255,255,255,0.15); color: white; border: none; width: 40px; height: 40px; border-radius: 50%; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.image-preview-close:hover { background: rgba(255,255,255,0.25); }

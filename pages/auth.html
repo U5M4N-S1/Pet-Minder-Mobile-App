@@ -8,6 +8,8 @@
 <link rel="stylesheet" href="../css/shared.css">
 <link rel="stylesheet" href="../css/auth.css">
 <link rel="stylesheet" href="../css/responsive.css">
+<script src="../js/config.js"></script>
+<script src="../js/maps-loader.js"></script>
 </head>
 <body>
 
@@ -43,6 +45,7 @@
         <div class="field-group" style="min-width:0"><label>Last Name</label><input type="text" placeholder="Khan" id="reg-last-name" style="width:100%"></div>
       </div>
       <div class="field-group"><label>Email</label><input type="email" placeholder="you@email.com" id="reg-email"></div>
+      <div class="field-group"><label>Town or City</label><input type="text" placeholder="e.g. Mile End, London" id="reg-location"></div>
       <div class="field-group"><label>Password</label><input type="password" placeholder="Create password" id="reg-password"></div>
       <div class="field-group"><label>Confirm Password</label><input type="password" placeholder="Repeat password" id="reg-confirm-password"></div>
       <div class="field-group"><label>I am a...</label>
@@ -70,6 +73,14 @@
           <label class="file-upload-label"><input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple id="cert-upload-input" onchange="handleCertUpload()" style="display:none">＋ Add Certification</label>
           <div id="cert-file-names" style="margin-top:8px;font-size:12px;color:var(--moss)"></div>
           <div id="reg-certs-grid" class="reg-pets-grid"></div>
+        </div>
+        <div class="reg-extras-box" id="reg-minder-payout-box" style="margin-top:12px">
+          <p class="reg-extras-title">💷 Payout Details <span style="color:var(--terra)">*</span></p>
+          <p class="reg-extras-sub">Required — how you get paid for completed bookings. <em>Demo only — no real bank data is sent.</em></p>
+          <div class="field-group" style="margin-top:10px"><label>Account holder name</label><input type="text" id="reg-payout-name" placeholder="Name on bank account"></div>
+          <div class="field-group"><label>Bank name</label><input type="text" id="reg-payout-bank" placeholder="e.g. Barclays"></div>
+          <div class="field-group"><label>Sort code</label><input type="text" id="reg-payout-sort" inputmode="numeric" placeholder="12-34-56" maxlength="8"></div>
+          <div class="field-group"><label>Account number</label><input type="text" id="reg-payout-account" inputmode="numeric" placeholder="12345678" maxlength="8"></div>
         </div>
       </div>
       <button class="btn-primary" onclick="handleRegister()">Create Account</button>

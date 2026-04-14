@@ -1,3 +1,6 @@
+/* Google Places Autocomplete dropdown — must sit above our modals (which use z-index up to ~1000). */
+.pac-container { z-index: 2000; }
+
 /* Colour palette and spacing variables */
 :root {
   --cream: #faf6f0;

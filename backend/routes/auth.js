@@ -23,6 +23,8 @@ function userDTO(u) {
     email:        u.email,
     role:         u.role,
     location:     u.location  || '',
+    locationLat:  typeof u.locationLat === 'number' ? u.locationLat : null,
+    locationLng:  typeof u.locationLng === 'number' ? u.locationLng : null,
     phone:        u.phone     || '',
     bio:          u.bio       || '',
     profileImage: u.profileImage || '',
@@ -45,15 +47,46 @@ const AVATAR_MAX_BYTES  = 2 * 1024 * 1024; // 2 MB encoded (data-URI)
 const AVATAR_MIME_ALLOW = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const AVATAR_MAX_DIM    = 1024; // px (width and height)
 
+// ── Payout helpers (demo only — raw digits stay server-side, masked in UI)
+function maskSortCode(raw) {
+  const d = String(raw || '').replace(/\D/g, '');
+  if (d.length !== 6) return '';
+  return '**-**-' + d.slice(4);
+}
+function maskAccountNumber(raw) {
+  const d = String(raw || '').replace(/\D/g, '');
+  if (d.length < 4) return '';
+  return '****' + d.slice(-4);
+}
+function sanitisePayout(input) {
+  if (!input || typeof input !== 'object') return null;
+  const name    = String(input.accountHolderName || '').trim().slice(0, 80);
+  const bank    = String(input.bankName || '').trim().slice(0, 80);
+  const sort    = String(input.sortCode || '').replace(/\D/g, '');
+  const account = String(input.accountNumber || '').replace(/\D/g, '');
+  if (!name || !bank || sort.length !== 6 || account.length !== 8) return null;
+  return { accountHolderName: name, bankName: bank, sortCode: sort, accountNumber: account, updatedAt: new Date().toISOString() };
+}
+
 // POST /api/auth/signup
 router.post('/signup', async (req, res) => {
-  const { firstName, lastName, email, password, role } = req.body;
+  const { firstName, lastName, email, password, role, location, locationLat, locationLng, payout } = req.body;
 
   if (!firstName || !lastName || !email || !password) {
     return res.status(400).json({ error: 'All fields are required' });
   }
   if (password.length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  }
+
+  // Minder accounts must provide valid payout details at registration;
+  // owner accounts skip the payout flow entirely.
+  let payoutForUser = null;
+  if (role === 'minder') {
+    payoutForUser = sanitisePayout(payout);
+    if (!payoutForUser) {
+      return res.status(400).json({ error: 'Payout details are required for Pet Minder accounts (sort code 6 digits, account 8 digits)' });
+    }
   }
 
   const existing = db.get('users').find({ email: email.toLowerCase() }).value();
@@ -71,9 +104,15 @@ router.post('/signup', async (req, res) => {
       email:     email.toLowerCase(),
       passwordHash,
       role:      role || 'owner',
-      location:  'London',
+      location:  (typeof location === 'string' && location.trim()) ? location.trim() : '',
       createdAt: new Date().toISOString()
     };
+    if (Number.isFinite(locationLat) && Number.isFinite(locationLng) &&
+        locationLat >= -90 && locationLat <= 90 && locationLng >= -180 && locationLng <= 180) {
+      user.locationLat = locationLat;
+      user.locationLng = locationLng;
+    }
+    if (payoutForUser) user.payout = payoutForUser;
     user.online     = true;
     user.lastSeenAt = new Date().toISOString();
     db.get('users').push(user).write();
@@ -126,12 +165,51 @@ router.get('/me', requireAuth, (req, res) => {
   res.json(userDTO(user.value()));
 });
 
+// GET /api/auth/payout — minder-only. Returns the saved payout details
+// in masked form (never raw sort code / account number). Owners get 403.
+router.get('/payout', requireAuth, (req, res) => {
+  const user = db.get('users').find({ id: req.user.userId }).value();
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (user.role !== 'minder') return res.status(403).json({ error: 'Payout details are only available for Pet Minder accounts' });
+  const p = user.payout;
+  if (!p) return res.json({ hasPayout: false });
+  res.json({
+    hasPayout:           true,
+    accountHolderName:   p.accountHolderName || '',
+    bankName:            p.bankName || '',
+    sortCodeMasked:      maskSortCode(p.sortCode),
+    accountNumberMasked: maskAccountNumber(p.accountNumber),
+    updatedAt:           p.updatedAt || ''
+  });
+});
+
+// PUT /api/auth/payout — minder-only. Overwrites the saved payout details.
+// Requires all four fields; partial updates are rejected to keep demo
+// state coherent. The raw digits are stored server-side and never returned.
+router.put('/payout', requireAuth, (req, res) => {
+  const user = db.get('users').find({ id: req.user.userId });
+  const u = user.value();
+  if (!u) return res.status(404).json({ error: 'User not found' });
+  if (u.role !== 'minder') return res.status(403).json({ error: 'Payout details are only available for Pet Minder accounts' });
+  const payout = sanitisePayout(req.body);
+  if (!payout) return res.status(400).json({ error: 'All payout fields are required (sort code 6 digits, account 8 digits)' });
+  user.assign({ payout }).write();
+  res.json({
+    hasPayout:           true,
+    accountHolderName:   payout.accountHolderName,
+    bankName:            payout.bankName,
+    sortCodeMasked:      maskSortCode(payout.sortCode),
+    accountNumberMasked: maskAccountNumber(payout.accountNumber),
+    updatedAt:           payout.updatedAt
+  });
+});
+
 // PATCH /api/auth/me — update profile fields
 router.patch('/me', requireAuth, (req, res) => {
   const user = db.get('users').find({ id: req.user.userId });
   if (!user.value()) return res.status(404).json({ error: 'User not found' });
 
-  const { firstName, lastName, email, phone, location, bio,
+  const { firstName, lastName, email, phone, location, locationLat, locationLng, bio,
           serviceArea, petsCaredFor, services, rate, experience,
           priceMin, priceMax,
           availability, certifications } = req.body;
@@ -140,6 +218,11 @@ router.patch('/me', requireAuth, (req, res) => {
   if (typeof lastName     === 'string') updates.lastName     = lastName.trim();
   if (typeof phone        === 'string') updates.phone        = phone.trim();
   if (typeof location     === 'string') updates.location     = location.trim();
+  if (Number.isFinite(locationLat) && Number.isFinite(locationLng) &&
+      locationLat >= -90 && locationLat <= 90 && locationLng >= -180 && locationLng <= 180) {
+    updates.locationLat = locationLat;
+    updates.locationLng = locationLng;
+  }
   if (typeof bio          === 'string') updates.bio          = bio.trim();
   // Minder-specific fields
   if (typeof serviceArea  === 'string') updates.serviceArea  = serviceArea.trim();

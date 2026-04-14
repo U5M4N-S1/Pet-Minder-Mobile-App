@@ -50,7 +50,9 @@
           <button class="chat-report-btn" onclick="openReportFromChat()" aria-label="Report user" title="Report user" style="margin-left:auto;background:none;border:none;font-size:20px;cursor:pointer;padding:6px 10px;color:#c62828">🚩</button>
         </div>
         <div class="chat-messages" id="chat-active-messages"></div>
-        <div class="chat-input-bar">
+        <div class="chat-input-bar" id="chat-input-bar">
+          <input type="file" id="chat-image-input" accept="image/*" style="display:none" onchange="handleChatImageSelect(this)">
+          <button class="chat-image-btn" onclick="openChatImagePicker()" aria-label="Send image" title="Send image">📷</button>
           <input type="text" class="chat-input" placeholder="Type a message..." id="chat-input-field">
           <button class="send-btn" onclick="sendMessage()">➤</button>
         </div>
@@ -58,6 +60,12 @@
     </div>
   </div>
   <nav class="bottom-nav"><button class="bottom-nav-item" onclick="window.location.href='home.html'"><span>🏠</span><span>Home</span></button><button class="bottom-nav-item" onclick="window.location.href='search.html'"><span>🔍</span><span>Search</span></button><button class="bottom-nav-item" onclick="window.location.href='bookings.html'"><span>📅</span><span>Bookings</span></button><button class="bottom-nav-item active" onclick="window.location.href='messages.html'"><span>💬</span><span>Messages</span></button><button class="bottom-nav-item" onclick="window.location.href='profile.html'"><span>👤</span><span>Profile</span></button></nav>
+</div>
+
+<!-- Image preview overlay -->
+<div class="image-preview-overlay" id="image-preview-overlay" onclick="closeImagePreview()" style="display:none">
+  <button class="image-preview-close" onclick="closeImagePreview()">×</button>
+  <img id="image-preview-img" class="image-preview-img" src="" alt="Preview">
 </div>
 
 <div class="toast" id="toast"></div>

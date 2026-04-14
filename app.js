@@ -184,6 +184,7 @@ function hydrateUserProfile(u) {
   userProfile.priceMin         = u.priceMin != null ? u.priceMin : 0;
   userProfile.priceMax         = u.priceMax != null ? u.priceMax : 50;
   userProfile.availableForBooking = u.availableForBooking !== false;
+  userProfile.availability     = (u.availability && typeof u.availability === 'object' && !Array.isArray(u.availability)) ? u.availability : {};
   userProfile.enabledServices  = Array.isArray(u.enabledServices) ? u.enabledServices : [];
   userProfile.qualificationImages  = Array.isArray(u.qualificationImages) ? u.qualificationImages : [];
   userProfile.certificationTags = Array.isArray(u.certificationTags) ? u.certificationTags : [];

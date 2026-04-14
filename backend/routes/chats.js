@@ -56,7 +56,7 @@ function otherUserDTO(u) {
 router.get('/', requireAuth, (req, res) => {
   const me = req.user.userId;
   const mine = db.get('chats')
-    .filter(c => c.userA === me || c.userB === me)
+    .filter(c => (c.userA === me || c.userB === me) && !(Array.isArray(c.hiddenBy) && c.hiddenBy.includes(me)))
     .value()
     .slice()
     .sort((x, y) => new Date(y.lastMessageAt || 0) - new Date(x.lastMessageAt || 0));
@@ -66,7 +66,7 @@ router.get('/', requireAuth, (req, res) => {
     const otherUser = db.get('users').find({ id: otherId }).value();
     const unread = db.get('messages')
       .filter({ chatId: c.id })
-      .filter(m => m.fromUserId !== me && !m.read)
+      .filter(m => m.fromUserId !== me && !m.read && !m.deleted)
       .size()
       .value();
     return {
@@ -98,16 +98,58 @@ router.get('/:id/messages', requireAuth, (req, res) => {
   const list = db.get('messages')
     .filter({ chatId })
     .sortBy('createdAt')
-    .value();
+    .value()
+    .map(m => m.deleted ? { ...m, text: '', image: undefined, deleted: true } : m);
   res.json(list);
 });
 
-// POST /api/chats/:id/messages — send a message in a chat
-router.post('/:id/messages', requireAuth, (req, res) => {
+// DELETE /api/chats/:id/messages/:msgId — user deletes own sent message (marks deleted for all)
+router.delete('/:id/messages/:msgId', requireAuth, (req, res) => {
+  const me     = req.user.userId;
+  const chatId = Number(req.params.id);
+  const msgId  = Number(req.params.msgId);
+  const chat   = db.get('chats').find({ id: chatId }).value();
+  if (!chat) return res.status(404).json({ error: 'Chat not found' });
+  if (chat.userA !== me && chat.userB !== me) return res.status(403).json({ error: 'Not your chat' });
+  const msg = db.get('messages').find({ id: msgId, chatId }).value();
+  if (!msg) return res.status(404).json({ error: 'Message not found' });
+  if (msg.fromUserId !== me) return res.status(403).json({ error: 'You can only delete your own messages' });
+  db.get('messages').find({ id: msgId }).assign({ deleted: true, text: '', image: null }).write();
+  res.status(204).end();
+});
+
+// DELETE /api/chats/:id — user hides a chat (soft delete — only removes from their list)
+router.delete('/:id', requireAuth, (req, res) => {
+  const me     = req.user.userId;
+  const chatId = Number(req.params.id);
+  const chatRow = db.get('chats').find({ id: chatId });
+  const chat    = chatRow.value();
+  if (!chat) return res.status(404).json({ error: 'Chat not found' });
+  if (chat.userA !== me && chat.userB !== me) return res.status(403).json({ error: 'Not your chat' });
+  const hiddenBy = Array.isArray(chat.hiddenBy) ? chat.hiddenBy : [];
+  if (!hiddenBy.includes(me)) chatRow.assign({ hiddenBy: [...hiddenBy, me] }).write();
+  res.status(204).end();
+});
+
+// POST /api/chats/:id/messages — send a text or image message in a chat
+// Body: { text } for text messages, { image } for image messages (data-URI), or both
+router.post('/:id/messages', requireAuth, express.json({ limit: '3mb' }), (req, res) => {
   const me     = req.user.userId;
   const chatId = Number(req.params.id);
   const text   = String((req.body && req.body.text) || '').trim();
-  if (!text) return res.status(400).json({ error: 'Message text is required' });
+  const image  = (req.body && req.body.image) || '';
+
+  if (!text && !image) return res.status(400).json({ error: 'Message text or image is required' });
+
+  // Validate image if provided
+  if (image) {
+    if (typeof image !== 'string' || !image.match(/^data:image\/(jpeg|png|webp|gif);base64,/)) {
+      return res.status(400).json({ error: 'Invalid image format' });
+    }
+    if (image.length > 2 * 1024 * 1024) {
+      return res.status(400).json({ error: 'Image too large. Maximum 2 MB' });
+    }
+  }
 
   const chatRow = db.get('chats').find({ id: chatId });
   const chat    = chatRow.value();
@@ -119,12 +161,15 @@ router.post('/:id/messages', requireAuth, (req, res) => {
     id:         nextId('messages'),
     chatId,
     fromUserId: me,
-    text,
+    text:       text || '',
     read:       false,
     createdAt:  now
   };
+  if (image) msg.image = image;
   db.get('messages').push(msg).write();
-  chatRow.assign({ lastMessageAt: now, lastPreview: text.slice(0, 80) }).write();
+
+  const preview = image ? (text || '📷 Photo') : text.slice(0, 80);
+  chatRow.assign({ lastMessageAt: now, lastPreview: preview }).write();
 
   res.status(201).json(msg);
 });

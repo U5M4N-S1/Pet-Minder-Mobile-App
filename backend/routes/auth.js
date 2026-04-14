@@ -240,6 +240,40 @@ router.delete('/avatar', requireAuth, (req, res) => {
   res.status(204).end();
 });
 
+// POST /api/auth/qualifications — upload a qualification image (PNG only)
+// Body: { image: "data:image/png;base64,..." }
+// Appends to the user's qualificationImages array (max 10 files).
+router.post('/qualifications', requireAuth, express.json({ limit: '4mb' }), (req, res) => {
+  const { image } = req.body;
+  if (!image || typeof image !== 'string') return res.status(400).json({ error: 'No image provided' });
+
+  const match = image.match(/^data:(image\/png);base64,/);
+  if (!match) return res.status(400).json({ error: 'Only PNG images are accepted' });
+
+  if (image.length > 3 * 1024 * 1024) return res.status(400).json({ error: 'Image too large. Maximum 3 MB' });
+
+  const userRow = db.get('users').find({ id: req.user.userId });
+  if (!userRow.value()) return res.status(404).json({ error: 'User not found' });
+
+  const existing = Array.isArray(userRow.value().qualificationImages) ? userRow.value().qualificationImages : [];
+  if (existing.length >= 10) return res.status(400).json({ error: 'Maximum 10 qualification images allowed' });
+
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const newEntry = { id, image, uploadedAt: new Date().toISOString() };
+  userRow.assign({ qualificationImages: [...existing, newEntry] }).write();
+
+  res.status(201).json({ id, uploadedAt: newEntry.uploadedAt });
+});
+
+// DELETE /api/auth/qualifications/:id — remove one qualification image
+router.delete('/qualifications/:imageId', requireAuth, (req, res) => {
+  const userRow = db.get('users').find({ id: req.user.userId });
+  if (!userRow.value()) return res.status(404).json({ error: 'User not found' });
+  const existing = Array.isArray(userRow.value().qualificationImages) ? userRow.value().qualificationImages : [];
+  userRow.assign({ qualificationImages: existing.filter(q => q.id !== req.params.imageId) }).write();
+  res.status(204).end();
+});
+
 // ── Lightweight image dimension reader (no external deps) ─────────────
 function readImageDimensions(buf, mime) {
   try {

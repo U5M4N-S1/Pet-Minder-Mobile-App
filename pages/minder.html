@@ -109,6 +109,9 @@
   </div>
 </div>
 
+<!-- CONFIRM MODAL -->
+<div class="confirm-modal-overlay" id="confirm-modal" onclick="if(event.target===this)closeConfirmModal()"><div class="confirm-modal"><div class="confirm-modal-icon" id="confirm-modal-icon">⚠️</div><h3 id="confirm-modal-title">Are you sure?</h3><p id="confirm-modal-message">This action cannot be undone.</p><div class="confirm-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:12px" onclick="closeConfirmModal()">Cancel</button><button class="btn-primary" style="flex:1;padding:12px" id="confirm-modal-btn">Confirm</button></div></div></div>
+
 <script src="../app.js"></script>
 <script>
 (async () => {

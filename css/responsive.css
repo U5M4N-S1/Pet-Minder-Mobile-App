@@ -1,9 +1,15 @@
 /* ===== RESPONSIVE ===== */
 
-/* Desktop */
+/* ── Global touch & overflow fixes ──────────────────────────────────── */
+html { -webkit-text-size-adjust: 100%; }
+input, select, textarea, button { font-size: 16px; } /* prevent iOS zoom on focus */
+img, video { max-width: 100%; height: auto; }
+
+/* ── Desktop (768px +) ──────────────────────────────────────────────── */
 @media (min-width: 768px) {
   .bottom-nav { display: none !important; }
   .app-nav { display: flex !important; }
+  .mobile-header { display: none !important; }
   .page-content { padding-bottom: 24px; }
   .home-hero { padding: 40px 48px 56px; }
   .section-pad { padding: 32px 48px 0; }

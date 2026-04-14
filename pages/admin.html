@@ -15,9 +15,10 @@
 <div class="screen active" id="screen-admin">
   <div class="page-content">
     <div class="admin-hero"><div style="display:flex;align-items:center;justify-content:space-between"><div><h1 style="font-family:'Playfair Display',serif;font-size:24px;color:white">Admin Dashboard</h1><p style="font-size:13px;color:var(--sand);margin-top:4px">🔒 PawPal Administration</p></div><button class="btn-outline" style="padding:8px 16px;font-size:13px" onclick="confirmLogout()">Log Out</button></div></div>
-    <div class="admin-tabs"><button class="admin-tab active" onclick="switchAdminTab(this,'admin-users')">👥 Users</button><button class="admin-tab" onclick="switchAdminTab(this,'admin-disputes')">⚠️ Disputes</button></div>
+    <div class="admin-tabs"><button class="admin-tab active" onclick="switchAdminTab(this,'admin-users')">👥 Users</button><button class="admin-tab" onclick="switchAdminTab(this,'admin-disputes')">⚠️ Disputes</button><button class="admin-tab" onclick="switchAdminTab(this,'admin-chats');loadAdminChats()">💬 Chats</button></div>
     <div id="admin-users" class="admin-panel" style="display:block"></div>
     <div id="admin-disputes" class="admin-panel" style="display:none"></div>
+    <div id="admin-chats" class="admin-panel" style="display:none"></div>
   </div>
 </div>
 

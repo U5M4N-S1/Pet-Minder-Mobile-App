@@ -50,7 +50,8 @@ router.get('/users', requireAuth, requireAdmin, (_req, res) => {
       priceMin:         u.priceMin != null ? u.priceMin : 0,
       priceMax:         u.priceMax != null ? u.priceMax : 50,
       availableForBooking: u.availableForBooking !== false,
-      pendingServices: Array.isArray(u.pendingServices) ? u.pendingServices : [],
+      pendingServices:       Array.isArray(u.pendingServices) ? u.pendingServices : [],
+      qualificationImages:   Array.isArray(u.qualificationImages) ? u.qualificationImages : [],
     };
   });
   res.json(users);
@@ -105,7 +106,8 @@ router.patch('/users/:id', requireAuth, requireAdmin, (req, res) => {
     priceMin:        u.priceMin != null ? u.priceMin : 0,
     priceMax:        u.priceMax != null ? u.priceMax : 50,
     availableForBooking: u.availableForBooking !== false,
-    pendingServices: Array.isArray(u.pendingServices) ? u.pendingServices : [],
+    pendingServices:       Array.isArray(u.pendingServices) ? u.pendingServices : [],
+    qualificationImages:   Array.isArray(u.qualificationImages) ? u.qualificationImages : [],
   });
 });
 
@@ -222,6 +224,67 @@ router.patch('/users/:id/services', requireAuth, requireAdmin, (req, res) => {
   }).write();
 
   res.json({ id, enabledServices, pendingServices: row.value().pendingServices || [], services: row.value().services || '' });
+});
+
+// ── Admin Chat Management ────────────────────────────────────────────────────
+
+// GET /api/admin/chats — list all chats with participant names and message count
+router.get('/chats', requireAuth, requireAdmin, (req, res) => {
+  const chats = db.get('chats').value().map(c => {
+    const userA = db.get('users').find({ id: c.userA }).value();
+    const userB = db.get('users').find({ id: c.userB }).value();
+    const msgCount = db.get('messages').filter({ chatId: c.id }).size().value();
+    const nameA = userA ? ((userA.firstName || '') + ' ' + (userA.lastName || '')).trim() : 'Unknown';
+    const nameB = userB ? ((userB.firstName || '') + ' ' + (userB.lastName || '')).trim() : 'Unknown';
+    return {
+      id:            c.id,
+      nameA,
+      nameB,
+      lastPreview:   c.lastPreview || '',
+      lastMessageAt: c.lastMessageAt,
+      msgCount
+    };
+  }).sort((a, b) => new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0));
+  res.json(chats);
+});
+
+// GET /api/admin/chats/:id/messages — all messages in a chat
+router.get('/chats/:id/messages', requireAuth, requireAdmin, (req, res) => {
+  const chatId = Number(req.params.id);
+  const msgs = db.get('messages').filter({ chatId }).sortBy('createdAt').value();
+  res.json(msgs);
+});
+
+// DELETE /api/admin/chats/:id/messages/:msgId — hard delete a single message
+router.delete('/chats/:id/messages/:msgId', requireAuth, requireAdmin, (req, res) => {
+  const chatId = Number(req.params.id);
+  const msgId  = Number(req.params.msgId);
+  db.get('messages').remove({ id: msgId, chatId }).write();
+  // Update chat preview to the latest remaining message
+  const latest = db.get('messages').filter({ chatId }).maxBy('createdAt').value();
+  if (latest) {
+    db.get('chats').find({ id: chatId }).assign({ lastPreview: latest.text ? latest.text.slice(0, 80) : '📷 Photo' }).write();
+  }
+  res.status(204).end();
+});
+
+// DELETE /api/admin/chats/:id — hard delete a chat and all its messages
+router.delete('/chats/:id', requireAuth, requireAdmin, (req, res) => {
+  const chatId = Number(req.params.id);
+  db.get('messages').remove({ chatId }).write();
+  db.get('chats').remove({ id: chatId }).write();
+  res.status(204).end();
+});
+
+// DELETE /api/admin/qualifications/:userId/:imageId — remove a qual image from a minder
+router.delete('/qualifications/:userId/:imageId', requireAuth, requireAdmin, (req, res) => {
+  const userId  = Number(req.params.userId);
+  const imageId = req.params.imageId;
+  const userRow = db.get('users').find({ id: userId });
+  if (!userRow.value()) return res.status(404).json({ error: 'User not found' });
+  const existing = Array.isArray(userRow.value().qualificationImages) ? userRow.value().qualificationImages : [];
+  userRow.assign({ qualificationImages: existing.filter(q => q.id !== imageId) }).write();
+  res.status(204).end();
 });
 
 module.exports = router;

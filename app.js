@@ -132,13 +132,23 @@ const api = {
   // Profile image
   uploadAvatar(image)       { return this._req('POST',   '/auth/avatar', { image }); },
   deleteAvatar()            { return this._req('DELETE', '/auth/avatar'); },
+  uploadQualification(image){ return this._req('POST',   '/auth/qualifications', { image }); },
+  deleteQualification(id)   { return this._req('DELETE', '/auth/qualifications/' + id); },
   setAvailability(val)          { return this._req('PATCH',  '/auth/me', { availableForBooking: val }); },
   applyForServices(services)    { return this._req('PATCH',  '/auth/me/service-applications', { services }); },
   // Chats
   getChats()                { return this._req('GET',    '/chats'); },
   getChatMessages(id)       { return this._req('GET',    '/chats/' + id + '/messages'); },
-  sendChatMessage(id, text) { return this._req('POST',   '/chats/' + id + '/messages', { text }); },
+  sendChatMessage(id, text, image) { const body = {}; if (text) body.text = text; if (image) body.image = image; return this._req('POST', '/chats/' + id + '/messages', body); },
   createChat(otherUserId)   { return this._req('POST',   '/chats', { otherUserId }); },
+  deleteMessage(chatId, msgId) { return this._req('DELETE', '/chats/' + chatId + '/messages/' + msgId); },
+  hideChat(chatId)          { return this._req('DELETE', '/chats/' + chatId); },
+  // Admin chats
+  getAdminChats()                        { return this._req('GET',    '/admin/chats'); },
+  getAdminChatMessages(id)               { return this._req('GET',    '/admin/chats/' + id + '/messages'); },
+  adminDeleteMessage(chatId, msgId)      { return this._req('DELETE', '/admin/chats/' + chatId + '/messages/' + msgId); },
+  adminDeleteChat(chatId)                { return this._req('DELETE', '/admin/chats/' + chatId); },
+  adminDeleteQualification(userId, imgId){ return this._req('DELETE', '/admin/qualifications/' + userId + '/' + imgId); },
   // Reviews
   getMinderReviews(minderId) { return this._req('GET',    '/reviews/minder/' + minderId); },
   submitReview(data)         { return this._req('POST',   '/reviews', data); },
@@ -1174,23 +1184,41 @@ function openQualifications(){
   document.getElementById('become-minder-modal').classList.add('open');
   document.getElementById('bm-step-1').style.display = 'none';
   document.getElementById('bm-step-quals').style.display = 'block';
-  // Reset checkboxes
   document.querySelectorAll('#qual-service-checkboxes input[type="checkbox"]').forEach(cb => { cb.checked = false; });
   document.getElementById('bm-cert-names').textContent = '';
   document.getElementById('bm-cert-input').value = '';
+  document.getElementById('bm-cert-input').accept = 'image/png';
 }
 
 async function bmSubmitQuals() {
+  const fileInput = document.getElementById('bm-cert-input');
+  const file = fileInput.files && fileInput.files[0];
+
+  if (!file) { showToast('❌ Please select a PNG image to upload'); return; }
+  if (file.type !== 'image/png') { showToast('❌ Only PNG images are accepted'); return; }
+  if (file.size > 3 * 1024 * 1024) { showToast('❌ Image must be under 3 MB'); return; }
+
   const selected = Array.from(document.querySelectorAll('#qual-service-checkboxes input[type="checkbox"]:checked'))
     .map(cb => cb.value);
-  if (selected.length === 0) {
-    showToast('❌ Please select at least one service to apply for');
-    return;
-  }
+  if (selected.length === 0) { showToast('❌ Please select at least one service to apply for'); return; }
+
   try {
-    await api.applyForServices(selected);
+    // Read file as base64 data URI
+    const dataUri = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+
+    // Upload image then submit service application in parallel
+    await Promise.all([
+      api.uploadQualification(dataUri),
+      api.applyForServices(selected)
+    ]);
+
     closeBecomeMinder();
-    showToast('📨 Application sent! Admin will review your qualifications.');
+    showToast('📨 Qualification uploaded! Admin will review your application.');
   } catch (err) {
     showToast('❌ ' + (err.message || 'Could not submit application'));
   }
@@ -1211,9 +1239,21 @@ function bmShowStep2(hasQuals) {
 
 function bmHandleCerts() {
   const input = document.getElementById('bm-cert-input');
-  if (input.files.length) {
-    document.getElementById('bm-cert-names').textContent = '✅ ' + Array.from(input.files).map(f => f.name).join(', ');
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (file.type !== 'image/png') {
+    showToast('❌ Only PNG images are accepted');
+    input.value = '';
+    document.getElementById('bm-cert-names').textContent = '';
+    return;
   }
+  if (file.size > 3 * 1024 * 1024) {
+    showToast('❌ Image must be under 3 MB');
+    input.value = '';
+    document.getElementById('bm-cert-names').textContent = '';
+    return;
+  }
+  document.getElementById('bm-cert-names').textContent = '✅ ' + file.name;
 }
 
 function bmShowStep3() {
@@ -1501,9 +1541,21 @@ async function openChatInline(chatId) {
     const myId = store.currentUserId();
     msgs.innerHTML = '';
     history.forEach(m => {
+      const isMine = m.fromUserId === myId;
       const b = document.createElement('div');
-      b.className = 'msg-bubble ' + (m.fromUserId === myId ? 'sent' : 'received');
-      b.innerHTML = escapeHTML(m.text) + '<div class="msg-time">' + formatMsgTime(m.createdAt) + '</div>';
+      b.className = 'msg-bubble ' + (isMine ? 'sent' : 'received');
+      if (m.deleted) {
+        b.innerHTML = '<span style="opacity:0.45;font-style:italic;font-size:12px">Message deleted</span><div class="msg-time">' + formatMsgTime(m.createdAt) + '</div>';
+      } else {
+        let content = '';
+        if (m.image) content += '<img src="' + m.image + '" class="msg-image" alt="Photo" onclick="openImagePreview(this.src)">';
+        if (m.text) content += escapeHTML(m.text);
+        content += '<div class="msg-time">' + formatMsgTime(m.createdAt) + '</div>';
+        if (isMine) {
+          content += '<button class="msg-delete-btn" onclick="deleteMyMessage(' + activeChat + ',' + m.id + ',this.closest(\'.msg-bubble\'))" title="Delete message">×</button>';
+        }
+        b.innerHTML = content;
+      }
       msgs.appendChild(b);
     });
     msgs.scrollTop = msgs.scrollHeight;
@@ -1512,27 +1564,88 @@ async function openChatInline(chatId) {
   }
 }
 function closeMobileChat() { document.getElementById('messages-container').classList.remove('chat-open'); }
-async function sendMessage() {
+
+async function deleteMyMessage(chatId, msgId, bubbleEl) {
+  try {
+    await api.deleteMessage(chatId, msgId);
+    if (bubbleEl) bubbleEl.innerHTML = '<span style="opacity:0.45;font-style:italic;font-size:12px">Message deleted</span>';
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Could not delete message'));
+  }
+}
+
+function deleteChatForMe() {
+  if (!activeChat) return;
+  showConfirmModal('🗑', 'Delete conversation?', 'This will hide the conversation from your list. The other person can still see it.', async function() {
+    try {
+      await api.hideChat(activeChat);
+      closeMobileChat();
+      activeChat = null;
+      await loadChatList();
+      showToast('✅ Conversation removed');
+    } catch (err) {
+      showToast('❌ ' + (err.message || 'Could not delete conversation'));
+    }
+  });
+}
+
+async function sendMessage(imageDataUri) {
   const input = document.getElementById('chat-input-field');
-  const text = input.value.trim();
-  if (!text || !activeChat) return;
-  input.value = '';
+  const text = (input ? input.value.trim() : '');
+  if (!imageDataUri && !text) return;
+  if (!activeChat) return;
+  if (input) input.value = '';
   const msgs = document.getElementById('chat-active-messages');
   const b = document.createElement('div');
   b.className = 'msg-bubble sent';
-  b.innerHTML = escapeHTML(text) + '<div class="msg-time">…</div>';
+  let preview = '';
+  if (imageDataUri) preview += '<img src="' + imageDataUri + '" class="msg-image" alt="Photo">';
+  if (text) preview += escapeHTML(text);
+  preview += '<div class="msg-time">…</div>';
+  b.innerHTML = preview;
   msgs.appendChild(b);
   msgs.scrollTop = msgs.scrollHeight;
   try {
-    const saved = await api.sendChatMessage(activeChat, text);
-    b.innerHTML = escapeHTML(saved.text) + '<div class="msg-time">' + formatMsgTime(saved.createdAt) + '</div>';
-    // Refresh list so newest-message-first ordering updates (moves active chat to top)
+    const saved = await api.sendChatMessage(activeChat, text || '', imageDataUri || '');
+    let content = '';
+    if (saved.image) content += '<img src="' + saved.image + '" class="msg-image" alt="Photo" onclick="openImagePreview(this.src)">';
+    if (saved.text) content += escapeHTML(saved.text);
+    content += '<div class="msg-time">' + formatMsgTime(saved.createdAt) + '</div>';
+    content += '<button class="msg-delete-btn" onclick="deleteMyMessage(' + activeChat + ',' + saved.id + ',this.closest(\'.msg-bubble\'))" title="Delete message">×</button>';
+    b.innerHTML = content;
     await loadChatList();
   } catch (err) {
     b.remove();
     showToast('❌ ' + (err.message || 'Failed to send'));
   }
 }
+
+function openChatImagePicker() {
+  const picker = document.getElementById('chat-image-input');
+  if (picker) picker.click();
+}
+
+function handleChatImageSelect(inputEl) {
+  const file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { showToast('❌ Please select an image file'); inputEl.value = ''; return; }
+  if (file.size > 2 * 1024 * 1024) { showToast('❌ Image must be under 2 MB'); inputEl.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = () => { sendMessage(reader.result); inputEl.value = ''; };
+  reader.onerror = () => { showToast('❌ Failed to read image'); inputEl.value = ''; };
+  reader.readAsDataURL(file);
+}
+
+function openImagePreview(src) {
+  const overlay = document.getElementById('image-preview-overlay');
+  const img = document.getElementById('image-preview-img');
+  if (overlay && img) { img.src = src; overlay.style.display = 'flex'; }
+}
+function closeImagePreview() {
+  const overlay = document.getElementById('image-preview-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
 const _chatInputField = document.getElementById('chat-input-field');
 if (_chatInputField) _chatInputField.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
 
@@ -2611,6 +2724,24 @@ function openAdminUserDetail(userId) {
               '<span class="avail-slider"></span>' +
           '</label></div>';
     }).join('');
+    const quals = Array.isArray(u.qualificationImages) ? u.qualificationImages : [];
+    const qualsSection = quals.length
+      ? '<div style="margin-top:14px;border:1.5px solid var(--sand-light);border-radius:var(--radius-sm);overflow:hidden">' +
+          '<button onclick="toggleAdminQuals(this)" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--sand-light);border:none;cursor:pointer;font-family:\'DM Sans\',sans-serif;font-size:13px;font-weight:600;color:var(--bark)">' +
+            '<span>📎 Uploaded Qualifications (' + quals.length + ')</span>' +
+            '<span class="quals-chevron" style="transition:transform 0.2s;display:inline-block">▼</span>' +
+          '</button>' +
+          '<div class="quals-body" style="display:none;padding:12px;display:none;flex-wrap:wrap;gap:10px">' +
+            quals.map(q =>
+              '<div style="position:relative;width:calc(50% - 5px)">' +
+                '<img src="' + q.image + '" alt="Qualification" style="width:100%;border-radius:8px;object-fit:contain;border:1px solid var(--sand-light);cursor:zoom-in;max-height:160px" onclick="openImagePreview(this.src)">' +
+                '<button onclick="adminDeleteQual(' + u.id + ',\'' + q.id + '\')" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:22px;height:22px;font-size:13px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center" title="Delete">×</button>' +
+              '</div>'
+            ).join('') +
+          '</div>' +
+        '</div>'
+      : '<div style="margin-top:14px;padding:10px 14px;background:var(--sand-light);border-radius:var(--radius-sm);font-size:13px;color:var(--bark-light)">📎 No qualifications uploaded yet.</div>';
+
     minderSection =
       '<div style="margin-top:18px">' +
         '<div style="font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Current Services</div>' +
@@ -2619,6 +2750,7 @@ function openAdminUserDetail(userId) {
         '<div style="font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Enable Advanced Services</div>' +
         '<div>' + toggles + '</div>' +
         '<div style="font-size:11px;color:var(--bark-light);margin-top:10px">Toggling sends the minder a notification and updates their profile immediately.</div>' +
+        qualsSection +
       '</div>';
   }
 
@@ -2657,6 +2789,126 @@ function openAdminUserDetail(userId) {
 
 function closeAdminDetailPanel() {
   document.getElementById('admin-detail-panel').classList.remove('open');
+}
+
+function toggleAdminQuals(btn) {
+  const body = btn.nextElementSibling;
+  const chevron = btn.querySelector('.quals-chevron');
+  const isOpen = body.style.display === 'flex';
+  body.style.display = isOpen ? 'none' : 'flex';
+  if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+}
+
+async function adminDeleteQual(userId, imageId) {
+  showConfirmModal('🗑', 'Delete Qualification?', 'This will permanently remove this qualification image.', async function() {
+    try {
+      await api.adminDeleteQualification(userId, imageId);
+      // Update local cache and re-render panel
+      const u = adminUsers.find(x => x.id === userId);
+      if (u) u.qualificationImages = (u.qualificationImages || []).filter(q => q.id !== imageId);
+      showToast('✅ Qualification deleted');
+      openAdminUserDetail(userId);
+    } catch (err) {
+      showToast('❌ ' + (err.message || 'Failed to delete qualification'));
+    }
+  });
+}
+
+// ===== ADMIN CHATS =====
+let adminChatsCache = [];
+let adminOpenChatId = null;
+
+async function loadAdminChats() {
+  const panel = document.getElementById('admin-chats');
+  if (!panel) return;
+  panel.innerHTML = '<div style="padding:20px;text-align:center;color:var(--bark-light);font-size:13px">Loading chats…</div>';
+  try {
+    adminChatsCache = await api.getAdminChats();
+    renderAdminChatList();
+  } catch {
+    panel.innerHTML = '<div style="padding:20px;text-align:center;color:var(--bark-light);font-size:13px">Could not load chats.</div>';
+  }
+}
+
+function renderAdminChatList() {
+  const panel = document.getElementById('admin-chats');
+  if (!panel) return;
+  if (adminChatsCache.length === 0) {
+    panel.innerHTML = '<div style="padding:20px;text-align:center;color:var(--bark-light);font-size:13px">No chats yet.</div>';
+    return;
+  }
+  panel.innerHTML = '<div class="admin-section-title">All Conversations (' + adminChatsCache.length + ')</div>' +
+    adminChatsCache.map(c =>
+      '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--sand-light);cursor:pointer;background:white" onclick="openAdminChat(' + c.id + ')">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-weight:600;font-size:13px;color:var(--bark)">' + escapeHTML(c.nameA) + ' & ' + escapeHTML(c.nameB) + '</div>' +
+          '<div style="font-size:12px;color:var(--bark-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHTML(c.lastPreview || '(no messages)') + '</div>' +
+        '</div>' +
+        '<span style="font-size:11px;color:var(--bark-light);flex-shrink:0">' + c.msgCount + ' msg' + (c.msgCount !== 1 ? 's' : '') + '</span>' +
+        '<button class="admin-btn remove" onclick="event.stopPropagation();adminHardDeleteChat(' + c.id + ')" style="padding:6px 10px;font-size:11px;flex-shrink:0">🗑 Delete</button>' +
+      '</div>'
+    ).join('');
+}
+
+async function openAdminChat(chatId) {
+  adminOpenChatId = chatId;
+  const chat = adminChatsCache.find(c => c.id === chatId);
+  const panel = document.getElementById('admin-chats');
+  panel.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--sand-light);background:white;position:sticky;top:0;z-index:1">' +
+    '<button onclick="renderAdminChatList()" style="background:var(--sand-light);border:none;border-radius:20px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--bark)">← Back</button>' +
+    '<div style="flex:1;font-weight:600;font-size:14px;color:var(--bark)">' + (chat ? escapeHTML(chat.nameA) + ' & ' + escapeHTML(chat.nameB) : 'Chat') + '</div>' +
+    '<button class="admin-btn remove" onclick="adminHardDeleteChat(' + chatId + ')" style="padding:6px 10px;font-size:11px">🗑 Delete chat</button>' +
+    '</div>' +
+    '<div id="admin-chat-messages" style="padding:12px 16px;display:flex;flex-direction:column;gap:8px"><div style="text-align:center;color:var(--bark-light);font-size:13px">Loading…</div></div>';
+
+  try {
+    const msgs = await api.getAdminChatMessages(chatId);
+    const msgEl = document.getElementById('admin-chat-messages');
+    if (!msgEl) return;
+    if (msgs.length === 0) { msgEl.innerHTML = '<div style="text-align:center;color:var(--bark-light);font-size:13px">No messages.</div>'; return; }
+    msgEl.innerHTML = msgs.map(m =>
+      '<div style="display:flex;align-items:flex-start;gap:8px;padding:8px;border-radius:8px;background:white;border:1px solid var(--sand-light)" id="admin-msg-' + m.id + '">' +
+        '<div style="flex:1;min-width:0">' +
+          '<span style="font-size:11px;font-weight:600;color:var(--terra)">User #' + m.fromUserId + '</span>' +
+          '<span style="font-size:11px;color:var(--bark-light);margin-left:8px">' + new Date(m.createdAt).toLocaleString() + '</span>' +
+          (m.deleted ? '<div style="font-style:italic;color:var(--bark-light);font-size:13px">Message deleted</div>'
+            : (m.image ? '<div><img src="' + m.image + '" style="max-width:160px;border-radius:6px;margin-top:4px;cursor:zoom-in" onclick="openImagePreview(this.src)"></div>' : '') +
+              (m.text ? '<div style="font-size:13px;color:var(--bark);margin-top:2px">' + escapeHTML(m.text) + '</div>' : '')) +
+        '</div>' +
+        (!m.deleted ? '<button onclick="adminHardDeleteMessage(' + chatId + ',' + m.id + ')" style="background:none;border:none;color:#e53935;font-size:16px;cursor:pointer;flex-shrink:0;padding:2px 6px" title="Delete message">×</button>' : '') +
+      '</div>'
+    ).join('');
+  } catch {
+    const msgEl = document.getElementById('admin-chat-messages');
+    if (msgEl) msgEl.innerHTML = '<div style="text-align:center;color:var(--bark-light);font-size:13px">Could not load messages.</div>';
+  }
+}
+
+async function adminHardDeleteMessage(chatId, msgId) {
+  try {
+    await api.adminDeleteMessage(chatId, msgId);
+    const el = document.getElementById('admin-msg-' + msgId);
+    if (el) el.querySelector('div').innerHTML += '<div style="font-style:italic;color:var(--bark-light);font-size:13px">Message deleted</div>';
+    showToast('✅ Message deleted');
+    // Update cache count
+    const c = adminChatsCache.find(x => x.id === chatId);
+    if (c) c.msgCount = Math.max(0, c.msgCount - 1);
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Failed to delete message'));
+  }
+}
+
+async function adminHardDeleteChat(chatId) {
+  showConfirmModal('🗑', 'Delete Chat?', 'This permanently deletes the conversation and all its messages for everyone.', async function() {
+    try {
+      await api.adminDeleteChat(chatId);
+      adminChatsCache = adminChatsCache.filter(c => c.id !== chatId);
+      showToast('✅ Chat permanently deleted');
+      renderAdminChatList();
+    } catch (err) {
+      showToast('❌ ' + (err.message || 'Failed to delete chat'));
+    }
+  });
 }
 
 async function adminToggleService(userId, service, enabled) {

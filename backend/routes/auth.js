@@ -369,7 +369,10 @@ router.get('/minders', requireAuth, (req, res) => {
         location:       u.serviceArea || u.location || '',
         bio:            u.bio          || '',
         petsCaredFor:   u.petsCaredFor || '',
-        services:       [u.services || '', ...(Array.isArray(u.enabledServices) ? u.enabledServices : [])].filter(Boolean).join(', '),
+        services:       [...new Set([
+                          ...(u.services || '').split(',').map(s => s.trim()).filter(Boolean),
+                          ...(Array.isArray(u.enabledServices) ? u.enabledServices : [])
+                        ])].join(', '),
         rate:           u.rate         || '',
         experience:     u.experience   || '',
         priceMin:       u.priceMin != null ? u.priceMin : 0,

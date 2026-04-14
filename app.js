@@ -26,7 +26,7 @@ let currentReportTarget = null;
 const AVAIL_SLOT_RANGES = {
   morning:   { start: 8,  end: 12 },
   afternoon: { start: 12, end: 17 },
-  evening:   { start: 17, end: 20 }
+  evening:   { start: 17, end: 21 }
 };
 const AVAIL_DAY_KEYS   = ['sun','mon','tue','wed','thu','fri','sat'];
 const AVAIL_DAY_LABELS = { mon:'Monday', tue:'Tuesday', wed:'Wednesday', thu:'Thursday', fri:'Friday', sat:'Saturday', sun:'Sunday' };
@@ -747,7 +747,7 @@ function renderBookingPetPicker() {
   });
 }
 
-const BOOKING_TIME_SLOTS = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00'];
+const BOOKING_TIME_SLOTS = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00'];
 
 function getSelectedBookingDate() {
   const dateEl = document.querySelector('.date-chip.selected');
@@ -3469,22 +3469,7 @@ function renderMinderReviews(reviews) {
       }).join('')
     : '<div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow);text-align:center;color:var(--bark-light);font-size:13px">No reviews yet.</div>';
 
-  // Write-review box — only for owners viewing someone else's profile
-  const writeBox = (_isOwner && !_isSelf) ? `
-    <div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)">
-      <p style="font-family:'Playfair Display',serif;font-size:15px;font-weight:600;color:var(--bark);margin-bottom:12px">Leave a Review</p>
-      <div class="star-rating-input" id="review-stars">
-        <span class="star-btn" onclick="setReviewStars(1)">★</span>
-        <span class="star-btn" onclick="setReviewStars(2)">★</span>
-        <span class="star-btn" onclick="setReviewStars(3)">★</span>
-        <span class="star-btn" onclick="setReviewStars(4)">★</span>
-        <span class="star-btn" onclick="setReviewStars(5)">★</span>
-      </div>
-      <textarea id="review-text-input" placeholder="Write your review..." style="width:100%;padding:12px 14px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);resize:vertical;min-height:70px;outline:none;margin-top:10px"></textarea>
-      <button class="btn-primary" style="width:100%;margin-top:10px;padding:12px" onclick="submitReview()">Submit Review</button>
-    </div>` : '';
-
-  list.innerHTML = reviewCards + writeBox;
+  list.innerHTML = reviewCards;
   reviewStars = 0;
 }
 

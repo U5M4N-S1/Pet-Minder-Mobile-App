@@ -21,7 +21,7 @@ const VALID_SLOTS = ['morning','afternoon','evening'];
 const SLOT_RANGES = {
   morning:   { start: 8,  end: 12 },
   afternoon: { start: 12, end: 17 },
-  evening:   { start: 17, end: 23 }
+  evening:   { start: 17, end: 21 }
 };
 
 // Returns 'mon'|'tue'|... for a "YYYY-MM-DD" string, or null if malformed.

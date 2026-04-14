@@ -394,7 +394,15 @@ router.patch('/me/service-applications', requireAuth, (req, res) => {
   if (!user.value()) return res.status(404).json({ error: 'User not found' });
 
   const roles = Array.isArray(user.value().role) ? user.value().role : [user.value().role || ''];
-  if (!roles.includes('minder')) return res.status(403).json({ error: 'Only minders can apply for services' });
+  // Auto-grant minder role if the user is an owner applying to become a minder
+  if (!roles.includes('minder')) {
+    if (roles.includes('owner')) {
+      const updatedRoles = [...roles, 'minder'];
+      user.assign({ role: updatedRoles }).write();
+    } else {
+      return res.status(403).json({ error: 'Only minders can apply for services' });
+    }
+  }
 
   const ADVANCED = ['Grooming', 'Vet', 'Training'];
   const requested = (Array.isArray(req.body.services) ? req.body.services : [])

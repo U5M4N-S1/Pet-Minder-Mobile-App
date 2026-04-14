@@ -16,7 +16,7 @@
   <div class="nav-logo" onclick="window.location.href='home.html'"><span>🐾</span> <span class="logo-paw">Paw</span><span class="logo-pal">Pal</span></div>
   <div class="nav-links">
     <button class="nav-link" id="nav-home" onclick="window.location.href='home.html'">🏠 Home</button>
-    <button class="nav-link" id="nav-search" onclick="window.location.href='search.html'">🔍 Find Minders</button>
+    <button class="nav-link" id="nav-search" onclick="goToSearch()">🔍 Find Minders</button>
     <button class="nav-link" id="nav-bookings" onclick="window.location.href='bookings.html'">📅 Bookings</button>
     <button class="nav-link active" id="nav-messages" onclick="window.location.href='messages.html'">💬 Messages</button>
     <button class="nav-link" id="nav-profile" onclick="window.location.href='profile.html'">👤 Profile</button>
@@ -60,7 +60,7 @@
       </div>
     </div>
   </div>
-  <nav class="bottom-nav"><button class="bottom-nav-item" onclick="window.location.href='home.html'"><span>🏠</span><span>Home</span></button><button class="bottom-nav-item" onclick="window.location.href='search.html'"><span>🔍</span><span>Search</span></button><button class="bottom-nav-item" onclick="window.location.href='bookings.html'"><span>📅</span><span>Bookings</span></button><button class="bottom-nav-item active" onclick="window.location.href='messages.html'"><span>💬</span><span>Messages</span></button><button class="bottom-nav-item" onclick="window.location.href='profile.html'"><span>👤</span><span>Profile</span></button></nav>
+  <nav class="bottom-nav"><button class="bottom-nav-item" onclick="window.location.href='home.html'"><span>🏠</span><span>Home</span></button><button class="bottom-nav-item" onclick="goToSearch()"><span>🔍</span><span>Search</span></button><button class="bottom-nav-item" onclick="window.location.href='bookings.html'"><span>📅</span><span>Bookings</span></button><button class="bottom-nav-item active" onclick="window.location.href='messages.html'"><span>💬</span><span>Messages</span></button><button class="bottom-nav-item" onclick="window.location.href='profile.html'"><span>👤</span><span>Profile</span></button></nav>
 </div>
 
 <div class="toast" id="toast"></div>

@@ -17,7 +17,7 @@
   <div class="nav-logo" onclick="window.location.href='home.html'"><span>🐾</span> <span class="logo-paw">Paw</span><span class="logo-pal">Pal</span></div>
   <div class="nav-links">
     <button class="nav-link active" id="nav-home" onclick="window.location.href='home.html'">🏠 Home</button>
-    <button class="nav-link" id="nav-search" onclick="window.location.href='search.html'">🔍 Find Minders</button>
+    <button class="nav-link" id="nav-search" onclick="goToSearch()">🔍 Find Minders</button>
     <button class="nav-link" id="nav-bookings" onclick="window.location.href='bookings.html'">📅 Bookings</button>
     <button class="nav-link" id="nav-messages" onclick="window.location.href='messages.html'">💬 Messages</button>
     <button class="nav-link" id="nav-profile" onclick="window.location.href='profile.html'">👤 Profile</button>
@@ -31,7 +31,7 @@
     <div class="home-hero">
       <div class="home-avatar-row"><div class="home-avatar" id="home-user-avatar">👤</div><div><p class="home-sub">Your furry friends are waiting 🐾</p><h2 class="home-greeting">Welcome back, <span id="home-user-name">friend</span> 👋</h2></div></div>
       <div style="height:16px"></div>
-      <div class="home-search"><input type="text" placeholder="Search minders near you..."><button class="search-btn" onclick="window.location.href='search.html'">Search</button></div>
+      <div class="home-search"><input type="text" placeholder="Search minders near you..."><button class="search-btn" onclick="goToSearch()">Search</button></div>
     </div>
     <div class="section-pad">
       <div class="stats-row">
@@ -69,7 +69,7 @@
       <div class="booking-list" id="home-upcoming-list"></div>
     </div>
   </div>
-  <nav class="bottom-nav"><button class="bottom-nav-item active" onclick="window.location.href='home.html'"><span>🏠</span><span>Home</span></button><button class="bottom-nav-item" onclick="window.location.href='search.html'"><span>🔍</span><span>Search</span></button><button class="bottom-nav-item" onclick="window.location.href='bookings.html'"><span>📅</span><span>Bookings</span></button><button class="bottom-nav-item" onclick="window.location.href='messages.html'"><span>💬</span><span>Messages</span></button><button class="bottom-nav-item" onclick="window.location.href='profile.html'"><span>👤</span><span>Profile</span></button></nav>
+  <nav class="bottom-nav"><button class="bottom-nav-item active" onclick="window.location.href='home.html'"><span>🏠</span><span>Home</span></button><button class="bottom-nav-item" onclick="goToSearch()"><span>🔍</span><span>Search</span></button><button class="bottom-nav-item" onclick="window.location.href='bookings.html'"><span>📅</span><span>Bookings</span></button><button class="bottom-nav-item" onclick="window.location.href='messages.html'"><span>💬</span><span>Messages</span></button><button class="bottom-nav-item" onclick="window.location.href='profile.html'"><span>👤</span><span>Profile</span></button></nav>
 </div>
 
 <!-- MINDER PROFILE (NO Book Now - view only) -->

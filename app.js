@@ -1350,32 +1350,36 @@ async function bmSubmitQuals() {
   const fileInput = document.getElementById('bm-cert-input');
   const file = fileInput && fileInput.files && fileInput.files[0];
 
-  // Validate only if a file was selected (qualification is optional)
-  if (file) {
-    if (file.type !== 'image/png') { showToast('❌ Only PNG images are accepted'); return; }
-    if (file.size > 3 * 1024 * 1024) { showToast('❌ Image must be under 3 MB'); return; }
-  }
+  if (!file) { showToast('❌ Please upload a PNG of your qualification'); return; }
+  if (file.type !== 'image/png') { showToast('❌ Only PNG images are accepted'); return; }
+  if (file.size > 3 * 1024 * 1024) { showToast('❌ Image must be under 3 MB'); return; }
 
   const selected = Array.from(document.querySelectorAll('#qual-service-checkboxes input[type="checkbox"]:checked'))
     .map(cb => cb.value);
   if (selected.length === 0) { showToast('❌ Please select at least one service to apply for'); return; }
 
   try {
-    const tasks = [api.applyForServices(selected)];
+    const dataUri = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
 
-    if (file) {
-      const dataUri = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload  = () => resolve(reader.result);
-        reader.onerror = () => reject(new Error('Failed to read file'));
-        reader.readAsDataURL(file);
-      });
-      tasks.push(api.uploadQualification(dataUri));
-    }
+    await Promise.all([
+      api.applyForServices(selected),
+      api.uploadQualification(dataUri)
+    ]);
 
-    await Promise.all(tasks);
+    // Refresh profile — the backend may have auto-granted the minder role
+    try {
+      const refreshed = await api.getMe();
+      hydrateUserProfile(refreshed);
+      store.setUser(userProfile);
+    } catch { /* non-fatal */ }
+
     closeBecomeMinder();
-    showToast(file ? '📨 Qualification uploaded! Admin will review your application.' : '📨 Application sent! Admin will review your request.');
+    showToast('📨 Qualification uploaded! Admin will review your application.');
   } catch (err) {
     showToast('❌ ' + (err.message || 'Could not submit application'));
   }
@@ -1497,6 +1501,15 @@ async function toggleMinderAvailability() {
 }
 
 // ===== NAVIGATION =====
+function goToSearch() {
+  const roles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role || ''];
+  if (!roles.includes('owner')) {
+    showToast('❌ Find Minders is not available for non-owners');
+    return;
+  }
+  window.location.href = 'search.html';
+}
+
 function goToHome() { window.location.href = 'home.html'; }
 function switchTab(tab) {
   const pageMap = { home: 'home.html', search: 'search.html', bookings: 'bookings.html', messages: 'messages.html', profile: 'profile.html' };
@@ -1637,6 +1650,13 @@ const geocodeCache = {};        // locationString -> { lat, lng } | null
 async function loadMinders() {
   const list = document.getElementById('minders-list');
   if (!list) return;
+
+  // Only owners can browse minders
+  const roles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role || ''];
+  if (!roles.includes('owner')) {
+    showToast('❌ Find Minders is not available for non-owners');
+    return;
+  }
   try {
     loadedMinders = await api.getMinders();
     if (loadedMinders.length === 0) {
@@ -2849,6 +2869,14 @@ async function loadAdminData() {
 const ADVANCED_SERVICES = ['Grooming', 'Vet', 'Training'];
 
 function openAdminUserDetail(userId) {
+  // Dismiss any pending service_application notifications for this user
+  const notifCache = notifMinderMessages || [];
+  const toDelete = notifCache.filter(n => n.type === 'service_application' && n.applicantId === userId && !n.read);
+  if (toDelete.length) {
+    toDelete.forEach(n => api.deleteNotification(n.id).catch(() => {}));
+    notifMinderMessages = notifMinderMessages.filter(n => !toDelete.some(d => d.id === n.id));
+    loadNotificationCount();
+  }
   const u = adminUsers.find(x => x.id === userId);
   if (!u) return;
   const isMinder = u.rawRoles ? u.rawRoles.includes('minder') : u.role.toLowerCase().includes('minder');

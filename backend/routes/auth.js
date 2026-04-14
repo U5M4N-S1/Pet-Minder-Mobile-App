@@ -3,6 +3,7 @@ const bcrypt  = require('bcrypt');
 const jwt     = require('jsonwebtoken');
 const db      = require('../db');
 const { requireAuth, JWT_SECRET } = require('../middleware/authMiddleware');
+const { normalizeAvailability } = require('../lib/availability');
 
 const router      = express.Router();
 const SALT_ROUNDS = 12;
@@ -35,6 +36,11 @@ function userDTO(u) {
     priceMax:        u.priceMax != null ? u.priceMax : 10000,
     availableForBooking: u.availableForBooking !== false, // default true
     enabledServices:  Array.isArray(u.enabledServices) ? u.enabledServices : [],
+    // Per-day availability schedule (used for booking validation)
+    availability:     normalizeAvailability(u),
+    certifications:   u.certifications || '',
+    online:           u.online === true && u.lastSeenAt &&
+                      (Date.now() - new Date(u.lastSeenAt).getTime()) < 2 * 60 * 1000,
   };
 }
 
@@ -64,8 +70,8 @@ router.post('/signup', async (req, res) => {
     const id = nextId('users');
     const baseRole = role || 'owner';
     const isMinder = baseRole === 'minder';
-    // Minders always also get owner role so they can book & review other minders
-    const roles = isMinder ? ['minder', 'owner'] : [baseRole];
+    // Minders sign up as minder-only; they add the owner role when they add a pet.
+    const roles = [baseRole];
     const user = {
       id,
       firstName: firstName.trim(),
@@ -110,15 +116,23 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
 
+  if (user.status === 'Suspended') {
+    return res.status(403).json({ error: 'Your account has been suspended. Please contact support.' });
+  }
+
+  // Stamp online presence
+  db.get('users').find({ id: user.id }).assign({ online: true, lastSeenAt: new Date().toISOString() }).write();
   const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
   res.json({ token, user: userDTO(user) });
 });
 
 // GET /api/auth/me
 router.get('/me', requireAuth, (req, res) => {
-  const user = db.get('users').find({ id: req.user.userId }).value();
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json(userDTO(user));
+  const user = db.get('users').find({ id: req.user.userId });
+  if (!user.value()) return res.status(404).json({ error: 'User not found' });
+  // Refresh presence heartbeat
+  user.assign({ online: true, lastSeenAt: new Date().toISOString() }).write();
+  res.json(userDTO(user.value()));
 });
 
 // PATCH /api/auth/me — update profile fields
@@ -128,7 +142,8 @@ router.patch('/me', requireAuth, (req, res) => {
 
   const { firstName, lastName, email, phone, location, bio,
           serviceArea, petsCaredFor, services, rate, experience,
-          priceMin, priceMax, addMinderRole, minderServices, availableForBooking } = req.body;
+          priceMin, priceMax, addMinderRole, minderServices, availableForBooking,
+          certifications, availability } = req.body;
   const updates = {};
   if (typeof firstName    === 'string' && firstName.trim()) updates.firstName    = firstName.trim();
   if (typeof lastName     === 'string') updates.lastName     = lastName.trim();
@@ -157,6 +172,10 @@ router.patch('/me', requireAuth, (req, res) => {
   if (Array.isArray(minderServices)) updates.minderServices = minderServices;
   // Toggle minder availability (on/off switch)
   if (availableForBooking !== undefined) updates.availableForBooking = !!availableForBooking;
+  // Certifications text
+  if (typeof certifications === 'string') updates.certifications = certifications.trim();
+  // Per-day availability schedule
+  if (availability && typeof availability === 'object' && !Array.isArray(availability)) updates.availability = availability;
 
   // Email changes need a uniqueness check
   if (typeof email === 'string' && email.trim()) {
@@ -322,9 +341,58 @@ router.get('/minders', requireAuth, (req, res) => {
         priceMax:       u.priceMax != null ? u.priceMax : 10000,
         avgRating,
         reviewCount,
+        availability:   normalizeAvailability(u),
+        certifications: u.certifications || '',
+        online:         u.online === true && u.lastSeenAt &&
+                        (Date.now() - new Date(u.lastSeenAt).getTime()) < 2 * 60 * 1000,
       };
     });
   res.json(minders);
+});
+
+
+// PATCH /api/auth/me/service-applications — minder applies for advanced services
+// Body: { services: ['Grooming', 'Vet', 'Training'] }
+// Saves pendingServices to the user and pushes a notification to every admin.
+router.patch('/me/service-applications', requireAuth, (req, res) => {
+  const user = db.get('users').find({ id: req.user.userId });
+  if (!user.value()) return res.status(404).json({ error: 'User not found' });
+
+  const roles = Array.isArray(user.value().role) ? user.value().role : [user.value().role || ''];
+  if (!roles.includes('minder')) return res.status(403).json({ error: 'Only minders can apply for services' });
+
+  const ADVANCED = ['Grooming', 'Vet', 'Training'];
+  const requested = (Array.isArray(req.body.services) ? req.body.services : [])
+    .filter(s => ADVANCED.includes(s));
+  if (!requested.length) return res.status(400).json({ error: 'No valid services provided' });
+
+  user.assign({ pendingServices: requested }).write();
+  const u = user.value();
+  const minderName = ((u.firstName || '') + ' ' + (u.lastName || '')).trim() || 'A minder';
+
+  // Notify every admin
+  const admins = db.get('users').filter(a => {
+    const r = Array.isArray(a.role) ? a.role : [a.role || ''];
+    return r.includes('admin');
+  }).value();
+
+  const notifBase = db.get('notifications').maxBy('id').value();
+  let nextId = notifBase ? notifBase.id + 1 : 1;
+
+  admins.forEach(admin => {
+    db.get('notifications').push({
+      id:        nextId++,
+      userId:    admin.id,
+      type:      'service_application',
+      applicantId: u.id,
+      title:     'Service application from ' + minderName,
+      message:   minderName + ' has applied to offer: ' + requested.join(', ') + '. Review their profile to approve.',
+      read:      false,
+      createdAt: new Date().toISOString()
+    }).write();
+  });
+
+  res.json({ pendingServices: requested });
 });
 
 module.exports = router;

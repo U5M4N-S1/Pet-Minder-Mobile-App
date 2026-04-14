@@ -4,8 +4,84 @@ const { requireAuth } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
+function nextNotifId() {
+  const last = db.get('notifications').maxBy('id').value();
+  return last ? last.id + 1 : 1;
+}
+
+// Generate booking reminders for the given user. Called lazily on every
+// GET /notifications so reminders appear without a background scheduler.
+// A reminder is created once per booking (tracked by a unique key) when the
+// booking is confirmed and its date/time is within the next 24 hours.
+function generateReminders(userId) {
+  const now = new Date();
+  const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+  // Find confirmed bookings where this user is the owner
+  const bookings = db.get('bookings')
+    .filter(b => b.ownerId === userId && b.status === 'confirmed')
+    .value();
+
+  bookings.forEach(b => {
+    // Build a Date from bookingDate + bookingTime
+    const dt = new Date(b.bookingDate + 'T' + b.bookingTime + ':00');
+    if (isNaN(dt.getTime())) return;
+    // Only create reminders for bookings within the next 24 hours (and not in the past)
+    if (dt <= now || dt > in24h) return;
+
+    // Check if a reminder already exists for this booking + user
+    const exists = db.get('notifications')
+      .find({ userId, type: 'booking_reminder', bookingId: b.id })
+      .value();
+    if (exists) return;
+
+    // Resolve minder name
+    let minderName = b.minderName || 'your minder';
+    if (b.minderKey != null) {
+      const mu = db.get('users').find({ id: Number(b.minderKey) }).value();
+      if (mu) minderName = ((mu.firstName || '') + ' ' + (mu.lastName || '')).trim() || minderName;
+    }
+
+    db.get('notifications').push({
+      id:        nextNotifId(),
+      userId,
+      type:      'booking_reminder',
+      bookingId: b.id,
+      title:     'Upcoming booking reminder',
+      message:   'Your booking with ' + minderName + ' for ' + b.petNames + ' is coming up on ' + b.bookingDate + ' at ' + b.bookingTime + '.',
+      read:      false,
+      createdAt: new Date().toISOString()
+    }).write();
+  });
+}
+
+const SERVICE_UPDATE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
+
+// Auto-expire read service_update notifications older than 14 days for a user.
+// Called lazily on every GET so no background scheduler is needed.
+function expireServiceUpdates(userId) {
+  const cutoff = new Date(Date.now() - SERVICE_UPDATE_TTL_MS);
+  const stale = db.get('notifications')
+    .filter(n =>
+      n.userId === userId &&
+      n.type === 'service_update' &&
+      n.read === true &&
+      n.createdAt &&
+      new Date(n.createdAt) < cutoff
+    )
+    .value();
+  if (stale.length) {
+    stale.forEach(n => db.get('notifications').remove({ id: n.id }).write());
+  }
+}
+
 // GET /api/notifications — list notifications for the logged-in user, newest first
 router.get('/', requireAuth, (req, res) => {
+  // Generate any pending reminders before returning the list
+  generateReminders(req.user.userId);
+  // Clean up stale service update notifications
+  expireServiceUpdates(req.user.userId);
+
   const list = db.get('notifications')
     .filter({ userId: req.user.userId })
     .sortBy('createdAt')

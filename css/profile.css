@@ -42,3 +42,8 @@
 .price-input-wrap input::-webkit-outer-spin-button,
 .price-input-wrap input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .price-sep { font-size: 13px; color: var(--bark-light); font-weight: 500; flex-shrink: 0; }
+
+/* === Group additions === */
+/* Per-day availability row */
+.avail-day-row { display: flex; align-items: center; gap: 10px; }
+.avail-day-row .chip-btn { padding: 6px 10px; font-size: 12px; }

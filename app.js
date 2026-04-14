@@ -7,6 +7,26 @@ let reviewStars = 0;
 let profileReviewStars = 0;
 let currentEditPetId = null;
 let currentReviewMinder = null;
+
+// Chat state
+let chatListCache = [];
+
+// Registration certs
+let regPendingCerts = [];
+let regCertNextId   = 1;
+
+// Report modal
+let currentReportTarget = null;
+
+// Availability helpers (mirror backend SLOT_RANGES)
+const AVAIL_SLOT_RANGES = {
+  morning:   { start: 8,  end: 12 },
+  afternoon: { start: 12, end: 17 },
+  evening:   { start: 17, end: 20 }
+};
+const AVAIL_DAY_KEYS   = ['sun','mon','tue','wed','thu','fri','sat'];
+const AVAIL_DAY_LABELS = { mon:'Monday', tue:'Tuesday', wed:'Wednesday', thu:'Thursday', fri:'Friday', sat:'Saturday', sun:'Sunday' };
+
 let _openMinderIsBackend = false; // true when viewing a real (numeric-id) minder
 let reportSelectedUser = null;
 
@@ -110,7 +130,13 @@ const api = {
   // Profile image
   uploadAvatar(image)       { return this._req('POST',   '/auth/avatar', { image }); },
   deleteAvatar()            { return this._req('DELETE', '/auth/avatar'); },
-  setAvailability(val)      { return this._req('PATCH',  '/auth/me', { availableForBooking: val }); },
+  setAvailability(val)          { return this._req('PATCH',  '/auth/me', { availableForBooking: val }); },
+  applyForServices(services)    { return this._req('PATCH',  '/auth/me/service-applications', { services }); },
+  // Chats
+  getChats()                { return this._req('GET',    '/chats'); },
+  getChatMessages(id)       { return this._req('GET',    '/chats/' + id + '/messages'); },
+  sendChatMessage(id, text) { return this._req('POST',   '/chats/' + id + '/messages', { text }); },
+  createChat(otherUserId)   { return this._req('POST',   '/chats', { otherUserId }); },
   // Reviews
   getMinderReviews(minderId) { return this._req('GET',    '/reviews/minder/' + minderId); },
   submitReview(data)         { return this._req('POST',   '/reviews', data); },
@@ -228,7 +254,11 @@ function openBookingDetail(bookingId) {
   if (!b) return;
   const el = document.getElementById('booking-detail-content');
   if (!el) return;
-  const canCancel = b.status === 'pending' || b.status === 'confirmed';
+  const canCancel  = (b.status === 'pending' || b.status === 'confirmed') && String(b.ownerId) === String(store.currentUserId());
+  const isMinder   = String(b.minder) === String(store.currentUserId());
+  const canComplete = isMinder && b.status === 'confirmed';
+  const minderCanCancel = isMinder && (b.status === 'pending' || b.status === 'confirmed');
+
   el.innerHTML =
     '<div style="background:white;border-radius:var(--radius);padding:20px;box-shadow:0 2px 12px var(--shadow)">' +
       '<div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">' +
@@ -244,7 +274,17 @@ function openBookingDetail(bookingId) {
         (b.price ? '<div class="info-row" style="display:flex;justify-content:space-between;padding:10px 0"><span style="color:var(--bark-light);font-size:13px">Price</span><span style="font-weight:700;font-size:16px;color:var(--terra)">' + b.price + '</span></div>' : '') +
       '</div>' +
     '</div>' +
-    (canCancel ? '<button class="btn-primary" style="width:100%;margin-top:20px;padding:14px;background:#e53935" onclick="cancelBooking(' + b.id + ')">Cancel Booking</button>' : '');
+    // Minder actions
+    (canComplete ?
+      '<button class="btn-primary" style="width:100%;margin-top:16px;padding:14px;font-size:14px" onclick="markBookingComplete(' + b.id + ')">✅ Mark Complete</button>'
+    : '') +
+    (minderCanCancel ?
+      '<button class="btn-outline" style="width:100%;margin-top:10px;padding:13px;color:#e53935;border-color:#e53935;font-size:14px" onclick="minderCancelBooking(' + b.id + ')">Cancel Booking</button>'
+    : '') +
+    // Owner: cancel
+    (canCancel ?
+      '<button class="btn-outline" style="width:100%;margin-top:10px;padding:13px;color:#e53935;border-color:#e53935;font-size:14px" onclick="cancelBooking(' + b.id + ')">Cancel Booking</button>'
+    : '');
   document.getElementById('bookings-detail-section').style.display = 'block';
   document.getElementById('bookings-main-section').style.display = 'none';
 }
@@ -252,6 +292,41 @@ function openBookingDetail(bookingId) {
 function closeBookingDetail() {
   document.getElementById('bookings-detail-section').style.display = 'none';
   document.getElementById('bookings-main-section').style.display = 'block';
+}
+
+async function markBookingComplete(bookingId) {
+  showConfirmModal('✅', 'Mark as Complete?', 'Confirm the service is finished. The owner will be notified and can leave a review.', async function() {
+    try {
+      await api.updateBooking(bookingId, { status: 'completed' });
+      showToast('✅ Booking marked as complete!');
+      closeBookingDetail();
+      const bookings = await loadAllBookingsForUser();
+      allBookingsCache = bookings;
+      renderBookingCards('bookings-upcoming-list', filterUpcoming(bookings));
+      renderBookingCards('bookings-past-list',     filterPast(bookings));
+      loadNotificationCount();
+    } catch (err) {
+      showToast('❌ ' + (err.message || 'Failed to complete booking'));
+    }
+  });
+}
+
+function minderCancelBooking(bookingId) {
+  showConfirmModal('🗑', 'Cancel Booking?', 'Are you sure you want to cancel this booking? The customer will be notified.', async function() {
+    try {
+      await api.updateBooking(bookingId, { status: 'cancelled' });
+      showToast('✅ Booking cancelled');
+      closeBookingDetail();
+      try {
+        const bookings = await loadAllBookingsForUser();
+        allBookingsCache = bookings;
+        renderBookingCards('bookings-upcoming-list', filterUpcoming(bookings));
+        renderBookingCards('bookings-past-list',     filterPast(bookings));
+      } catch { /* silent */ }
+    } catch (err) {
+      showToast('❌ ' + (err.message || 'Failed to cancel booking'));
+    }
+  });
 }
 
 function cancelBooking(bookingId) {
@@ -421,7 +496,7 @@ function openNotifications() {
       } else {
         list.innerHTML = notifOwnerMessages.map(n => {
           const unread = !n.read;
-          const icon = n.type === 'booking_declined' ? '❌' : '🔔';
+          const icon = n.type === 'booking_declined' ? '❌' : n.type === 'service_application' ? '📋' : '🔔';
           return '<div class="menu-item" style="' + (unread ? 'border-left:3px solid var(--terra);' : 'opacity:0.75;') + '" onclick="handleOwnerNotifClick(' + n.id + ')">' +
             '<span class="menu-icon">' + icon + '</span>' +
             '<span class="menu-label" style="display:flex;flex-direction:column;gap:2px">' +
@@ -460,6 +535,16 @@ async function deleteMinderNotif(id) {
 
 async function handleOwnerNotifClick(id) {
   try { await api.markNotificationRead(id); } catch { /* silent */ }
+  // If this is a service_application notification and we're on admin page, open the panel
+  const n = notifOwnerMessages.find(x => x.id === id);
+  if (n && n.type === 'service_application' && n.applicantId) {
+    if (typeof openAdminUserDetail === 'function') {
+      const u = adminUsers.find(x => x.id === n.applicantId);
+      if (u) { openAdminUserDetail(n.applicantId); return; }
+    }
+    window.location.href = 'admin.html';
+    return;
+  }
   window.location.href = 'bookings.html';
 }
 
@@ -558,7 +643,7 @@ function getSelectedBookingDate() {
 // Both checks are scoped to the date, so slots on other dates are never
 // affected. This replaces the previous logic which treated every slot the
 // user had any booking at as globally blocked.
-function getUnavailableTimes(myBookings, minderTaken, bookingDate) {
+function getUnavailableTimes(myBookings, minderTaken, bookingDate, minderAvailability) {
   const unavailable = new Set();
 
   // (2) Minder already confirmed at this date/slot (comes from the public
@@ -575,15 +660,32 @@ function getUnavailableTimes(myBookings, minderTaken, bookingDate) {
       if (ids.some(id => selected.includes(id))) unavailable.add(b.bookingTime);
     });
   }
+
+  // (3) Outside the minder's published per-day availability.
+  // `minderAvailability` is { availability: { mon: [...], ... }, isReal } where
+  // isReal=false skips the check (legacy demo minders).
+  if (minderAvailability && minderAvailability.isReal) {
+    const avail = (minderAvailability.availability && typeof minderAvailability.availability === 'object')
+      ? minderAvailability.availability : {};
+    const day = availDayForDate(bookingDate);
+    const daySlots = (day && Array.isArray(avail[day])) ? avail[day] : [];
+    const dayOff = !Object.keys(avail).length || !day || !daySlots.length;
+    BOOKING_TIME_SLOTS.forEach(t => {
+      if (dayOff) { unavailable.add(t); return; }
+      const slot = availSlotForTime(t);
+      if (!slot || !daySlots.includes(slot)) unavailable.add(t);
+    });
+  }
+
   return unavailable;
 }
 
-function renderBookingTimeGrid(myBookings, minderTaken) {
+function renderBookingTimeGrid(myBookings, minderTaken, minderAvailability) {
   const container = document.querySelector('.time-grid');
   if (!container) return;
 
   const bookingDate = getSelectedBookingDate();
-  const unavailableTimes = getUnavailableTimes(myBookings, minderTaken, bookingDate);
+  const unavailableTimes = getUnavailableTimes(myBookings, minderTaken, bookingDate, minderAvailability);
   const currentSelected = document.querySelector('.time-chip.selected')?.textContent.trim();
   const selectedIsUnavailable = currentSelected && unavailableTimes.has(currentSelected);
 
@@ -613,6 +715,7 @@ async function refreshBookingTimeAvailability() {
   const minderId    = (window._activeMinder && window._activeMinder.id) || '';
   let myBookings = [];
   let minderTaken = [];
+  let minderAvailability = { isReal: false, availability: {} };
   try {
     myBookings = await api.getBookings();
     allBookingsCache = myBookings;
@@ -624,9 +727,13 @@ async function refreshBookingTimeAvailability() {
     try {
       const data = await api.getMinderTakenTimes(minderId, bookingDate);
       minderTaken = Array.isArray(data.taken) ? data.taken : [];
+      minderAvailability = {
+        isReal:       true,
+        availability: (data.availability && typeof data.availability === 'object') ? data.availability : {}
+      };
     } catch { /* silent */ }
   }
-  renderBookingTimeGrid(myBookings, minderTaken);
+  renderBookingTimeGrid(myBookings, minderTaken, minderAvailability);
 }
 
 function generateDateChips() {
@@ -726,9 +833,7 @@ function show(id) {
     pastTab.classList.remove('active');
     if (reqTab) reqTab.classList.remove('active');
     document.getElementById('bookings-upcoming').style.display = 'block';
-    document.getElementById('bookings-gps-live').style.display = 'block';
     document.getElementById('bookings-past').style.display = 'none';
-    document.getElementById('bookings-gps').style.display = 'none';
     const reqSection = document.getElementById('bookings-requests');
     if (reqSection) reqSection.style.display = 'none';
   }
@@ -950,13 +1055,29 @@ function closeBecomeMinder() {
 }
 
 function openQualifications(){
-  const replaceNext = document.getElementById('display-Next');
   document.getElementById('become-minder-modal').classList.add('open');
   document.getElementById('bm-step-1').style.display = 'none';
-  document.getElementById('bm-step-quals').style.display  = 'block';
-  replaceNext.textContent = 'upload';
-  replaceNext.onclick = function() { upload(); };
-  document.getElementById('display-Back').style.display = 'none';
+  document.getElementById('bm-step-quals').style.display = 'block';
+  // Reset checkboxes
+  document.querySelectorAll('#qual-service-checkboxes input[type="checkbox"]').forEach(cb => { cb.checked = false; });
+  document.getElementById('bm-cert-names').textContent = '';
+  document.getElementById('bm-cert-input').value = '';
+}
+
+async function bmSubmitQuals() {
+  const selected = Array.from(document.querySelectorAll('#qual-service-checkboxes input[type="checkbox"]:checked'))
+    .map(cb => cb.value);
+  if (selected.length === 0) {
+    showToast('❌ Please select at least one service to apply for');
+    return;
+  }
+  try {
+    await api.applyForServices(selected);
+    closeBecomeMinder();
+    showToast('📨 Application sent! Admin will review your qualifications.');
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Could not submit application'));
+  }
 }
 
 function bmShowStep2(hasQuals) {
@@ -1196,6 +1317,8 @@ async function handleAvatarUpload(event) {
 // ===== FIND MINDERS =====
 // Cached array of minders loaded from the API (used by search + profile view).
 let loadedMinders = [];
+let userCoords = null;          // { lat, lng } once geolocation granted
+const geocodeCache = {};        // locationString -> { lat, lng } | null
 
 async function loadMinders() {
   const list = document.getElementById('minders-list');
@@ -1206,158 +1329,15 @@ async function loadMinders() {
       list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">No pet minders have signed up yet.</div>';
       return;
     }
-    list.innerHTML = '';
-    loadedMinders.forEach(m => {
-      const avatar = m.profileImage
-        ? '<img src="' + m.profileImage + '" alt="' + m.name + '" class="avatar-img" style="width:100%;height:100%;object-fit:cover;border-radius:14px">'
-        : '👤';
-      const loc  = m.location ? '📍 ' + m.location : '';
-      const price = (m.priceMin != null && m.priceMax != null) ? '£' + m.priceMin + ' – £' + m.priceMax + '/hr' : (m.rate || '');
-      const tags = [];
-      if (m.services) m.services.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
-      if (m.petsCaredFor) m.petsCaredFor.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
-
-      const card = document.createElement('div');
-      card.className = 'minder-list-card';
-      card.style.cursor = 'pointer';
-      card.onclick = function() { openMinderProfile(m.id); };
-      card.innerHTML =
-        '<div class="minder-list-avatar">' + avatar + '</div>' +
-        '<div class="minder-list-info">' +
-          '<div class="minder-list-name">' + m.name + '</div>' +
-          (loc ? '<div class="minder-list-loc">' + loc + '</div>' : '') +
-          (m.avgRating ? '<div style="font-size:12px;color:#f5a623;margin-top:2px">★ ' + m.avgRating + ' <span style="color:var(--bark-light)">(' + m.reviewCount + ' review' + (m.reviewCount !== 1 ? 's' : '') + ')</span></div>' : '') +
-          (tags.length ? '<div class="minder-list-tags">' + tags.join('') + '</div>' : '') +
-          (price ? '<div class="minder-list-rate">' + price + '</div>' : '') +
-          '<div class="minder-btns">' +
-            '<button class="btn-msg-minder" onclick="event.stopPropagation();showToast(\'Chat coming soon!\')">💬 Message</button>' +
-            (String(m.id) !== String(store.currentUserId())
-              ? '<button class="btn-book-sm" onclick="event.stopPropagation();window.location.href=\'active-booking.html?minder=' + m.id + '\'">Book Now</button>'
-              : '<span style="font-size:12px;color:var(--bark-light);padding:10px 12px">Your listing</span>') +
-          '</div>' +
-        '</div>';
-      list.appendChild(card);
-    });
+    renderMinders(loadedMinders);
   } catch {
     list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">Could not load minders. Try refreshing.</div>';
   }
 }
 
-async function openMinderProfile(minderId) {
-  previousScreen = currentScreen;
-  _openMinderIsBackend = /^\d+$/.test(String(minderId));
-  currentReviewMinder = minderId;
-
-  const minder = loadedMinders.find(m => m.id === minderId) || minderData[minderId];
-  if (minder) {
-    const mpAvatar = document.getElementById('mp-avatar');
-    if (minder.profileImage) {
-      mpAvatar.innerHTML = '<img src="' + minder.profileImage + '" alt="avatar" class="avatar-img" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
-    } else {
-      mpAvatar.textContent = minder.avatar || '👤';
-    }
-    document.getElementById('mp-name').textContent = minder.name;
-    document.getElementById('mp-loc').textContent = minder.location ? '📍 ' + minder.location : (minder.loc || '');
-    document.getElementById('mp-bio').textContent = minder.bio || '';
-
-    const details = document.getElementById('mp-details');
-    if (details && (minder.experience || minder.petsCaredFor || minder.services || minder.rate || minder.priceMin != null)) {
-      details.innerHTML = '';
-      if (minder.experience)   details.innerHTML += '<div class="info-row"><span class="info-label">Experience</span><span class="info-value">' + minder.experience + '</span></div>';
-      if (minder.petsCaredFor) details.innerHTML += '<div class="info-row"><span class="info-label">Pets accepted</span><span class="info-value">' + minder.petsCaredFor + '</span></div>';
-      if (minder.services)     details.innerHTML += '<div class="info-row"><span class="info-label">Services</span><span class="info-value">' + minder.services + '</span></div>';
-      const priceStr = (minder.priceMin != null && minder.priceMax != null) ? '£' + minder.priceMin + ' – £' + minder.priceMax + '/hr' : (minder.rate || '');
-      if (priceStr) details.innerHTML += '<div class="info-row"><span class="info-label">Rate</span><span class="info-value">' + priceStr + '</span></div>';
-    }
-
-    // Stars placeholder — will be updated after reviews load
-    const starsEl = document.getElementById('mp-stars');
-    if (starsEl) starsEl.innerHTML = minder.stars
-      ? minder.stars + ' <span style="font-size:13px;opacity:0.8">(' + (minder.reviews || 0) + ' reviews)</span>'
-      : '<span style="font-size:13px;color:var(--bark-light)">No reviews yet</span>';
-  }
-
-  // Reset to About tab
-  document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
-  document.querySelector('.profile-tab').classList.add('active');
-  document.querySelectorAll('[id^="tab-"]').forEach(t => t.classList.add('hidden'));
-  document.getElementById('tab-about').classList.remove('hidden');
-
-  // Pre-clear review list (will populate when Reviews tab is clicked)
-  const reviewList = document.getElementById('minder-reviews-list');
-  if (reviewList) reviewList.dataset.loaded = '';
-
-  show('minder-profile');
-  currentScreen = 'minder-profile';
-
-  // For backend minders: load reviews in the background to update stars immediately
-  if (_openMinderIsBackend) {
-    try {
-      const { reviews, average, count } = await api.getMinderReviews(minderId);
-      _cachedMinderReviews = { reviews, average, count };
-      const starsEl = document.getElementById('mp-stars');
-      if (starsEl && currentScreen === 'minder-profile') {
-        if (average) {
-          const filled = Math.round(Number(average));
-          const starStr = '★'.repeat(filled) + '☆'.repeat(5 - filled);
-          starsEl.innerHTML = '<span style="color:#f5a623">' + starStr + '</span> <span style="font-size:13px;opacity:0.9">' + average + '</span> <span style="font-size:13px;opacity:0.7">(' + count + ' review' + (count !== 1 ? 's' : '') + ')</span>';
-        } else {
-          starsEl.innerHTML = '<span style="font-size:13px;color:var(--bark-light)">No reviews yet</span>';
-        }
-      }
-      // If the reviews tab is already open, populate it
-      if (reviewList && reviewList.dataset.loaded === 'pending') {
-        _renderMinderReviewsTab(reviews);
-      }
-    } catch { /* silent */ }
-  }
-}
-
-let _cachedMinderReviews = null;
-
-function _renderMinderReviewsTab(reviews) {
-  const container = document.getElementById('minder-reviews-list');
-  if (!container) return;
-  const writeBox = container.querySelector('.review-write-box');
-  // Keep just the write-review box, replace everything else
-  const isOwner = (Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role]).includes('owner');
-  const isSelf  = currentReviewMinder != null && String(currentReviewMinder) === String(store.currentUserId());
-
-  let html = '';
-  if (!reviews || reviews.length === 0) {
-    html = '<div style="padding:20px;text-align:center;color:var(--bark-light);font-size:13px">No reviews yet. Be the first!</div>';
-  } else {
-    html = reviews.map(r => {
-      const stars = '★'.repeat(r.stars) + '☆'.repeat(5 - r.stars);
-      const date = new Date(r.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-      return '<div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)">' +
-        '<div style="display:flex;justify-content:space-between;margin-bottom:8px">' +
-        '<strong style="font-size:14px;color:var(--bark)">' + (r.reviewerName || 'Anonymous') + '</strong>' +
-        '<span style="color:#f5a623">' + stars + '</span></div>' +
-        '<p style="font-size:13px;color:var(--bark-light);line-height:1.6;margin:0">"' + r.text + '"</p>' +
-        '<p style="font-size:11px;color:var(--bark-light);margin-top:8px">' + date + '</p>' +
-        '</div>';
-    }).join('');
-  }
-
-  // Write-review box (only if viewer is an owner and not self)
-  const writeHTML = (!isSelf && isOwner) ? `
-    <div class="review-write-box" style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)">
-      <p style="font-family:'Playfair Display',serif;font-size:15px;font-weight:600;color:var(--bark);margin-bottom:12px">Leave a Review</p>
-      <div class="star-rating-input" id="review-stars">
-        <span class="star-btn" onclick="setReviewStars(1)">★</span>
-        <span class="star-btn" onclick="setReviewStars(2)">★</span>
-        <span class="star-btn" onclick="setReviewStars(3)">★</span>
-        <span class="star-btn" onclick="setReviewStars(4)">★</span>
-        <span class="star-btn" onclick="setReviewStars(5)">★</span>
-      </div>
-      <textarea id="review-text-input" placeholder="Write your review..." style="width:100%;padding:12px 14px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);resize:vertical;min-height:70px;outline:none;margin-top:10px"></textarea>
-      <button class="btn-primary" style="width:100%;margin-top:10px;padding:12px" onclick="submitReview()">Submit Review</button>
-    </div>` : (!isOwner && !isSelf ? '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:12px 0">Only pet owners can leave reviews.</p>' : '');
-
-  container.innerHTML = html + writeHTML;
-  container.dataset.loaded = 'done';
-  reviewStars = 0;
+function openMinderProfile(minderId) {
+  if (minderId == null) return;
+  window.location.href = 'minder.html?id=' + encodeURIComponent(minderId);
 }
 
 function openBooking() { previousScreen = currentScreen; show('booking'); currentScreen = 'booking'; }
@@ -1368,40 +1348,69 @@ function goBack() {
 }
 
 // ===== MESSAGES =====
-function messageMinder(chatId) {
-  switchTab('messages');
-  setTimeout(() => {
-    const items = document.querySelectorAll('.chat-item');
-    const map = { sarah: 0, emma: 1, james: 2 };
-    if (map[chatId] !== undefined && items[map[chatId]]) openChatInline(items[map[chatId]], chatId);
-  }, 100);
+async function messageMinder(otherUserId) {
+  try {
+    const chat = await api.createChat(Number(otherUserId));
+    window.location.href = 'messages.html?chat=' + chat.id;
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Could not open chat'));
+  }
 }
 
-function openChatInline(el, chatId) {
-  activeChat = chatId;
-  const data = chatData[chatId];
-  document.querySelectorAll('.chat-item').forEach(c => c.classList.remove('active-chat'));
-  el.classList.add('active-chat');
-  const u = el.querySelector('.chat-unread'); if (u) u.remove();
+async function openChatInline(chatId) {
+  activeChat = Number(chatId);
+  const chat = chatListCache.find(c => c.id === activeChat);
+  renderChatList();
   document.getElementById('chat-empty-state').style.display = 'none';
   const area = document.getElementById('chat-active-area'); area.style.display = 'flex';
-  document.getElementById('chat-active-avatar').textContent = data.avatar;
-  document.getElementById('chat-active-name').textContent = data.name;
-  document.getElementById('chat-active-status').innerHTML = data.online ? '● Online' : '● Offline';
-  document.getElementById('chat-active-status').style.color = data.online ? '#4caf50' : '#999';
-  const msgs = document.getElementById('chat-active-messages'); msgs.innerHTML = '';
-  data.messages.forEach(m => { const b = document.createElement('div'); b.className = 'msg-bubble ' + (m.from === 'me' ? 'sent' : 'received'); b.innerHTML = m.text + '<div class="msg-time">' + m.time + '</div>'; msgs.appendChild(b); });
-  msgs.scrollTop = msgs.scrollHeight;
+  const avatarEl = document.getElementById('chat-active-avatar');
+  if (chat) {
+    avatarEl.innerHTML = chatAvatarHTML(chat.other);
+    document.getElementById('chat-active-name').textContent = chat.other.name || 'User';
+  }
+  const statusEl = document.getElementById('chat-active-status');
+  const isOnline = !!(chat && chat.other && chat.other.online);
+  statusEl.innerHTML = isOnline ? '● Online' : '● Offline';
+  statusEl.style.color = isOnline ? '#4caf50' : '#9e9e9e';
+  const msgs = document.getElementById('chat-active-messages');
+  msgs.innerHTML = '<div style="color:var(--bark-light);font-size:13px;text-align:center">Loading…</div>';
   document.getElementById('messages-container').classList.add('chat-open');
+  try {
+    const history = await api.getChatMessages(activeChat);
+    const myId = store.currentUserId();
+    msgs.innerHTML = '';
+    history.forEach(m => {
+      const b = document.createElement('div');
+      b.className = 'msg-bubble ' + (m.fromUserId === myId ? 'sent' : 'received');
+      b.innerHTML = escapeHTML(m.text) + '<div class="msg-time">' + formatMsgTime(m.createdAt) + '</div>';
+      msgs.appendChild(b);
+    });
+    msgs.scrollTop = msgs.scrollHeight;
+  } catch {
+    msgs.innerHTML = '<div style="color:var(--bark-light);font-size:13px;text-align:center">Could not load messages.</div>';
+  }
 }
 function closeMobileChat() { document.getElementById('messages-container').classList.remove('chat-open'); }
-function sendMessage() {
-  const input = document.getElementById('chat-input-field'); const text = input.value.trim();
+async function sendMessage() {
+  const input = document.getElementById('chat-input-field');
+  const text = input.value.trim();
   if (!text || !activeChat) return;
+  input.value = '';
   const msgs = document.getElementById('chat-active-messages');
-  const b = document.createElement('div'); b.className = 'msg-bubble sent'; b.innerHTML = text + '<div class="msg-time">Now</div>';
-  msgs.appendChild(b); msgs.scrollTop = msgs.scrollHeight;
-  chatData[activeChat].messages.push({ from: 'me', text, time: 'Now' }); input.value = '';
+  const b = document.createElement('div');
+  b.className = 'msg-bubble sent';
+  b.innerHTML = escapeHTML(text) + '<div class="msg-time">…</div>';
+  msgs.appendChild(b);
+  msgs.scrollTop = msgs.scrollHeight;
+  try {
+    const saved = await api.sendChatMessage(activeChat, text);
+    b.innerHTML = escapeHTML(saved.text) + '<div class="msg-time">' + formatMsgTime(saved.createdAt) + '</div>';
+    // Refresh list so newest-message-first ordering updates (moves active chat to top)
+    await loadChatList();
+  } catch (err) {
+    b.remove();
+    showToast('❌ ' + (err.message || 'Failed to send'));
+  }
 }
 const _chatInputField = document.getElementById('chat-input-field');
 if (_chatInputField) _chatInputField.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
@@ -1438,9 +1447,7 @@ function switchBookingTab(btn, tab) {
   document.querySelectorAll('#screen-bookings .auth-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('bookings-upcoming').style.display = tab === 'upcoming' ? 'block' : 'none';
-  document.getElementById('bookings-gps-live').style.display = tab === 'upcoming' ? 'block' : 'none';
   document.getElementById('bookings-past').style.display = tab === 'past' ? 'block' : 'none';
-  document.getElementById('bookings-gps').style.display = tab === 'past' ? 'block' : 'none';
   const reqSection = document.getElementById('bookings-requests');
   if (reqSection) reqSection.style.display = tab === 'requests' ? 'block' : 'none';
   if (tab === 'requests') loadBookingRequests();
@@ -1455,22 +1462,95 @@ function toggleFilterModal() { document.getElementById('filter-modal').classList
 
 // ===== SEARCH & FILTER SYSTEM =====
 // Saved filter state — only updated when user clicks Save or Clear All.
-let savedFilters = { petTypes: [], serviceTypes: [], priceMin: null, priceMax: null };
+let savedFilters = { petTypes: [], serviceTypes: [], priceMin: null, priceMax: null, minRating: null, sortBy: null };
 
 // Helper: read the text label from a filter-opt, strip its emoji prefix, return lowercase.
 function filterOptLabel(el) { return el.textContent.replace(/^[^\w]*/u, '').trim().toLowerCase(); }
 
 // Location search bar — triggered by the Go button or Enter key
+// ===== DISTANCE / GEOCODING =====
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function geocodeLocation(locationStr) {
+  if (!locationStr) return null;
+  const key = locationStr.trim().toLowerCase();
+  if (key in geocodeCache) return geocodeCache[key];
+  try {
+    const url = 'https://nominatim.openstreetmap.org/search?q=' +
+                encodeURIComponent(locationStr + ', UK') +
+                '&format=json&limit=1';
+    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const json = await res.json();
+    const result = json[0] ? { lat: parseFloat(json[0].lat), lng: parseFloat(json[0].lon) } : null;
+    geocodeCache[key] = result;
+    return result;
+  } catch {
+    geocodeCache[key] = null;
+    return null;
+  }
+}
+
+async function requestUserLocation() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) { resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      ()  => resolve(null),
+      { timeout: 8000 }
+    );
+  });
+}
+
+function selectSortFilter(el) {
+  const wasActive = el.classList.contains('active');
+  document.querySelectorAll('#filter-sort .filter-opt').forEach(o => o.classList.remove('active'));
+  if (!wasActive) el.classList.add('active');
+}
+
+// Keep the quick-sort chip bar and the filter-modal Sort By section in sync
+function syncSortChips(sortBy) {
+  // Quick chips bar
+  document.querySelectorAll('.sort-chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.sort === sortBy);
+  });
+  // Filter modal
+  document.querySelectorAll('#filter-sort .filter-opt').forEach(o => {
+    o.classList.toggle('active', o.dataset.sort === sortBy);
+  });
+}
+
+// Quick-sort chip clicked directly from the search page bar
+async function quickSort(sortBy) {
+  savedFilters.sortBy = (savedFilters.sortBy === sortBy) ? null : sortBy; // toggle off if same
+  syncSortChips(savedFilters.sortBy);
+  await runSearch();
+}
+
+function formatDist(km) {
+  if (km == null) return '';
+  return km < 1 ? Math.round(km * 1000) + ' m away' : km.toFixed(1) + ' km away';
+}
+
 function searchByLocation() {
   runSearch();
 }
 
+
 // Central search: combines the location bar + saved modal filters and re-renders.
-function runSearch() {
+async function runSearch() {
   const locInput = document.getElementById('search-location-input');
   const query = locInput ? locInput.value.trim().toLowerCase() : '';
 
-  const filtered = loadedMinders.filter(m => {
+  let filtered = loadedMinders.filter(m => {
     // 1. Location search
     if (query) {
       const minderLoc = (m.location || '').toLowerCase();
@@ -1495,8 +1575,51 @@ function runSearch() {
     if (savedFilters.priceMin !== null && m.priceMax != null && m.priceMax < savedFilters.priceMin) return false;
     if (savedFilters.priceMax !== null && m.priceMin != null && m.priceMin > savedFilters.priceMax) return false;
 
+    // 5. Minimum rating filter
+    if (savedFilters.minRating !== null) {
+      if (!m.avgRating || m.avgRating < savedFilters.minRating) return false;
+    }
+
     return true;
   });
+
+  // 5. Sorting
+  if (savedFilters.sortBy === 'distance') {
+    // Get user location if we don't have it yet
+    if (!userCoords) {
+      const list = document.getElementById('minders-list');
+      if (list) list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--bark-light);font-size:14px">📍 Getting your location…</div>';
+      userCoords = await requestUserLocation();
+      if (!userCoords) {
+        showToast('❌ Location access denied – can\'t sort by distance');
+        savedFilters.sortBy = null;
+        document.querySelectorAll('#filter-sort .filter-opt').forEach(o => o.classList.remove('active'));
+        renderMinders(filtered);
+        return filtered;
+      }
+    }
+    // Geocode any minder locations we haven't seen yet
+    await Promise.all(filtered.map(m => geocodeLocation(m.location)));
+    // Attach distance to each minder object (transient, not persisted)
+    filtered.forEach(m => {
+      const coords = m.location ? geocodeCache[(m.location).trim().toLowerCase()] : null;
+      m._distKm = coords ? haversineKm(userCoords.lat, userCoords.lng, coords.lat, coords.lng) : null;
+    });
+    filtered.sort((a, b) => {
+      if (a._distKm == null && b._distKm == null) return 0;
+      if (a._distKm == null) return 1;
+      if (b._distKm == null) return -1;
+      return a._distKm - b._distKm;
+    });
+  } else if (savedFilters.sortBy === 'rating') {
+    filtered.sort((a, b) => (b.avgRating || 0) - (a.avgRating || 0));
+  } else if (savedFilters.sortBy === 'review_count') {
+    filtered.sort((a, b) => (b.reviewCount || 0) - (a.reviewCount || 0));
+  } else if (savedFilters.sortBy === 'price_asc') {
+    filtered.sort((a, b) => (a.priceMin ?? Infinity) - (b.priceMin ?? Infinity));
+  } else if (savedFilters.sortBy === 'price_desc') {
+    filtered.sort((a, b) => (b.priceMax ?? -Infinity) - (a.priceMax ?? -Infinity));
+  }
 
   renderMinders(filtered);
   return filtered;
@@ -1509,14 +1632,15 @@ function clearAllFilters() {
   const maxEl = document.getElementById('filter-price-max');
   if (minEl) minEl.value = '';
   if (maxEl) maxEl.value = '';
-  savedFilters = { petTypes: [], serviceTypes: [], priceMin: null, priceMax: null };
+  savedFilters = { petTypes: [], serviceTypes: [], priceMin: null, priceMax: null, minRating: null, sortBy: null };
+  syncSortChips(null);
   runSearch();
   toggleFilterModal();
   showToast('✅ Filters cleared');
 }
 
 // Save — read modal UI into savedFilters, then re-run search
-function applyFilters() {
+async function applyFilters() {
   const petTypeEls = document.querySelectorAll('#filter-pet-type .filter-opt.active');
   savedFilters.petTypes = Array.from(petTypeEls).map(filterOptLabel);
 
@@ -1528,8 +1652,15 @@ function applyFilters() {
   savedFilters.priceMin = minEl && minEl.value !== '' ? Number(minEl.value) : null;
   savedFilters.priceMax = maxEl && maxEl.value !== '' ? Number(maxEl.value) : null;
 
-  const filtered = runSearch();
+  const ratingEl = document.querySelector('#filter-rating .filter-opt.active');
+  savedFilters.minRating = ratingEl ? Number(ratingEl.dataset.rating) : null;
+
+  const sortEl = document.querySelector('#filter-sort .filter-opt.active');
+  savedFilters.sortBy = sortEl ? sortEl.dataset.sort : null;
+  syncSortChips(savedFilters.sortBy);
+
   toggleFilterModal();
+  const filtered = await runSearch();
   showToast('✅ Filters saved – ' + filtered.length + ' minder' + (filtered.length !== 1 ? 's' : '') + ' found');
 }
 
@@ -1552,6 +1683,11 @@ function renderMinders(minders) {
     if (m.services) m.services.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
     if (m.petsCaredFor) m.petsCaredFor.split(',').forEach(s => { s = s.trim(); if (s) tags.push('<span class="tag">' + s + '</span>'); });
 
+    // Distance badge shown when sorting by distance
+    const distBadge = (savedFilters.sortBy === 'distance' && m._distKm != null)
+      ? ' <span style="display:inline-block;font-size:11px;background:var(--sand-light);color:var(--bark);border-radius:20px;padding:2px 8px;font-weight:500">📍 ' + formatDist(m._distKm) + '</span>'
+      : '';
+
     const card = document.createElement('div');
     card.className = 'minder-list-card';
     card.style.cursor = 'pointer';
@@ -1559,16 +1695,18 @@ function renderMinders(minders) {
     card.innerHTML =
       '<div class="minder-list-avatar">' + avatar + '</div>' +
       '<div class="minder-list-info">' +
-        '<div class="minder-list-name">' + m.name + '</div>' +
+        '<div class="minder-list-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">' + m.name + distBadge + '</div>' +
         (loc ? '<div class="minder-list-loc">' + loc + '</div>' : '') +
         (m.avgRating ? '<div style="font-size:12px;color:#f5a623;margin-top:2px">★ ' + m.avgRating + ' <span style="color:var(--bark-light)">(' + m.reviewCount + ' review' + (m.reviewCount !== 1 ? 's' : '') + ')</span></div>' : '') +
         (tags.length ? '<div class="minder-list-tags">' + tags.join('') + '</div>' : '') +
         (price ? '<div class="minder-list-rate">' + price + '</div>' : '') +
         '<div class="minder-btns">' +
           '<button class="btn-msg-minder" onclick="event.stopPropagation();showToast(\'Chat coming soon!\')">💬 Message</button>' +
-          (String(m.id) !== String(store.currentUserId())
-            ? '<button class="btn-book-sm" onclick="event.stopPropagation();window.location.href=\'active-booking.html?minder=' + m.id + '\'">Book Now</button>'
-            : '<span style="font-size:12px;color:var(--bark-light);padding:10px 12px">Your listing</span>') +
+          (String(m.id) === String(store.currentUserId())
+            ? '<span style="font-size:12px;color:var(--bark-light);padding:10px 12px">Your listing</span>'
+            : ((Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role || '']).includes('owner')
+              ? '<button class="btn-book-sm" onclick="event.stopPropagation();window.location.href=\'active-booking.html?minder=' + m.id + '\'">Book Now</button>'
+              : '')) +
         '</div>' +
       '</div>';
     list.appendChild(card);
@@ -1947,62 +2085,92 @@ async function submitReview() {
 }
 
 // ===== REVIEWS (from profile section) =====
+function toggleReviewAccordion(section) {
+  const body    = document.getElementById('accordion-' + section + '-body');
+  const chevron = document.getElementById('accordion-' + section + '-chevron');
+  if (!body) return;
+  const isOpen = body.style.display !== 'none';
+  body.style.display    = isOpen ? 'none' : 'block';
+  chevron.style.transform = isOpen ? '' : 'rotate(90deg)';
+}
+
 async function openProfileReviews() {
   previousScreen = currentScreen;
-  const roles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role];
+  const roles    = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role];
   const isMinder = roles.includes('minder');
+  const isOwner  = roles.includes('owner');
+  const isBoth   = isMinder && isOwner;
 
-  // Render the write-reviews tab (bookings they made as an owner)
-  const list = document.getElementById('profile-reviews-minder-list');
-  if (list) {
-    list.innerHTML = '';
-    bookedMinders.forEach(m => {
-      const card = document.createElement('div'); card.className = 'review-minder-card';
-      card.onclick = () => openWriteReview(m.id);
-      card.innerHTML = '<div class="review-minder-avatar">' + m.avatar + '</div><div class="review-minder-info"><div class="review-minder-name">' + m.name + '</div><div class="review-minder-booking">' + m.lastBooking + '</div></div><span style="color:var(--terra);font-weight:600;font-size:13px">Write Review ›</span>';
-      list.appendChild(card);
-    });
+  // Show/hide accordion sections based on role
+  const accReceived = document.getElementById('accordion-received');
+  const accGiven    = document.getElementById('accordion-given');
+  if (accReceived) accReceived.style.display = isMinder ? 'block' : 'none';
+  if (accGiven)    accGiven.style.display    = isOwner  ? 'block' : 'none';
+
+  // Update subtitle
+  const subtitle = document.getElementById('reviews-subtitle');
+  if (subtitle) {
+    if (isBoth)        subtitle.textContent = "Reviews you've received and given";
+    else if (isMinder) subtitle.textContent = 'Reviews from pet owners';
+    else               subtitle.textContent = "Leave reviews for minders you've booked";
   }
 
-  // Render received reviews section (minders only)
-  const receivedSection = document.getElementById('received-reviews-section');
-  const titleEl = document.getElementById('received-reviews-title');
-  if (receivedSection) {
-    if (isMinder) {
-      receivedSection.style.display = 'block';
-      if (titleEl) titleEl.textContent = 'Loading…';
-      try {
-        const { reviews, average, count } = await api.getMinderReviews(userProfile.id);
-        const starDisplay = average
-          ? '★ ' + average + ' <span style="font-size:12px;color:var(--bark-light)">(' + count + ' review' + (count !== 1 ? 's' : '') + ')</span>'
-          : '<span style="font-size:12px;color:var(--bark-light)">No reviews yet</span>';
-        if (titleEl) titleEl.innerHTML = 'My Minder Reviews &nbsp;' + starDisplay;
-        const rList = document.getElementById('received-reviews-list');
-        if (rList) {
-          if (!reviews.length) {
-            rList.innerHTML = '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:20px 0">You haven\'t received any reviews yet.</p>';
-          } else {
-            rList.innerHTML = reviews.map(r => {
+  // Auto-open the single section if only one role; leave both collapsed if dual-role
+  if (!isBoth) {
+    if (isMinder) toggleReviewAccordion('received');
+    if (isOwner && !isMinder) toggleReviewAccordion('given');
+  }
+
+  // ── Section A: Reviews received (minder) ──
+  if (isMinder) {
+    const titleEl = document.getElementById('received-reviews-title');
+    const rList   = document.getElementById('received-reviews-list');
+    if (titleEl) titleEl.textContent = 'Loading…';
+    try {
+      const { reviews, average, count } = await api.getMinderReviews(userProfile.id);
+      const subEl = document.getElementById('received-reviews-subtitle');
+      if (subEl) {
+        subEl.textContent = average
+          ? '★ ' + average + ' avg · ' + count + ' review' + (count !== 1 ? 's' : '')
+          : 'No reviews yet';
+      }
+      if (titleEl) titleEl.style.display = 'none'; // subtitle now carries avg
+      if (rList) {
+        rList.innerHTML = reviews.length
+          ? reviews.map(r => {
               const stars = '★'.repeat(r.stars) + '☆'.repeat(5 - r.stars);
-              const date = new Date(r.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-              return '<div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)">' +
-                '<div style="display:flex;justify-content:space-between;margin-bottom:6px">' +
+              const date  = new Date(r.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+              return '<div style="padding:14px 0;border-bottom:1px solid var(--sand-light)">' +
+                '<div style="display:flex;justify-content:space-between;margin-bottom:4px">' +
                 '<strong style="font-size:14px;color:var(--bark)">' + (r.reviewerName || 'Anonymous') + '</strong>' +
-                '<span style="color:#f5a623;font-size:15px">' + stars + '</span>' +
+                '<span style="color:#f5a623">' + stars + '</span>' +
                 '</div>' +
                 '<p style="font-size:13px;color:var(--bark-light);line-height:1.6;margin:0">"' + r.text + '"</p>' +
-                '<p style="font-size:11px;color:var(--bark-light);margin-top:8px">' + date + '</p>' +
+                '<p style="font-size:11px;color:var(--bark-light);margin-top:6px">' + date + '</p>' +
                 '</div>';
-            }).join('');
-          }
-        }
-      } catch {
-        if (titleEl) titleEl.textContent = 'My Minder Reviews';
-        const rList = document.getElementById('received-reviews-list');
-        if (rList) rList.innerHTML = '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:20px 0">Could not load reviews.</p>';
+            }).join('')
+          : '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:16px 0">No reviews received yet.</p>';
       }
-    } else {
-      receivedSection.style.display = 'none';
+    } catch {
+      if (titleEl) { titleEl.style.display = ''; titleEl.textContent = 'Could not load reviews.'; }
+    }
+  }
+
+  // ── Section B: Reviews given (owner) ──
+  if (isOwner) {
+    const list = document.getElementById('profile-reviews-minder-list');
+    if (list) {
+      list.innerHTML = '';
+      if (bookedMinders.length === 0) {
+        list.innerHTML = '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:16px 0">No minders booked yet.</p>';
+      } else {
+        bookedMinders.forEach(m => {
+          const card = document.createElement('div'); card.className = 'review-minder-card';
+          card.onclick = () => openWriteReview(m.id);
+          card.innerHTML = '<div class="review-minder-avatar">' + m.avatar + '</div><div class="review-minder-info"><div class="review-minder-name">' + m.name + '</div><div class="review-minder-booking">' + m.lastBooking + '</div></div><span style="color:var(--terra);font-weight:600;font-size:13px">Write Review ›</span>';
+          list.appendChild(card);
+        });
+      }
     }
   }
 
@@ -2182,6 +2350,10 @@ function openEditProfileModal() {
       document.getElementById('edit-price-min').value = userProfile.priceMin != null ? userProfile.priceMin : 0;
       document.getElementById('edit-price-max').value = userProfile.priceMax != null ? userProfile.priceMax : 10000;
       document.getElementById('edit-experience').value = userProfile.experience || '';
+      const certEl = document.getElementById('edit-certifications');
+      if (certEl) certEl.value = userProfile.certifications || '';
+      // Load availability grid
+      loadAvailabilityGrid(userProfile.availability || {});
 
     }
   }
@@ -2201,17 +2373,17 @@ function saveProfile() {
       location:  document.getElementById('edit-location').value.trim(),
       bio:       document.getElementById('edit-bio').value.trim(),
     };
-    // Include minder-specific fields if user is a minder (by role or isMinder)
-    if ((Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role]).includes('minder')) {
-      updates.serviceArea  = (document.getElementById('edit-service-area') || {}).value || '';
-      updates.petsCaredFor = getSelectedChips('edit-pet-type-chips');
-      // Save all selected service chips. Advanced chips (Grooming/Vet/Training) are
-      // only visible when admin has unlocked them, so whatever the minder ticks is valid.
-      updates.services = getSelectedChips('edit-service-type-chips');
-      updates.priceMin     = clampPrice(document.getElementById('edit-price-min'));
-      updates.priceMax     = clampPrice(document.getElementById('edit-price-max'));
-      updates.experience   = (document.getElementById('edit-experience') || {}).value || '';
-    }
+      if ((Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role]).includes('minder')) {
+        updates.serviceArea  = (document.getElementById('edit-service-area') || {}).value || '';
+        updates.petsCaredFor = getSelectedChips('edit-pet-type-chips');
+        // Save all selected service chips. Advanced chips are only visible when admin has unlocked them.
+        updates.services = getSelectedChips('edit-service-type-chips');
+        updates.priceMin     = clampPrice(document.getElementById('edit-price-min'));
+        updates.priceMax     = clampPrice(document.getElementById('edit-price-max'));
+        updates.experience   = (document.getElementById('edit-experience') || {}).value || '';
+        updates.certifications = (document.getElementById('edit-certifications') || {}).value || '';
+        updates.availability = readAvailabilityGrid();
+      }
     // Optimistic local update so the UI feels instant
     Object.assign(userProfile, updates);
     store.setUser(userProfile);
@@ -2294,6 +2466,19 @@ function openAdminUserDetail(userId) {
     const serviceChips = allServices.length
       ? allServices.map(s => '<span style="background:var(--sand-light);color:var(--bark);padding:3px 10px;border-radius:12px;font-size:12px;font-weight:500">' + s + '</span>').join(' ')
       : '<span style="color:var(--bark-light);font-size:13px">No services yet</span>';
+    // Pending service applications from the minder
+    const pending = Array.isArray(u.pendingServices) ? u.pendingServices : [];
+    const pendingSection = pending.length
+      ? '<div style="background:#fff8e1;border:1.5px solid #f5a623;border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:14px">' +
+          '<div style="font-size:12px;font-weight:600;color:#e65100;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📋 Pending Service Applications</div>' +
+          '<div style="font-size:13px;color:var(--bark);margin-bottom:6px">This minder has applied to offer:</div>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">' +
+            pending.map(s => '<span style="background:#f5a623;color:white;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600">' + s + '</span>').join('') +
+          '</div>' +
+          '<div style="font-size:12px;color:var(--bark-light)">Use the toggles below to approve or deny each service.</div>' +
+        '</div>'
+      : '';
+
     const toggles = ADVANCED_SERVICES.map(svc => {
       const isOn = enabled.includes(svc);
       return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--sand-light)">' +
@@ -2309,6 +2494,7 @@ function openAdminUserDetail(userId) {
       '<div style="margin-top:18px">' +
         '<div style="font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Current Services</div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">' + serviceChips + '</div>' +
+        pendingSection +
         '<div style="font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Enable Advanced Services</div>' +
         '<div>' + toggles + '</div>' +
         '<div style="font-size:11px;color:var(--bark-light);margin-top:10px">Toggling sends the minder a notification and updates their profile immediately.</div>' +
@@ -2358,6 +2544,7 @@ async function adminToggleService(userId, service, enabled) {
     const u = adminUsers.find(x => x.id === userId);
     if (u) {
       u.enabledServices = result.enabledServices;
+      if (result.pendingServices !== undefined) u.pendingServices = result.pendingServices;
       // When disabling, the backend also cleans the services string — sync that too
       if (!enabled && result.services !== undefined) u.services = result.services;
     }
@@ -2385,6 +2572,8 @@ function renderAdminPanels() {
       const statusBadge = u.status === 'Active' ? '' : ' <span style="color:#e53935;font-size:11px">(' + u.status + ')</span>';
       const isMinder = u.rawRoles ? u.rawRoles.includes('minder') : u.role.toLowerCase().includes('minder');
       const minderBadge = isMinder ? ' <span style="background:var(--terra);color:white;font-size:10px;padding:2px 6px;border-radius:8px;margin-left:4px">Minder</span>' : '';
+      const hasPending = isMinder && Array.isArray(u.pendingServices) && u.pendingServices.length > 0;
+      const pendingBadge = hasPending ? ' <span style="background:#f5a623;color:white;font-size:10px;padding:2px 6px;border-radius:8px;margin-left:4px" title="Pending service application">📋 ' + u.pendingServices.length + ' pending</span>' : '';
       const avatar = u.profileImage
         ? '<img src="' + u.profileImage + '" alt="" style="width:38px;height:38px;border-radius:50%;object-fit:cover">'
         : '<span style="font-size:22px">' + (u.avatar || '👤') + '</span>';
@@ -2395,7 +2584,9 @@ function renderAdminPanels() {
         '<div class="admin-user-actions">' +
           (isMinder ? '<button class="admin-btn edit" onclick="event.stopPropagation();openAdminServicePanel(' + u.id + ')">🛎 Services</button>' : '') +
           '<button class="admin-btn edit" onclick="event.stopPropagation();openAdminEditUser(' + u.id + ')">✏️ Edit</button>' +
-          '<button class="admin-btn suspend" onclick="event.stopPropagation();adminSuspendUser(' + u.id + ')">⏸ Suspend</button>' +
+          (u.status === 'Suspended'
+            ? '<button class="admin-btn edit" style="background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7" onclick="event.stopPropagation();adminUnsuspendUser(' + u.id + ')">▶ Unsuspend</button>'
+            : '<button class="admin-btn suspend" onclick="event.stopPropagation();adminSuspendUser(' + u.id + ')">⏸ Suspend</button>') +
           '<button class="admin-btn remove" onclick="event.stopPropagation();adminRemoveUser(' + u.id + ')">🗑 Remove</button>' +
         '</div>';
       card.onclick = function() { openAdminUserDetail(u.id); };
@@ -2473,7 +2664,7 @@ async function saveAdminEdit() {
 }
 
 function adminSuspendUser(userId) {
-  showConfirmModal('⏸', 'Suspend User?', 'This user will be unable to log in.', async function() {
+  showConfirmModal('⏸', 'Suspend User?', 'This user will be unable to log in. You can unsuspend them at any time.', async function() {
     try {
       const updated = await api.updateAdminUser(userId, { status: 'Suspended' });
       const idx = adminUsers.findIndex(u => u.id === userId);
@@ -2482,6 +2673,20 @@ function adminSuspendUser(userId) {
       renderAdminPanels();
     } catch (err) {
       showToast('❌ ' + (err.message || 'Failed to suspend user'));
+    }
+  });
+}
+
+function adminUnsuspendUser(userId) {
+  showConfirmModal('▶', 'Unsuspend User?', 'This user will be able to log in again.', async function() {
+    try {
+      const updated = await api.updateAdminUser(userId, { status: 'Active' });
+      const idx = adminUsers.findIndex(u => u.id === userId);
+      if (idx !== -1) adminUsers[idx] = updated;
+      showToast('✅ User account reactivated');
+      renderAdminPanels();
+    } catch (err) {
+      showToast('❌ ' + (err.message || 'Failed to unsuspend user'));
     }
   });
 }
@@ -2528,6 +2733,504 @@ async function dismissDispute(disputeId) {
   });
 }
 
+
+// ===== CHAT SYSTEM =====
+async function loadAllBookingsForUser() {
+  const owned = await api.getBookings().catch(() => []);
+  let received = [];
+  if (userProfile.role === 'minder') {
+    received = await api.getBookingRequests().catch(() => []);
+    received = received.map(b => Object.assign({}, b, { _recipient: true }));
+  }
+  // Dedupe in case a user is somehow both owner and minder of the same row
+  const seen = new Set(owned.map(b => b.id));
+  const merged = owned.concat(received.filter(b => !seen.has(b.id)));
+  return merged;
+}
+
+// Render a minder's picture as either an emoji/glyph or an <img> if we have
+// a real data-URI profile image stored on the booking. Falls back to the
+// default 👤 glyph if nothing sensible is available.
+
+function notifIcon(type) {
+  switch (type) {
+    case 'booking_request':   return '📩';
+    case 'booking_confirmed': return '✅';
+    case 'booking_declined':  return '❌';
+    case 'booking_reminder':  return '⏰';
+    default:                  return '🔔';
+  }
+}
+
+function notifAction(n) {
+  if (n.type === 'booking_request') return "window.location.href='bookings.html?tab=requests'";
+  return 'handleOwnerNotifClick(' + n.id + ')';
+}
+
+function availSlotForTime(timeStr) {
+  const m = String(timeStr || '').match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const h = Number(m[1]) + Number(m[2]) / 60;
+  for (const [key, r] of Object.entries(AVAIL_SLOT_RANGES)) {
+    if (h >= r.start && h < r.end) return key;
+  }
+  return null;
+}
+
+function availDayForDate(dateStr) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr || ''))) return null;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return AVAIL_DAY_KEYS[dt.getUTCDay()];
+}
+// Pure check used both by the time-grid renderer and the pre-submit guard.
+// Returns { ok: true } or { ok: false, reason: string }.
+// `minder.availability` is the per-day object { mon: ['morning','evening'], ... }
+
+function checkMinderAvailability(minder, bookingDate, bookingTime) {
+  if (!minder) return { ok: false, reason: 'Minder not found' };
+  if (typeof minder.id !== 'number') return { ok: true }; // legacy demo minder
+  const avail = (minder.availability && typeof minder.availability === 'object') ? minder.availability : {};
+  if (!Object.keys(avail).length) {
+    return { ok: false, reason: 'This minder has not published their availability yet' };
+  }
+  const day = availDayForDate(bookingDate);
+  if (!day) return { ok: false, reason: 'Invalid booking date' };
+  const daySlots = Array.isArray(avail[day]) ? avail[day] : [];
+  if (!daySlots.length) {
+    return { ok: false, reason: 'This minder is not available on ' + (AVAIL_DAY_LABELS[day] || day) };
+  }
+  const slot = availSlotForTime(bookingTime);
+  if (!slot) return { ok: false, reason: 'Booking time is outside working hours' };
+  if (!daySlots.includes(slot)) {
+    return { ok: false, reason: 'This minder is not available in the ' + slot + ' on the selected date' };
+  }
+  return { ok: true };
+}
+
+function removeRegCert(certId) {
+  regPendingCerts = regPendingCerts.filter(c => c.id !== certId);
+  refreshRegCerts();
+}
+
+function refreshRegCerts() {
+  const grid = document.getElementById('reg-certs-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  regPendingCerts.forEach(c => {
+    const card = document.createElement('div');
+    card.className = 'reg-pet-card';
+    const icon = (c.type && c.type.startsWith('image/')) ? '🖼️' : '📄';
+    card.innerHTML =
+      '<span>' + icon + '</span>' +
+      '<span style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + c.name + '</span>' +
+      '<span class="reg-cert-remove" title="Remove" style="margin-left:4px;color:#e53935;font-weight:700;cursor:pointer">×</span>';
+    card.querySelector('.reg-cert-remove').onclick = (e) => { e.stopPropagation(); removeRegCert(c.id); };
+    grid.appendChild(card);
+  });
+  const label = document.getElementById('cert-file-names');
+  if (label) {
+    label.textContent = regPendingCerts.length > 0
+      ? '✅ ' + regPendingCerts.length + ' file' + (regPendingCerts.length === 1 ? '' : 's') + ' added'
+      : '';
+  }
+}
+
+async function initMinderPage() {
+  const params = new URLSearchParams(window.location.search);
+  const raw    = params.get('id');
+  if (!raw) {
+    document.getElementById('mp-name').textContent = 'Minder not found';
+    return;
+  }
+  const numericId = Number(raw);
+  let minder = null;
+  try {
+    if (!loadedMinders.length) loadedMinders = await api.getMinders();
+    if (!Number.isNaN(numericId)) {
+      minder = loadedMinders.find(m => m.id === numericId) || null;
+    }
+    // Fall back to legacy hardcoded demo data (sarah/james/emma/priya)
+    if (!minder && minderData[raw]) minder = minderData[raw];
+  } catch {
+    if (minderData[raw]) minder = minderData[raw];
+  }
+  if (!minder) {
+    document.getElementById('mp-name').textContent = 'Minder not found';
+    return;
+  }
+  currentMinderId = minder.id;
+  renderMinderProfileInto(minder);
+  // Wire the Book Now button — only owners can book
+  const bookBtn = document.getElementById('mp-book-btn');
+  const _mpRoles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role || ''];
+  const _canBook = _mpRoles.includes('owner') && String(minder.id) !== String(store.currentUserId());
+  if (bookBtn) {
+    if (_canBook && typeof minder.id === 'number') {
+      bookBtn.style.display = '';
+      bookBtn.onclick = function () { window.location.href = 'active-booking.html?minder=' + minder.id; };
+    } else {
+      bookBtn.style.display = 'none';
+    }
+  }
+  // Wire the Message button
+  const msgBtn = document.getElementById('mp-msg-btn');
+  if (msgBtn && typeof minder.id === 'number') {
+    msgBtn.onclick = function () { messageMinder(minder.id); };
+  }
+  await loadMinderReviews(minder.id);
+}
+
+function renderMinderProfileInto(minder) {
+  // Stash the currently-viewed minder as the default report target so the
+  // "🚩 Report" button in the hero can pick it up without extra state plumbing.
+  const _rptRoles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role || ''];
+  const canReport = minder && typeof minder.id === 'number' && _rptRoles.includes('owner') && String(minder.id) !== String(store.currentUserId());
+  currentReportTarget = canReport ? {
+    targetUserId: minder.id,
+    targetName:   minder.name,
+    targetRole:   'minder',
+    context:      'minder-profile'
+  } : null;
+  const reportBtn = document.getElementById('mp-report-btn');
+  if (reportBtn) reportBtn.style.display = canReport ? 'inline-block' : 'none';
+  if (!minder) return;
+  const mpAvatar = document.getElementById('mp-avatar');
+  if (mpAvatar) {
+    if (minder.profileImage) {
+      mpAvatar.innerHTML = '<img src="' + minder.profileImage + '" alt="avatar" class="avatar-img" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
+    } else {
+      mpAvatar.textContent = minder.avatar || '👤';
+    }
+  }
+  const nameEl = document.getElementById('mp-name'); if (nameEl) nameEl.textContent = minder.name;
+  const locEl  = document.getElementById('mp-loc');  if (locEl)  locEl.textContent  = minder.location ? '📍 ' + minder.location : (minder.loc || '');
+  const bioEl  = document.getElementById('mp-bio');  if (bioEl)  bioEl.textContent  = minder.bio || '';
+
+  const details = document.getElementById('mp-details');
+  const isRealMinder = typeof minder.id === 'number';
+  if (details && (isRealMinder || minder.experience || minder.petsCaredFor || minder.services || minder.rate || minder.priceMin != null)) {
+    let html = '';
+    if (minder.experience)   html += '<div class="info-row"><span class="info-label">Experience</span><span class="info-value">' + escapeHTML(minder.experience) + '</span></div>';
+    if (minder.petsCaredFor) html += '<div class="info-row"><span class="info-label">Pets accepted</span><span class="info-value">' + escapeHTML(minder.petsCaredFor) + '</span></div>';
+    if (minder.services)     html += '<div class="info-row"><span class="info-label">Services</span><span class="info-value">' + escapeHTML(minder.services) + '</span></div>';
+    const priceStr = (minder.priceMin != null && minder.priceMax != null) ? '£' + minder.priceMin + ' – £' + minder.priceMax + '/hr' : (minder.rate || '');
+    if (priceStr) html += '<div class="info-row"><span class="info-label">Rate</span><span class="info-value">' + escapeHTML(priceStr) + '</span></div>';
+    if (minder.certifications) html += '<div class="info-row"><span class="info-label">Certifications</span><span class="info-value" style="white-space:pre-wrap;text-align:right;max-width:60%">' + escapeHTML(minder.certifications) + '</span></div>';
+    if (!html && isRealMinder) html = '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:8px 0">This minder hasn\'t added service details yet.</p>';
+    details.innerHTML = html;
+  }
+  renderMinderAvailability(minder);
+}
+
+// Tracks which minder is currently being viewed on minder.html so submitReview
+// knows where to attach the review the user just wrote.
+
+async function loadMinderReviews(minderId) {
+  const list = document.getElementById('minder-reviews-list');
+  if (!list) return;
+  if (typeof minderId !== 'number') {
+    list.innerHTML = '<div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow);text-align:center;color:var(--bark-light);font-size:13px">Reviews are only available for verified minders.</div>';
+    updateMinderStarsSummary([]);
+    return;
+  }
+  try {
+    const reviews = await api.getMinderReviews(minderId);
+    renderMinderReviews(reviews);
+    updateMinderStarsSummary(reviews);
+  } catch {
+    list.innerHTML = '<div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow);text-align:center;color:var(--bark-light);font-size:13px">Could not load reviews.</div>';
+  }
+}
+
+function renderMinderReviews(reviews) {
+  const list = document.getElementById('minder-reviews-list');
+  if (!list) return;
+
+  const _rvRoles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role || ''];
+  const _isOwner  = _rvRoles.includes('owner');
+  const _isSelf   = currentMinderId != null && String(currentMinderId) === String(store.currentUserId());
+
+  const reviewCards = reviews.length
+    ? reviews.map(r => {
+        const stars = '★'.repeat(r.rating || r.stars || 0) + '☆'.repeat(5 - (r.rating || r.stars || 0));
+        const when  = formatChatTime(r.createdAt);
+        return '<div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)">'
+          + '<div style="display:flex;justify-content:space-between;margin-bottom:8px">'
+          + '<strong style="font-size:14px">' + escapeHTML(r.authorName || r.reviewerName || 'User') + '</strong>'
+          + '<span style="color:#f5a623">' + stars + '</span></div>'
+          + '<p style="font-size:13px;color:var(--bark-light);line-height:1.6">"' + escapeHTML(r.text) + '"</p>'
+          + '<p style="font-size:11px;color:var(--bark-light);margin-top:8px">' + when + '</p></div>';
+      }).join('')
+    : '<div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow);text-align:center;color:var(--bark-light);font-size:13px">No reviews yet.</div>';
+
+  // Write-review box — only for owners viewing someone else's profile
+  const writeBox = (_isOwner && !_isSelf) ? `
+    <div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)">
+      <p style="font-family:'Playfair Display',serif;font-size:15px;font-weight:600;color:var(--bark);margin-bottom:12px">Leave a Review</p>
+      <div class="star-rating-input" id="review-stars">
+        <span class="star-btn" onclick="setReviewStars(1)">★</span>
+        <span class="star-btn" onclick="setReviewStars(2)">★</span>
+        <span class="star-btn" onclick="setReviewStars(3)">★</span>
+        <span class="star-btn" onclick="setReviewStars(4)">★</span>
+        <span class="star-btn" onclick="setReviewStars(5)">★</span>
+      </div>
+      <textarea id="review-text-input" placeholder="Write your review..." style="width:100%;padding:12px 14px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);resize:vertical;min-height:70px;outline:none;margin-top:10px"></textarea>
+      <button class="btn-primary" style="width:100%;margin-top:10px;padding:12px" onclick="submitReview()">Submit Review</button>
+    </div>` : '';
+
+  list.innerHTML = reviewCards + writeBox;
+  reviewStars = 0;
+}
+
+function updateMinderStarsSummary(reviews) {
+  const starsEl = document.getElementById('mp-stars');
+  if (!starsEl) return;
+  if (!reviews || !reviews.length) {
+    starsEl.innerHTML = '☆☆☆☆☆ <span style="font-size:13px;opacity:0.8">(no reviews yet)</span>';
+    return;
+  }
+  const avg = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+  const rounded = Math.round(avg);
+  const stars = '★'.repeat(rounded) + '☆'.repeat(5 - rounded);
+  starsEl.innerHTML = stars + ' <span style="font-size:13px;opacity:0.8">(' + reviews.length + ' review' + (reviews.length === 1 ? '' : 's') + ')</span>';
+}
+
+// Render the minder's availability tab from their saved arrays. Falls back
+// to a "not set" grid/message when a minder hasn't configured anything yet.
+
+function renderMinderAvailability(minder) {
+  const grid  = document.getElementById('mp-avail-grid');
+  const slots = document.getElementById('mp-avail-slots');
+  if (!grid || !slots) return;
+
+  const avail = (minder.availability && typeof minder.availability === 'object') ? minder.availability : {};
+  const isRealMinder = typeof minder.id === 'number';
+
+  const DAY_DEFS = [
+    { key: 'mon', label: 'M' }, { key: 'tue', label: 'T' }, { key: 'wed', label: 'W' },
+    { key: 'thu', label: 'T' }, { key: 'fri', label: 'F' }, { key: 'sat', label: 'S' },
+    { key: 'sun', label: 'S' }
+  ];
+  const DAY_FULL = { mon:'Monday', tue:'Tuesday', wed:'Wednesday', thu:'Thursday', fri:'Friday', sat:'Saturday', sun:'Sunday' };
+  const SLOT_LABELS = { morning: 'Morning (8–12)', afternoon: 'Afternoon (12–5)', evening: 'Evening (5–8)' };
+
+  grid.innerHTML = DAY_DEFS.map(d => {
+    const on = isRealMinder ? Array.isArray(avail[d.key]) && avail[d.key].length > 0 : true;
+    return '<div class="avail-day ' + (on ? 'available' : 'busy') + '"><div>' + d.label + '</div><div>' + (on ? '✓' : '–') + '</div></div>';
+  }).join('');
+
+  // Per-day slot breakdown
+  if (isRealMinder && Object.keys(avail).length) {
+    slots.innerHTML = DAY_DEFS.filter(d => Array.isArray(avail[d.key]) && avail[d.key].length)
+      .map(d => {
+        const slotLabels = avail[d.key].map(s => SLOT_LABELS[s] || s).join(', ');
+        return '<div class="info-row"><span class="info-label">' + DAY_FULL[d.key] + '</span><span class="info-value">' + slotLabels + '</span></div>';
+      }).join('');
+  } else if (isRealMinder) {
+    slots.innerHTML = '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:8px 0">This minder hasn\'t set their availability yet.</p>';
+  } else {
+    // Legacy demo minders — show all slots on all days
+    slots.innerHTML = Object.entries(SLOT_LABELS).map(([, label]) =>
+      '<div class="info-row"><span class="info-label">' + label + '</span><span class="info-value">✅ Available</span></div>'
+    ).join('');
+  }
+}
+
+function formatChatTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) return d.toTimeString().slice(0, 5);
+  const yest = new Date(now); yest.setDate(now.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return 'Yesterday';
+  const diffDays = Math.floor((now - d) / 86400000);
+  if (diffDays < 7) return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+  return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+function formatMsgTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso); if (isNaN(d.getTime())) return '';
+  return d.toTimeString().slice(0, 5);
+}
+
+function chatAvatarHTML(other) {
+  if (other && other.avatar) {
+    return '<img class="avatar-img" src="' + other.avatar + '" alt="">';
+  }
+  return '🧑';
+}
+
+async function loadChatList() {
+  const list = document.getElementById('chat-list');
+  if (!list) return;
+  try {
+    const chats = await api.getChats();
+    chatListCache = chats;
+    renderChatList();
+  } catch {
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--bark-light);font-size:13px">Could not load chats.</div>';
+  }
+}
+
+function renderChatList() {
+  const list = document.getElementById('chat-list');
+  if (!list) return;
+  if (!chatListCache.length) {
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--bark-light);font-size:13px">No conversations yet.<br>Accept a booking or message a minder to start.</div>';
+    return;
+  }
+  list.innerHTML = chatListCache.map(c => {
+    const activeCls = activeChat === c.id ? ' active-chat' : '';
+    const unread = (c.unread && activeChat !== c.id) ? '<div class="chat-unread">' + c.unread + '</div>' : '';
+    // Green dot for online counterparts, grey dot for offline. The CSS class
+    // .chat-online already paints green; offline gets an inline grey override.
+    const presenceDot = c.other.online
+      ? '<div class="chat-online"></div>'
+      : '<div class="chat-online" style="background:#9e9e9e"></div>';
+    return '<div class="chat-item' + activeCls + '" data-chat-id="' + c.id + '" onclick="openChatInline(' + c.id + ')">'
+      + '<div class="chat-avatar">' + chatAvatarHTML(c.other) + presenceDot + '</div>'
+      + '<div class="chat-info"><div class="chat-name">' + (c.other.name || 'User') + '</div>'
+      + '<div class="chat-preview">' + (c.lastPreview || 'No messages yet') + '</div></div>'
+      + '<div class="chat-meta"><div class="chat-time">' + formatChatTime(c.lastMessageAt) + '</div>' + unread + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+function selectRatingFilter(el) {
+  const wasActive = el.classList.contains('active');
+  document.querySelectorAll('#filter-rating .filter-opt').forEach(o => o.classList.remove('active'));
+  if (!wasActive) el.classList.add('active');
+}
+
+// Location search bar — triggered by the Go button or Enter key
+
+function openReportMinderModal() {
+  if (!currentReportTarget || currentReportTarget.targetRole !== 'minder') {
+    showToast('❌ Unable to report this profile');
+    return;
+  }
+  openReportModalWith(currentReportTarget);
+}
+
+function openReportFromChat() {
+  if (!activeChat) { showToast('❌ Open a chat first'); return; }
+  const chat = chatListCache.find(c => c.id === activeChat);
+  if (!chat || !chat.other) { showToast('❌ Unable to report this chat'); return; }
+  currentReportTarget = {
+    targetUserId: chat.other.id,
+    targetName:   chat.other.name,
+    targetRole:   null,
+    context:      'chat',
+    chatId:       activeChat
+  };
+  openReportModalWith(currentReportTarget);
+}
+
+function openReportCustomerModal(bookingId, ownerId, ownerName) {
+  currentReportTarget = {
+    targetUserId: ownerId,
+    targetName:   ownerName,
+    targetRole:   'owner',
+    context:      'booking',
+    bookingId:    bookingId
+  };
+  openReportModalWith(currentReportTarget);
+}
+
+function openReportModalWith(target) {
+  const modal = document.getElementById('report-modal');
+  if (!modal) { showToast('❌ Report form unavailable on this page'); return; }
+  const roleLabel = target.targetRole === 'minder' ? 'Pet Minder' : (target.targetRole === 'owner' ? 'Pet Owner' : '');
+  const targetEl  = document.getElementById('report-modal-target');
+  const titleEl   = document.getElementById('report-modal-title');
+  const reasonEl  = document.getElementById('report-modal-reason');
+  const catEl     = document.getElementById('report-modal-category');
+  if (titleEl)  titleEl.textContent = '🚩 Report ' + (roleLabel || 'User');
+  if (targetEl) targetEl.textContent = 'Reporting: ' + (target.targetName || 'Unknown') + (roleLabel ? ' (' + roleLabel + ')' : '');
+  if (reasonEl) reasonEl.value = '';
+  if (catEl)    catEl.selectedIndex = 0;
+  modal.classList.add('open');
+}
+
+function closeReportModal() {
+  const modal = document.getElementById('report-modal');
+  if (modal) modal.classList.remove('open');
+}
+
+async function submitReportModal() {
+  if (!currentReportTarget) { showToast('❌ No user selected'); return; }
+  const reasonEl = document.getElementById('report-modal-reason');
+  const catEl    = document.getElementById('report-modal-category');
+  const reason   = (reasonEl && reasonEl.value || '').trim();
+  const category = (catEl && catEl.value || '').trim();
+  if (!reason) { showToast('❌ Please describe what happened'); return; }
+  const fullReason = category ? ('[' + category + '] ' + reason) : reason;
+  try {
+    await api.createDispute({
+      reason:       fullReason,
+      targetUserId: currentReportTarget.targetUserId,
+      targetName:   currentReportTarget.targetName,
+      targetRole:   currentReportTarget.targetRole,
+      context:      currentReportTarget.context,
+      bookingId:    currentReportTarget.bookingId,
+      chatId:       currentReportTarget.chatId
+    });
+    showToast('✅ Report submitted. Our team will review it.');
+    closeReportModal();
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Failed to submit report'));
+  }
+}
+
+function getSelectedChipsArray(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return [];
+  return Array.from(el.querySelectorAll('.chip-btn.active')).map(b => b.getAttribute('data-value'));
+}
+
+function setSelectedChipsArray(containerId, arr) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const vals = (Array.isArray(arr) ? arr : []).map(v => String(v).toLowerCase());
+  el.querySelectorAll('.chip-btn').forEach(b => {
+    b.classList.toggle('active', vals.includes(b.getAttribute('data-value').toLowerCase()));
+  });
+}
+// Per-day availability grid helpers (edit profile modal).
+// The grid is a set of .avail-day-row[data-day] elements, each containing
+// .avail-slot-btn[data-value] chip buttons.
+
+function loadAvailabilityGrid(avail) {
+  const grid = document.getElementById('edit-avail-grid');
+  if (!grid) return;
+  grid.querySelectorAll('.avail-day-row').forEach(row => {
+    const day = row.dataset.day;
+    const slots = (avail && Array.isArray(avail[day])) ? avail[day] : [];
+    row.querySelectorAll('.avail-slot-btn').forEach(btn => {
+      btn.classList.toggle('active', slots.includes(btn.dataset.value));
+    });
+  });
+}
+
+function readAvailabilityGrid() {
+  const grid = document.getElementById('edit-avail-grid');
+  if (!grid) return {};
+  const avail = {};
+  grid.querySelectorAll('.avail-day-row').forEach(row => {
+    const day = row.dataset.day;
+    const slots = Array.from(row.querySelectorAll('.avail-slot-btn.active')).map(b => b.dataset.value);
+    if (slots.length) avail[day] = slots;
+  });
+  return avail;
+}
+
+// Clamp price input value to 0–50
+
+// ===== AVAILABILITY HELPERS =====
 // ===== TOAST =====
 function showToast(msg) {
   const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');

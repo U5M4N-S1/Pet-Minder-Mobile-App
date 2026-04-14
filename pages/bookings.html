@@ -32,10 +32,8 @@
     <div id="bookings-main-section">
       <div style="padding:24px 24px 0"><h1 style="font-family:'Playfair Display',serif;font-size:26px;color:var(--bark);margin-bottom:16px">My Bookings</h1><div class="auth-tabs" id="bookings-tabs-row" style="max-width:420px"><button class="auth-tab active" id="bookings-tab-upcoming" onclick="switchBookingTab(this,'upcoming')">Upcoming</button><button class="auth-tab" id="bookings-tab-past" onclick="switchBookingTab(this,'past')">Past</button><button class="auth-tab" id="bookings-tab-requests" style="display:none" onclick="switchBookingTab(this,'requests')">Requests</button></div></div>
       <div style="padding:20px 24px" id="bookings-upcoming"><div class="booking-list" id="bookings-upcoming-list"></div></div>
-      <div style="padding:0 24px 20px" id="bookings-gps-live"><div class="gps-card"><h4>📍 Live Tracking</h4><div class="gps-map-placeholder"><div class="gps-dot" style="top:40%;left:55%"></div><span style="position:absolute;bottom:10px;right:10px;font-size:11px;background:white;padding:4px 8px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.1)">🗺 Victoria Park area</span></div><div class="gps-info"><div class="gps-stat"><div class="gps-stat-val">0.8mi</div><div class="gps-stat-label">Distance</div></div><div class="gps-stat"><div class="gps-stat-val">23min</div><div class="gps-stat-label">Duration</div></div><div class="gps-stat"><div class="gps-stat-val">Active</div><div class="gps-stat-label">Status</div></div></div></div></div>
       <div style="padding:20px 24px;display:none" id="bookings-past"><div class="booking-list" id="bookings-past-list"></div></div>
       <div style="padding:20px 24px;display:none" id="bookings-requests"><div class="booking-list" id="bookings-requests-list"></div></div>
-      <div style="padding:0 24px 20px;display:none" id="bookings-gps"><div class="gps-card"><h4>🗺 Completed Walk Routes</h4><div class="gps-route-card" onclick="showToast('Route map opening...')"><div class="gps-route-icon">🗺️</div><div class="gps-route-info"><div class="gps-route-date">28 Mar – Buddy with Sarah K.</div><div class="gps-route-detail">1.2mi · 45min · Victoria Park loop</div></div><span style="color:var(--bark-light);font-size:16px">›</span></div><div class="gps-route-card" onclick="showToast('Route map opening...')"><div class="gps-route-icon">🗺️</div><div class="gps-route-info"><div class="gps-route-date">22 Mar – Buddy with Sarah K.</div><div class="gps-route-detail">0.9mi · 38min · Canal towpath</div></div><span style="color:var(--bark-light);font-size:16px">›</span></div></div></div>
     </div>
     <!-- Booking detail view (shown when a card is clicked) -->
     <div id="bookings-detail-section" style="display:none;padding:24px">
@@ -50,6 +48,30 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- REPORT USER MODAL (shared) -->
+<div class="report-modal-overlay" id="report-modal" onclick="if(event.target===this)closeReportModal()">
+  <div class="report-modal">
+    <div class="report-modal-header">
+      <h3 id="report-modal-title">🚩 Report User</h3>
+      <button class="report-modal-close" onclick="closeReportModal()" aria-label="Close">×</button>
+    </div>
+    <p class="report-modal-target" id="report-modal-target">Reporting: —</p>
+    <div class="field-group"><label>Category</label><select id="report-modal-category">
+      <option>Inappropriate behaviour</option>
+      <option>Harassment or abuse</option>
+      <option>Scam or fraud</option>
+      <option>Unsafe pet care</option>
+      <option>No-show / missed booking</option>
+      <option>Other</option>
+    </select></div>
+    <div class="field-group"><label>What happened?</label><textarea id="report-modal-reason" placeholder="Please describe the issue in detail..." rows="5"></textarea></div>
+    <div class="report-modal-actions">
+      <button class="btn-outline" onclick="closeReportModal()">Cancel</button>
+      <button class="btn-primary" onclick="submitReportModal()">Submit Report</button>
+    </div>
+  </div>
+</div>
+
 <!-- CONFIRM MODAL -->
 <div class="confirm-modal-overlay" id="confirm-modal" onclick="if(event.target===this)closeConfirmModal()"><div class="confirm-modal"><div class="confirm-modal-icon" id="confirm-modal-icon">⚠️</div><h3 id="confirm-modal-title">Are you sure?</h3><p id="confirm-modal-message">This action cannot be undone.</p><div class="confirm-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:12px" onclick="closeConfirmModal()">Cancel</button><button class="btn-primary" style="flex:1;padding:12px" id="confirm-modal-btn">Confirm</button></div></div></div>
 
@@ -57,7 +79,10 @@
 <script>
 (async () => {
   try {
-    const bookings = await api.getBookings();
+    // Pull bookings from BOTH perspectives so a minder sees both the
+    // bookings they placed as an owner and the ones they received as a
+    // minder (recipient cards are tagged for the orange/yellow style).
+    const bookings = await loadAllBookingsForUser();
     allBookingsCache = bookings;
     renderBookingCards('bookings-upcoming-list', filterUpcoming(bookings));
     renderBookingCards('bookings-past-list',     filterPast(bookings));
@@ -69,10 +94,11 @@
   // If the logged-in user is a minder, also pre-load their pending
   // requests tab so switching to it is instant and the pending count is
   // correct from the moment the page renders.
-  if (userProfile.role === 'minder') loadBookingRequests();
+  const _bRoles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role || 'owner'];
+  if (_bRoles.includes('minder')) loadBookingRequests();
 
   // Show Requests tab for minders
-  if (userProfile.role === 'minder') {
+  if (_bRoles.includes('minder')) {
     const reqTab = document.getElementById('bookings-tab-requests');
     if (reqTab) reqTab.style.display = '';
   }

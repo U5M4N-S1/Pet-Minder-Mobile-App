@@ -1,6 +1,7 @@
 const express    = require('express');
 const db         = require('../db');
 const { requireAuth } = require('../middleware/authMiddleware');
+const { validateBookingSlot, normalizeAvailability } = require('../lib/availability');
 
 const router = express.Router();
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -32,6 +33,7 @@ function toDTO(b) {
   return {
     id:          b.id,
     minder:      b.minderKey,
+    ownerId:     b.ownerId,
     minderName:  liveName,
     minderImage: liveImage,
     avatar:      b.minderAvatar || '🧑‍🦱',
@@ -59,6 +61,12 @@ router.get('/', requireAuth, (req, res) => {
 
 // POST /api/bookings
 router.post('/', requireAuth, (req, res) => {
+  // Only pet owners may place bookings
+  const booker = db.get('users').find({ id: req.user.userId }).value();
+  const bookerRoles = Array.isArray(booker && booker.role) ? booker.role : [booker && booker.role || ''];
+  if (!bookerRoles.includes('owner')) {
+    return res.status(403).json({ error: 'Only pet owners can place bookings. Add a pet to your profile to get started.' });
+  }
   const { minderKey, minderName, minderAvatar, minderImage, service, bookingDate, bookingTime, petNames, petIds, price } = req.body;
   const selectedPetIds = Array.isArray(petIds) ? petIds.map(String).filter(Boolean) : [];
   const selectedPetNames = String(petNames || '').split(/\s*&\s*/).map(n => n.trim().toLowerCase()).filter(Boolean);
@@ -70,9 +78,20 @@ router.post('/', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'bookingDate must be YYYY-MM-DD' });
   }
 
-  // Prevent a minder from booking themselves
-  if (String(minderKey) === String(req.user.userId)) {
-    return res.status(400).json({ error: 'You cannot book yourself as a minder' });
+  // Availability check — enforced for any booking targeting a real minder
+  // account. Legacy demo minders (non-numeric keys like 'sarah') are not in
+  // the users table and have no availability data, so we skip them to keep
+  // the seeded demo flow working. Real numeric ids must validate.
+  if (minderKey != null && /^\d+$/.test(String(minderKey))) {
+    const minderUser = db.get('users').find({ id: Number(minderKey) }).value();
+    const minderRoles = Array.isArray(minderUser && minderUser.role) ? minderUser.role : [minderUser && minderUser.role || ''];
+    if (!minderUser || !minderRoles.includes('minder')) {
+      return res.status(404).json({ error: 'Minder not found' });
+    }
+    const check = validateBookingSlot(minderUser, bookingDate, bookingTime);
+    if (!check.ok) {
+      return res.status(409).json({ error: check.error });
+    }
   }
 
   // Conflict 1: same pet already has a non-cancelled booking at this slot
@@ -139,6 +158,23 @@ router.post('/', requireAuth, (req, res) => {
   };
 
   db.get('bookings').push(booking).write();
+
+  // Notify the minder about the new booking request
+  if (minderKey != null && /^\d+$/.test(String(minderKey))) {
+    const owner = db.get('users').find({ id: req.user.userId }).value();
+    const ownerName = owner ? ((owner.firstName || '') + ' ' + (owner.lastName || '')).trim() : 'A customer';
+    db.get('notifications').push({
+      id:        nextNotifId(),
+      userId:    Number(minderKey),
+      type:      'booking_request',
+      bookingId: booking.id,
+      title:     'New booking request',
+      message:   ownerName + ' wants to book ' + service + ' for ' + petNames + ' on ' + bookingDate + ' at ' + bookingTime + '.',
+      read:      false,
+      createdAt: new Date().toISOString()
+    }).write();
+  }
+
   res.status(201).json(toDTO(booking));
 });
 
@@ -149,10 +185,12 @@ router.get('/requests', requireAuth, (req, res) => {
     .sortBy('createdAt')
     .value()
     .reverse();                    // newest first
-  // Attach pet-owner name so the minder knows who's requesting
+  // Attach pet-owner name + id so the minder knows who's requesting
+  // and can reference them in the reporting flow.
   const enriched = bookings.map(b => {
     const owner = db.get('users').find({ id: b.ownerId }).value();
     const dto   = toDTO(b);
+    dto.ownerId   = b.ownerId;
     dto.ownerName = owner ? ((owner.firstName || '') + ' ' + (owner.lastName || '')).trim() : 'Unknown';
     return dto;
   });
@@ -170,8 +208,15 @@ router.patch('/:id', requireAuth, (req, res) => {
   const isMinder = Number(booking.minderKey) === req.user.userId;
   const isOwner  = booking.ownerId === req.user.userId;
 
-  if (isMinder && ['confirmed', 'declined'].includes(status)) {
+  if (isMinder && ['confirmed', 'declined', 'cancelled'].includes(status)) {
     row.assign({ status }).write();
+
+    let chatId = null;
+    if (status === 'confirmed') {
+      const { findOrCreateChat } = require('./chats');
+      const chat = findOrCreateChat(booking.ownerId, Number(booking.minderKey));
+      if (chat) chatId = chat.id;
+    }
 
     // Cascade: when a minder accepts a booking, auto-decline all other
     // pending requests for the same minder at the same date/time, and
@@ -202,10 +247,83 @@ router.patch('/:id', requireAuth, (req, res) => {
       });
     }
 
-    return res.json(toDTO(row.value()));
+    // Notify the owner about the accept/decline decision
+    const minderUser = db.get('users').find({ id: Number(booking.minderKey) }).value();
+    const minderFullName = minderUser ? ((minderUser.firstName || '') + ' ' + (minderUser.lastName || '')).trim() : (booking.minderName || 'The minder');
+    const ownerUser = db.get('users').find({ id: booking.ownerId }).value();
+    const ownerFullName = ownerUser ? ((ownerUser.firstName || '') + ' ' + (ownerUser.lastName || '')).trim() : 'The customer';
+
+    if (status === 'confirmed') {
+      // Notify the owner their booking was confirmed
+      db.get('notifications').push({
+        id:        nextNotifId(),
+        userId:    booking.ownerId,
+        type:      'booking_confirmed',
+        bookingId: booking.id,
+        title:     'Booking confirmed!',
+        message:   minderFullName + ' accepted your booking for ' + booking.petNames + ' on ' + booking.bookingDate + ' at ' + booking.bookingTime + '.',
+        read:      false,
+        createdAt: new Date().toISOString()
+      }).write();
+      // Notify the minder as confirmation receipt
+      db.get('notifications').push({
+        id:        nextNotifId(),
+        userId:    Number(booking.minderKey),
+        type:      'booking_confirmed',
+        bookingId: booking.id,
+        title:     'Booking confirmed',
+        message:   'You confirmed the booking for ' + ownerFullName + '\'s ' + booking.petNames + ' on ' + booking.bookingDate + ' at ' + booking.bookingTime + '.',
+        read:      false,
+        createdAt: new Date().toISOString()
+      }).write();
+    } else if (status === 'declined') {
+      db.get('notifications').push({
+        id:        nextNotifId(),
+        userId:    booking.ownerId,
+        type:      'booking_declined',
+        bookingId: booking.id,
+        title:     'Booking declined',
+        message:   minderFullName + ' declined your booking for ' + booking.petNames + ' on ' + booking.bookingDate + ' at ' + booking.bookingTime + '.',
+        read:      false,
+        createdAt: new Date().toISOString()
+      }).write();
+    } else if (status === 'cancelled') {
+      db.get('notifications').push({
+        id:        nextNotifId(),
+        userId:    booking.ownerId,
+        type:      'booking_declined',
+        bookingId: booking.id,
+        title:     'Booking cancelled by carer',
+        message:   minderFullName + ' cancelled your booking for ' + booking.petNames + ' on ' + booking.bookingDate + ' at ' + booking.bookingTime + '.',
+        read:      false,
+        createdAt: new Date().toISOString()
+      }).write();
+    }
+
+    const dto = toDTO(row.value());
+    if (chatId) dto.chatId = chatId;
+    return res.json(dto);
   }
   if (isOwner && status === 'cancelled') {
     row.assign({ status }).write();
+    return res.json(toDTO(row.value()));
+  }
+
+  // Minder marks a confirmed booking as completed
+  if (isMinder && status === 'completed' && booking.status === 'confirmed') {
+    row.assign({ status: 'completed' }).write();
+    const minderUser    = db.get('users').find({ id: Number(booking.minderKey) }).value();
+    const minderFullName = minderUser ? ((minderUser.firstName || '') + ' ' + (minderUser.lastName || '')).trim() : (booking.minderName || 'Your minder');
+    db.get('notifications').push({
+      id:        nextNotifId(),
+      userId:    booking.ownerId,
+      type:      'booking_completed',
+      bookingId: booking.id,
+      title:     'Walk complete! 🐾',
+      message:   minderFullName + ' has finished the ' + booking.service + ' for ' + booking.petNames + '. How did it go? Leave a review!',
+      read:      false,
+      createdAt: new Date().toISOString()
+    }).write();
     return res.json(toDTO(row.value()));
   }
 
@@ -228,7 +346,15 @@ router.get('/minder/:id/taken', requireAuth, (req, res) => {
               && b.status === 'confirmed')
     .map('bookingTime')
     .value();
-  res.json({ minderId, date, taken });
+
+  // Also return the minder's published availability (per-day object) so the
+  // booking UI can grey out slots that fall on unavailable days/times.
+  let availability = {};
+  if (/^\d+$/.test(minderId)) {
+    const mu = db.get('users').find({ id: Number(minderId) }).value();
+    if (mu) availability = normalizeAvailability(mu);
+  }
+  res.json({ minderId, date, taken, availability });
 });
 
 module.exports = router;

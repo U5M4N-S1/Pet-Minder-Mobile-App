@@ -50,6 +50,7 @@ router.get('/users', requireAuth, requireAdmin, (_req, res) => {
       priceMin:         u.priceMin != null ? u.priceMin : 0,
       priceMax:         u.priceMax != null ? u.priceMax : 50,
       availableForBooking: u.availableForBooking !== false,
+      pendingServices: Array.isArray(u.pendingServices) ? u.pendingServices : [],
     };
   });
   res.json(users);
@@ -104,6 +105,7 @@ router.patch('/users/:id', requireAuth, requireAdmin, (req, res) => {
     priceMin:        u.priceMin != null ? u.priceMin : 0,
     priceMax:        u.priceMax != null ? u.priceMax : 50,
     availableForBooking: u.availableForBooking !== false,
+    pendingServices: Array.isArray(u.pendingServices) ? u.pendingServices : [],
   });
 });
 
@@ -189,6 +191,10 @@ router.patch('/users/:id/services', requireAuth, requireAdmin, (req, res) => {
     enabledServices = enabledServices.filter(s => s !== service);
   }
 
+  // When enabling, remove the service from pendingServices (application resolved)
+  let pendingServices = Array.isArray(user.pendingServices) ? [...user.pendingServices] : [];
+  if (enabled) pendingServices = pendingServices.filter(s => s !== service);
+
   // When disabling, also strip the service from the minder's services string so
   // it doesn't linger in their profile or reappear on their next profile save.
   const updates = { enabledServices };
@@ -215,7 +221,7 @@ router.patch('/users/:id/services', requireAuth, requireAdmin, (req, res) => {
     createdAt: new Date().toISOString()
   }).write();
 
-  res.json({ id, enabledServices, services: row.value().services || '' });
+  res.json({ id, enabledServices, pendingServices: row.value().pendingServices || [], services: row.value().services || '' });
 });
 
 module.exports = router;

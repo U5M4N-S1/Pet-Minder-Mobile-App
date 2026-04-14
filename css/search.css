@@ -47,3 +47,40 @@
 .filter-actions { display: flex; gap: 10px; margin-top: 8px; }
 .btn-filter-clear { flex: 1; padding: 14px; border-radius: 50px; border: 1.5px solid var(--sand); background: white; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500; color: var(--bark-light); cursor: pointer; }
 .btn-filter-apply { flex: 2; padding: 14px; border-radius: 50px; border: none; background: var(--terra); color: white; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; }
+
+/* ===== QUICK SORT CHIPS ===== */
+.sort-chips-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 0 2px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.sort-chips-row::-webkit-scrollbar { display: none; }
+
+.sort-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1.5px solid var(--sand-dark, #d4c4a8);
+  background: var(--white, #fff);
+  color: var(--bark, #5c4a32);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.sort-chip:hover {
+  background: var(--sand-light, #f5efe6);
+  border-color: var(--terra, #c17f5e);
+}
+.sort-chip.active {
+  background: var(--terra, #c17f5e);
+  border-color: var(--terra, #c17f5e);
+  color: #fff;
+}

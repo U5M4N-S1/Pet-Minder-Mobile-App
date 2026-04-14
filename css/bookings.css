@@ -20,3 +20,9 @@
 /* Declined/cancelled booking status */
 .status-declined { background: #ffebee; color: #c62828; }
 .status-cancelled { background: #fce4ec; color: #b71c1c; }
+
+/* Recipient style — applied to booking cards where the logged-in user is
+   the minder (i.e. they received the booking request). Light orange/yellow
+   tint distinguishes them from cards the user placed themselves. */
+.booking-card.recipient { background: #fff4d6; border: 1px solid #f5d77a; }
+.booking-card.recipient:hover { background: #ffeec0; }

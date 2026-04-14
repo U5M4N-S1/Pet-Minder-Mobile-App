@@ -91,23 +91,47 @@
 <!-- PROFILE REVIEWS -->
 <div class="screen" id="screen-profile-reviews">
   <div class="page-content">
-    <div class="profile-sub-header">
+    <div class="profile-sub-header" style="padding:0 24px">
       <button class="back-btn" style="position:static;background:var(--sand-light);color:var(--bark);margin-bottom:16px" onclick="goBack()">←</button>
-      <h1 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--bark);margin-bottom:6px">Reviews</h1>
-      <p style="font-size:13px;color:var(--bark-light);margin-bottom:20px">Leave reviews for minders you've booked</p>
+      <h1 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--bark);margin-bottom:4px">Reviews</h1>
+      <p style="font-size:13px;color:var(--bark-light);margin-bottom:20px" id="reviews-subtitle">Your review history</p>
     </div>
 
-    <!-- Received reviews section — visible only to minders -->
-    <div id="received-reviews-section" style="display:none;padding:0 24px 8px">
-      <h2 id="received-reviews-title" style="font-family:'Playfair Display',serif;font-size:17px;color:var(--bark);margin-bottom:12px">My Minder Reviews</h2>
-      <div id="received-reviews-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px"></div>
-    </div>
+    <!-- Accordion sections — JS shows/hides based on role -->
+    <div style="padding:0 24px 24px;display:flex;flex-direction:column;gap:10px">
 
-    <!-- Write reviews for booked minders -->
-    <div style="padding:0 24px 4px">
-      <h2 style="font-family:'Playfair Display',serif;font-size:17px;color:var(--bark);margin-bottom:12px">Write a Review</h2>
+      <!-- Section A: Reviews I've received (minder role) -->
+      <div id="accordion-received" style="display:none;border-radius:var(--radius);overflow:hidden;box-shadow:0 2px 12px var(--shadow)">
+        <button onclick="toggleReviewAccordion('received')"
+          style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:16px 18px;background:white;border:none;cursor:pointer;text-align:left">
+          <div>
+            <div style="font-family:'Playfair Display',serif;font-size:15px;font-weight:600;color:var(--bark)">⭐ Reviews I've Received</div>
+            <div id="received-reviews-subtitle" style="font-size:12px;color:var(--bark-light);margin-top:2px">As a minder</div>
+          </div>
+          <span id="accordion-received-chevron" style="font-size:18px;color:var(--bark-light);transition:transform 0.2s">›</span>
+        </button>
+        <div id="accordion-received-body" style="display:none;padding:0 18px 16px;background:white;border-top:1px solid var(--sand-light)">
+          <div id="received-reviews-title" style="font-family:'Playfair Display',serif;font-size:13px;color:var(--bark-light);margin:12px 0 10px"></div>
+          <div id="received-reviews-list" style="display:flex;flex-direction:column;gap:10px"></div>
+        </div>
+      </div>
+
+      <!-- Section B: Reviews I've given (owner role) -->
+      <div id="accordion-given" style="display:none;border-radius:var(--radius);overflow:hidden;box-shadow:0 2px 12px var(--shadow)">
+        <button onclick="toggleReviewAccordion('given')"
+          style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:16px 18px;background:white;border:none;cursor:pointer;text-align:left">
+          <div>
+            <div style="font-family:'Playfair Display',serif;font-size:15px;font-weight:600;color:var(--bark)">✍️ Reviews I've Given</div>
+            <div style="font-size:12px;color:var(--bark-light);margin-top:2px">Leave reviews for minders you've booked</div>
+          </div>
+          <span id="accordion-given-chevron" style="font-size:18px;color:var(--bark-light);transition:transform 0.2s">›</span>
+        </button>
+        <div id="accordion-given-body" style="display:none;padding:0 18px 16px;background:white;border-top:1px solid var(--sand-light)">
+          <div id="profile-reviews-minder-list" style="margin-top:12px"></div>
+        </div>
+      </div>
+
     </div>
-    <div style="padding:0 24px 24px"><div id="profile-reviews-minder-list"></div></div>
   </div>
 </div>
 
@@ -172,6 +196,20 @@
   </div>
 
   <div class="field-group"><label>Experience</label><input type="text" id="edit-experience" placeholder="e.g. 3 years"></div>
+
+  <div class="field-group"><label>Certifications &amp; Qualifications</label><textarea id="edit-certifications" placeholder="e.g. Pet First Aid Certified, DBS Checked, Canine Care Level 2..." style="width:100%;padding:12px 14px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);resize:vertical;min-height:70px;outline:none"></textarea></div>
+
+  <div class="field-group"><label>Availability (per day)</label>
+    <div id="edit-avail-grid" style="display:flex;flex-direction:column;gap:8px">
+      <div class="avail-day-row" data-day="mon"><span class="avail-day-label" style="width:44px;font-weight:600;font-size:13px;color:var(--bark)">Mon</span><div class="chip-group" style="gap:6px;flex-wrap:nowrap"><button type="button" class="chip-btn avail-slot-btn" data-value="morning">🌅 Morn</button><button type="button" class="chip-btn avail-slot-btn" data-value="afternoon">☀️ Aft</button><button type="button" class="chip-btn avail-slot-btn" data-value="evening">🌙 Eve</button></div></div>
+      <div class="avail-day-row" data-day="tue"><span class="avail-day-label" style="width:44px;font-weight:600;font-size:13px;color:var(--bark)">Tue</span><div class="chip-group" style="gap:6px;flex-wrap:nowrap"><button type="button" class="chip-btn avail-slot-btn" data-value="morning">🌅 Morn</button><button type="button" class="chip-btn avail-slot-btn" data-value="afternoon">☀️ Aft</button><button type="button" class="chip-btn avail-slot-btn" data-value="evening">🌙 Eve</button></div></div>
+      <div class="avail-day-row" data-day="wed"><span class="avail-day-label" style="width:44px;font-weight:600;font-size:13px;color:var(--bark)">Wed</span><div class="chip-group" style="gap:6px;flex-wrap:nowrap"><button type="button" class="chip-btn avail-slot-btn" data-value="morning">🌅 Morn</button><button type="button" class="chip-btn avail-slot-btn" data-value="afternoon">☀️ Aft</button><button type="button" class="chip-btn avail-slot-btn" data-value="evening">🌙 Eve</button></div></div>
+      <div class="avail-day-row" data-day="thu"><span class="avail-day-label" style="width:44px;font-weight:600;font-size:13px;color:var(--bark)">Thu</span><div class="chip-group" style="gap:6px;flex-wrap:nowrap"><button type="button" class="chip-btn avail-slot-btn" data-value="morning">🌅 Morn</button><button type="button" class="chip-btn avail-slot-btn" data-value="afternoon">☀️ Aft</button><button type="button" class="chip-btn avail-slot-btn" data-value="evening">🌙 Eve</button></div></div>
+      <div class="avail-day-row" data-day="fri"><span class="avail-day-label" style="width:44px;font-weight:600;font-size:13px;color:var(--bark)">Fri</span><div class="chip-group" style="gap:6px;flex-wrap:nowrap"><button type="button" class="chip-btn avail-slot-btn" data-value="morning">🌅 Morn</button><button type="button" class="chip-btn avail-slot-btn" data-value="afternoon">☀️ Aft</button><button type="button" class="chip-btn avail-slot-btn" data-value="evening">🌙 Eve</button></div></div>
+      <div class="avail-day-row" data-day="sat"><span class="avail-day-label" style="width:44px;font-weight:600;font-size:13px;color:var(--bark)">Sat</span><div class="chip-group" style="gap:6px;flex-wrap:nowrap"><button type="button" class="chip-btn avail-slot-btn" data-value="morning">🌅 Morn</button><button type="button" class="chip-btn avail-slot-btn" data-value="afternoon">☀️ Aft</button><button type="button" class="chip-btn avail-slot-btn" data-value="evening">🌙 Eve</button></div></div>
+      <div class="avail-day-row" data-day="sun"><span class="avail-day-label" style="width:44px;font-weight:600;font-size:13px;color:var(--bark)">Sun</span><div class="chip-group" style="gap:6px;flex-wrap:nowrap"><button type="button" class="chip-btn avail-slot-btn" data-value="morning">🌅 Morn</button><button type="button" class="chip-btn avail-slot-btn" data-value="afternoon">☀️ Aft</button><button type="button" class="chip-btn avail-slot-btn" data-value="evening">🌙 Eve</button></div></div>
+    </div>
+  </div>
 </div>
 <div class="pet-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="closeEditProfileModal()">Cancel</button><button class="btn-primary" style="flex:2;padding:14px" onclick="saveProfile()">Save Changes</button></div></div></div>
 
@@ -193,7 +231,7 @@
     <!-- Step 2a: upload qualifications (shown only if they clicked Yes) -->
     <div id="bm-step-quals" style="display:none">
       <h3>📜 Upload Qualifications</h3>
-      <p style="font-size:13px;color:var(--bark-light);margin-bottom:16px">Upload any certifications or proof of training (PDF, JPG or PNG).</p>
+      <p style="font-size:13px;color:var(--bark-light);margin-bottom:16px">Upload your certifications and select the advanced services you'd like to apply for.</p>
       <div class="reg-extras-box" style="margin-bottom:16px">
         <label class="file-upload-label">
           <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple id="bm-cert-input" onchange="bmHandleCerts()" style="display:none">
@@ -201,8 +239,26 @@
         </label>
         <div id="bm-cert-names" style="margin-top:8px;font-size:12px;color:var(--moss)"></div>
       </div>
-      <button id = "display-Next" class="btn-primary" style="width:100%;padding:14px;display: block;" onclick="bmShowStep3()">Next →</button>
-      <button id = "display-Back" style="background:none;border:none;color:var(--bark-light);font-size:13px;margin-top:12px;cursor:pointer;width:100%;text-align:center;display: block;" onclick="openBecomeMinder()">← Back</button>
+      <div style="margin-bottom:16px">
+        <label style="font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:10px">Services to Apply For</label>
+        <p style="font-size:12px;color:var(--bark-light);margin-bottom:10px">These require admin approval — select which you're qualified to offer.</p>
+        <div style="display:flex;flex-direction:column;gap:8px" id="qual-service-checkboxes">
+          <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--sand-light);border-radius:var(--radius-sm);cursor:pointer">
+            <input type="checkbox" value="Grooming" style="width:16px;height:16px;accent-color:var(--terra);cursor:pointer">
+            <div><div style="font-weight:500;font-size:14px;color:var(--bark)">🛁 Grooming</div><div style="font-size:12px;color:var(--bark-light)">Full wash, dry &amp; brush</div></div>
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--sand-light);border-radius:var(--radius-sm);cursor:pointer">
+            <input type="checkbox" value="Vet" style="width:16px;height:16px;accent-color:var(--terra);cursor:pointer">
+            <div><div style="font-weight:500;font-size:14px;color:var(--bark)">🏥 Vet Assistance</div><div style="font-size:12px;color:var(--bark-light)">Vet visit support &amp; medication</div></div>
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--sand-light);border-radius:var(--radius-sm);cursor:pointer">
+            <input type="checkbox" value="Training" style="width:16px;height:16px;accent-color:var(--terra);cursor:pointer">
+            <div><div style="font-weight:500;font-size:14px;color:var(--bark)">🎓 Training</div><div style="font-size:12px;color:var(--bark-light)">Obedience &amp; behaviour training</div></div>
+          </label>
+        </div>
+      </div>
+      <button id="display-Next" class="btn-primary" style="width:100%;padding:14px;display:block;" onclick="bmSubmitQuals()">Submit Application →</button>
+      <button id="display-Back" style="background:none;border:none;color:var(--bark-light);font-size:13px;margin-top:12px;cursor:pointer;width:100%;text-align:center;display:block;" onclick="openBecomeMinder()">← Back</button>
     </div>
 
     <!-- Step 2b / 3: choose services -->

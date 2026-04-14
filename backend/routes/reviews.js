@@ -83,4 +83,33 @@ router.post('/', requireAuth, (req, res) => {
   res.status(201).json(review);
 });
 
+// DELETE /api/reviews/:id — reviewer deletes their own review
+router.delete('/:id', requireAuth, (req, res) => {
+  const id  = Number(req.params.id);
+  const row = db.get('reviews').find({ id });
+  const rev = row.value();
+  if (!rev) return res.status(404).json({ error: 'Review not found' });
+  if (rev.reviewerId !== req.user.userId) return res.status(403).json({ error: 'You can only delete your own reviews' });
+  db.get('reviews').remove({ id }).write();
+  res.status(204).end();
+});
+
+// GET /api/reviews/mine — all reviews written by the logged-in user
+router.get('/mine', requireAuth, (req, res) => {
+  const reviews = db.get('reviews')
+    .filter({ reviewerId: req.user.userId })
+    .sortBy('createdAt')
+    .value()
+    .reverse();
+  // Attach minder name to each review
+  const enriched = reviews.map(r => {
+    const minder = db.get('users').find({ id: r.minderId }).value();
+    return {
+      ...r,
+      minderName: minder ? ((minder.firstName || '') + ' ' + (minder.lastName || '')).trim() : 'Unknown Minder'
+    };
+  });
+  res.json(enriched);
+});
+
 module.exports = router;

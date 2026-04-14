@@ -151,6 +151,8 @@ const api = {
   // Reviews
   getMinderReviews(minderId) { return this._req('GET',    '/reviews/minder/' + minderId); },
   submitReview(data)         { return this._req('POST',   '/reviews', data); },
+  deleteReview(id)           { return this._req('DELETE', '/reviews/' + id); },
+  getMyReviews()             { return this._req('GET',    '/reviews/mine'); },
   // Admin service toggle
   toggleAdminService(id, service, enabled) { return this._req('PATCH', '/admin/users/' + id + '/services', { service, enabled }); },
   // Minders (public)
@@ -1835,13 +1837,13 @@ function switchProfileTab(btn, tabId) {
     const container = document.getElementById('minder-reviews-list');
     if (container && container.dataset.loaded !== 'done') {
       if (_cachedMinderReviews) {
-        _renderMinderReviewsTab(_cachedMinderReviews.reviews);
+        renderMinderReviews(_cachedMinderReviews.reviews);
       } else {
         container.dataset.loaded = 'pending';
         container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--bark-light);font-size:13px">Loading reviews…</div>';
         api.getMinderReviews(currentReviewMinder).then(({ reviews, average, count }) => {
           _cachedMinderReviews = { reviews, average, count };
-          _renderMinderReviewsTab(reviews);
+          renderMinderReviews(reviews);
         }).catch(() => {
           container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--bark-light);font-size:13px">Could not load reviews.</div>';
         });
@@ -2430,43 +2432,28 @@ async function submitReview() {
   const text = document.getElementById('review-text-input').value.trim();
   if (!text) { showToast('❌ Please write a review'); return; }
   if (reviewStars === 0) { showToast('❌ Please select a star rating'); return; }
+  if (!currentReviewMinder) { showToast('❌ No minder selected'); return; }
 
-  if (_openMinderIsBackend && currentReviewMinder) {
-    try {
-      const r = await api.submitReview({ minderId: currentReviewMinder, stars: reviewStars, text });
-      showToast('✅ Review submitted!');
-      document.getElementById('review-text-input').value = '';
-      setReviewStars(0);
-      // Refresh the reviews tab
-      _cachedMinderReviews = null;
-      const { reviews, average, count } = await api.getMinderReviews(currentReviewMinder);
-      _cachedMinderReviews = { reviews, average, count };
-      _renderMinderReviewsTab(reviews);
-      // Update stars in header
-      const starsEl = document.getElementById('mp-stars');
-      if (starsEl && average) {
-        const filled = Math.round(Number(average));
-        const starStr2 = '★'.repeat(filled) + '☆'.repeat(5 - filled);
-        starsEl.innerHTML = '<span style="color:#f5a623">' + starStr2 + '</span> <span style="font-size:13px;opacity:0.9">' + average + '</span> <span style="font-size:13px;opacity:0.7">(' + count + ' review' + (count !== 1 ? 's' : '') + ')</span>';
-      }
-    } catch (err) {
-      showToast('❌ ' + (err.message || 'Could not submit review'));
+  try {
+    await api.submitReview({ minderId: Number(currentReviewMinder), stars: reviewStars, text });
+    showToast('✅ Review submitted!');
+    document.getElementById('review-text-input').value = '';
+    setReviewStars(0);
+    // Refresh the reviews tab
+    _cachedMinderReviews = null;
+    const { reviews, average, count } = await api.getMinderReviews(currentReviewMinder);
+    _cachedMinderReviews = { reviews, average, count };
+    renderMinderReviews(reviews);
+    // Update stars in header
+    const starsEl = document.getElementById('mp-stars');
+    if (starsEl && average) {
+      const filled = Math.round(Number(average));
+      const starStr2 = '★'.repeat(filled) + '☆'.repeat(5 - filled);
+      starsEl.innerHTML = '<span style="color:#f5a623">' + starStr2 + '</span> <span style="font-size:13px;opacity:0.9">' + average + '</span> <span style="font-size:13px;opacity:0.7">(' + count + ' review' + (count !== 1 ? 's' : '') + ')</span>';
     }
-    return;
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Could not submit review'));
   }
-
-  // Legacy local display for demo/hardcoded minders
-  const starStr = '★'.repeat(reviewStars) + '☆'.repeat(5 - reviewStars);
-  const container = document.getElementById('user-reviews-container');
-  if (container) {
-    const review = document.createElement('div');
-    review.style.cssText = 'background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)';
-    review.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><strong style="font-size:14px">' + userProfile.firstName + ' ' + userProfile.lastName.charAt(0) + '.</strong><span style="color:#f5a623">' + starStr + '</span></div><p style="font-size:13px;color:var(--bark-light);line-height:1.6">"' + text + '"</p><p style="font-size:11px;color:var(--bark-light);margin-top:8px">Just now</p>';
-    container.appendChild(review);
-  }
-  document.getElementById('review-text-input').value = '';
-  setReviewStars(0);
-  showToast('✅ Review submitted!');
 }
 
 // ===== REVIEWS (from profile section) =====
@@ -2500,11 +2487,12 @@ async function openProfileReviews() {
     else               subtitle.textContent = "Leave reviews for minders you've booked";
   }
 
-  // Auto-open the single section if only one role; leave both collapsed if dual-role
-  if (!isBoth) {
-    if (isMinder) toggleReviewAccordion('received');
-    if (isOwner && !isMinder) toggleReviewAccordion('given');
-  }
+  // Show screen immediately so elements are visible while data loads
+  show('profile-reviews'); currentScreen = 'profile-reviews';
+
+  // Auto-open sections based on role
+  if (isOwner) toggleReviewAccordion('given');
+  if (isMinder) toggleReviewAccordion('received');
 
   // ── Section A: Reviews received (minder) ──
   if (isMinder) {
@@ -2545,28 +2533,95 @@ async function openProfileReviews() {
   if (isOwner) {
     const list = document.getElementById('profile-reviews-minder-list');
     if (list) {
-      list.innerHTML = '';
-      if (bookedMinders.length === 0) {
-        list.innerHTML = '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:16px 0">No minders booked yet.</p>';
-      } else {
-        bookedMinders.forEach(m => {
-          const card = document.createElement('div'); card.className = 'review-minder-card';
-          card.onclick = () => openWriteReview(m.id);
-          card.innerHTML = '<div class="review-minder-avatar">' + m.avatar + '</div><div class="review-minder-info"><div class="review-minder-name">' + m.name + '</div><div class="review-minder-booking">' + m.lastBooking + '</div></div><span style="color:var(--terra);font-weight:600;font-size:13px">Write Review ›</span>';
-          list.appendChild(card);
+      list.innerHTML = '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:16px 0">Loading…</p>';
+      try {
+        const [bookings, myReviews] = await Promise.all([api.getBookings(), api.getMyReviews()]);
+        const completed = bookings.filter(b => b.status === 'completed' && b.minder);
+        // Deduplicate minders from completed bookings
+        const seen = new Set();
+        const realMinders = [];
+        completed.forEach(b => {
+          if (!seen.has(b.minder)) {
+            seen.add(b.minder);
+            realMinders.push({
+              id:          b.minder,
+              name:        b.minderName || 'Minder',
+              avatar:      b.minderImage
+                ? '<img src="' + b.minderImage + '" style="width:38px;height:38px;border-radius:50%;object-fit:cover">'
+                : '<span style="font-size:22px">' + (b.avatar || '🧑‍🦱') + '</span>',
+              lastBooking: b.day + ' ' + b.month + ' – ' + (b.petDetail || '')
+            });
+          }
         });
+
+        list.innerHTML = '';
+
+        // Show existing reviews first
+        if (myReviews.length > 0) {
+          const heading = document.createElement('p');
+          heading.style.cssText = 'font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 10px';
+          heading.textContent = 'Your Reviews';
+          list.appendChild(heading);
+          myReviews.forEach(r => {
+            const stars = '★'.repeat(r.stars) + '☆'.repeat(5 - r.stars);
+            const date  = new Date(r.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+            const card  = document.createElement('div');
+            card.id = 'given-review-' + r.id;
+            card.style.cssText = 'background:white;border-radius:var(--radius-sm);padding:14px;box-shadow:0 2px 8px var(--shadow);margin-bottom:10px';
+            card.innerHTML =
+              '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+                '<div><span style="font-weight:600;font-size:13px;color:var(--bark)">' + escapeHTML(r.minderName) + '</span>' +
+                '<span style="color:#f5a623;margin-left:8px;font-size:13px">' + stars + '</span></div>' +
+                '<button onclick="deleteGivenReview(' + r.id + ')" style="background:none;border:none;color:#e53935;font-size:16px;cursor:pointer;padding:0" title="Delete">🗑</button>' +
+              '</div>' +
+              '<p style="font-size:13px;color:var(--bark-light);line-height:1.5;margin:0 0 4px">"' + escapeHTML(r.text) + '"</p>' +
+              '<p style="font-size:11px;color:var(--bark-light);margin:0">' + date + '</p>';
+            list.appendChild(card);
+          });
+        }
+
+        // Then show minders available to review
+        if (realMinders.length > 0) {
+          const heading2 = document.createElement('p');
+          heading2.style.cssText = 'font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 10px';
+          heading2.textContent = 'Write a Review';
+          list.appendChild(heading2);
+          realMinders.forEach(m => {
+            const card = document.createElement('div');
+            card.className = 'review-minder-card';
+            card.onclick = () => openWriteReview(m.id, m.name);
+            card.innerHTML = '<div class="review-minder-avatar">' + m.avatar + '</div><div class="review-minder-info"><div class="review-minder-name">' + m.name + '</div><div class="review-minder-booking">' + m.lastBooking + '</div></div><span style="color:var(--terra);font-weight:600;font-size:13px">Write Review ›</span>';
+            list.appendChild(card);
+          });
+        }
+
+        if (myReviews.length === 0 && realMinders.length === 0) {
+          list.innerHTML = '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:16px 0">No completed bookings yet.</p>';
+        }
+      } catch {
+        list.innerHTML = '<p style="font-size:13px;color:var(--bark-light);text-align:center;padding:16px 0">Could not load reviews.</p>';
       }
     }
   }
-
-  show('profile-reviews'); currentScreen = 'profile-reviews';
 }
 
-function openWriteReview(minderId) {
+async function deleteGivenReview(reviewId) {
+  showConfirmModal('🗑', 'Delete Review?', 'This will permanently remove your review.', async function() {
+    try {
+      await api.deleteReview(reviewId);
+      const card = document.getElementById('given-review-' + reviewId);
+      if (card) card.remove();
+      showToast('✅ Review deleted');
+    } catch (err) {
+      showToast('❌ ' + (err.message || 'Could not delete review'));
+    }
+  });
+}
+
+function openWriteReview(minderId, minderName) {
   previousScreen = 'profile-reviews';
   currentReviewMinder = minderId;
-  const m = minderData[minderId];
-  document.getElementById('write-review-title').textContent = 'Review ' + (m ? m.name : 'Minder');
+  document.getElementById('write-review-title').textContent = 'Review ' + (minderName || 'Minder');
   document.getElementById('profile-review-text').value = '';
   profileReviewStars = 0;
   document.querySelectorAll('#profile-review-stars .star-btn').forEach(s => s.classList.remove('active'));
@@ -2582,32 +2637,17 @@ async function submitProfileReview() {
   const text = document.getElementById('profile-review-text').value.trim();
   if (!text) { showToast('❌ Please write a review'); return; }
   if (profileReviewStars === 0) { showToast('❌ Please select a star rating'); return; }
+  if (!currentReviewMinder) { showToast('❌ No minder selected'); return; }
 
-  // Real backend minder (numeric id) → submit to API
-  if (currentReviewMinder && /^\d+$/.test(String(currentReviewMinder))) {
-    try {
-      await api.submitReview({ minderId: currentReviewMinder, stars: profileReviewStars, text });
-      showToast('✅ Review submitted!');
-      document.getElementById('profile-review-text').value = '';
-      setProfileReviewStars(0);
-      goBack();
-      return;
-    } catch (err) {
-      showToast('❌ ' + (err.message || 'Could not submit review'));
-      return;
-    }
+  try {
+    await api.submitReview({ minderId: Number(currentReviewMinder), stars: profileReviewStars, text });
+    showToast('✅ Review submitted!');
+    document.getElementById('profile-review-text').value = '';
+    setProfileReviewStars(0);
+    goBack();
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Could not submit review'));
   }
-
-  // Legacy local display for hardcoded demo minders
-  const starStr = '★'.repeat(profileReviewStars) + '☆'.repeat(5 - profileReviewStars);
-  const sub = document.getElementById('profile-review-submitted');
-  const card = document.createElement('div');
-  card.style.cssText = 'background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow);margin-bottom:12px';
-  card.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><strong style="font-size:14px">Your Review</strong><span style="color:#f5a623">' + starStr + '</span></div><p style="font-size:13px;color:var(--bark-light);line-height:1.6">"' + text + '"</p><p style="font-size:11px;color:var(--bark-light);margin-top:8px">Just now</p>';
-  sub.appendChild(card);
-  document.getElementById('profile-review-text').value = '';
-  setProfileReviewStars(0);
-  showToast('✅ Review submitted!');
 }
 
 // ===== HELP CENTRE / REPORT =====
@@ -3358,7 +3398,8 @@ async function initMinderPage() {
     document.getElementById('mp-name').textContent = 'Minder not found';
     return;
   }
-  currentMinderId = minder.id;
+  currentMinderId      = minder.id;
+  currentReviewMinder  = minder.id;
   renderMinderProfileInto(minder);
   // Wire the Book Now button — only owners can book
   const bookBtn = document.getElementById('mp-book-btn');
@@ -3440,7 +3481,7 @@ async function loadMinderReviews(minderId) {
     return;
   }
   try {
-    const reviews = await api.getMinderReviews(minderId);
+    const { reviews, average, count } = await api.getMinderReviews(minderId);
     renderMinderReviews(reviews);
     updateMinderStarsSummary(reviews);
   } catch {
@@ -3456,14 +3497,21 @@ function renderMinderReviews(reviews) {
   const _isOwner  = _rvRoles.includes('owner');
   const _isSelf   = currentMinderId != null && String(currentMinderId) === String(store.currentUserId());
 
+  const myId = String(store.currentUserId());
+
   const reviewCards = reviews.length
     ? reviews.map(r => {
         const stars = '★'.repeat(r.rating || r.stars || 0) + '☆'.repeat(5 - (r.rating || r.stars || 0));
         const when  = formatChatTime(r.createdAt);
-        return '<div style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)">'
-          + '<div style="display:flex;justify-content:space-between;margin-bottom:8px">'
-          + '<strong style="font-size:14px">' + escapeHTML(r.authorName || r.reviewerName || 'User') + '</strong>'
-          + '<span style="color:#f5a623">' + stars + '</span></div>'
+        const isOwn = String(r.reviewerId) === myId;
+        const deleteBtn = isOwn
+          ? '<button onclick="deleteMyReview(' + r.id + ')" style="background:none;border:none;color:#e53935;font-size:18px;cursor:pointer;padding:0;line-height:1" title="Delete review">🗑</button>'
+          : '';
+        return '<div id="review-card-' + r.id + '" style="background:white;border-radius:var(--radius);padding:18px;box-shadow:0 2px 12px var(--shadow)">'
+          + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">'
+          + '<div><strong style="font-size:14px">' + escapeHTML(r.authorName || r.reviewerName || 'User') + '</strong>'
+          + '<span style="color:#f5a623;margin-left:8px">' + stars + '</span></div>'
+          + deleteBtn + '</div>'
           + '<p style="font-size:13px;color:var(--bark-light);line-height:1.6">"' + escapeHTML(r.text) + '"</p>'
           + '<p style="font-size:11px;color:var(--bark-light);margin-top:8px">' + when + '</p></div>';
       }).join('')
@@ -3473,6 +3521,22 @@ function renderMinderReviews(reviews) {
   reviewStars = 0;
 }
 
+async function deleteMyReview(reviewId) {
+  showConfirmModal('🗑', 'Delete Review?', 'This will permanently remove your review.', async function() {
+    try {
+      await api.deleteReview(reviewId);
+      const card = document.getElementById('review-card-' + reviewId);
+      if (card) card.remove();
+      // Refresh star summary
+      const { reviews, average, count } = await api.getMinderReviews(currentReviewMinder);
+      updateMinderStarsSummary(reviews);
+      showToast('✅ Review deleted');
+    } catch (err) {
+      showToast('❌ ' + (err.message || 'Could not delete review'));
+    }
+  });
+}
+
 function updateMinderStarsSummary(reviews) {
   const starsEl = document.getElementById('mp-stars');
   if (!starsEl) return;
@@ -3480,7 +3544,7 @@ function updateMinderStarsSummary(reviews) {
     starsEl.innerHTML = '☆☆☆☆☆ <span style="font-size:13px;opacity:0.8">(no reviews yet)</span>';
     return;
   }
-  const avg = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+  const avg = reviews.reduce((s, r) => s + (r.stars || r.rating || 0), 0) / reviews.length;
   const rounded = Math.round(avg);
   const stars = '★'.repeat(rounded) + '☆'.repeat(5 - rounded);
   starsEl.innerHTML = stars + ' <span style="font-size:13px;opacity:0.8">(' + reviews.length + ' review' + (reviews.length === 1 ? '' : 's') + ')</span>';

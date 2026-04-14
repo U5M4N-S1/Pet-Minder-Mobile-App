@@ -23,6 +23,8 @@ function userDTO(u) {
     email:        u.email,
     role:         u.role,
     location:     u.location  || '',
+    locationLat:  typeof u.locationLat === 'number' ? u.locationLat : null,
+    locationLng:  typeof u.locationLng === 'number' ? u.locationLng : null,
     phone:        u.phone     || '',
     bio:          u.bio       || '',
     profileImage: u.profileImage || '',
@@ -68,7 +70,7 @@ function sanitisePayout(input) {
 
 // POST /api/auth/signup
 router.post('/signup', async (req, res) => {
-  const { firstName, lastName, email, password, role, location, payout } = req.body;
+  const { firstName, lastName, email, password, role, location, locationLat, locationLng, payout } = req.body;
 
   if (!firstName || !lastName || !email || !password) {
     return res.status(400).json({ error: 'All fields are required' });
@@ -105,6 +107,11 @@ router.post('/signup', async (req, res) => {
       location:  (typeof location === 'string' && location.trim()) ? location.trim() : '',
       createdAt: new Date().toISOString()
     };
+    if (Number.isFinite(locationLat) && Number.isFinite(locationLng) &&
+        locationLat >= -90 && locationLat <= 90 && locationLng >= -180 && locationLng <= 180) {
+      user.locationLat = locationLat;
+      user.locationLng = locationLng;
+    }
     if (payoutForUser) user.payout = payoutForUser;
     user.online     = true;
     user.lastSeenAt = new Date().toISOString();
@@ -202,7 +209,7 @@ router.patch('/me', requireAuth, (req, res) => {
   const user = db.get('users').find({ id: req.user.userId });
   if (!user.value()) return res.status(404).json({ error: 'User not found' });
 
-  const { firstName, lastName, email, phone, location, bio,
+  const { firstName, lastName, email, phone, location, locationLat, locationLng, bio,
           serviceArea, petsCaredFor, services, rate, experience,
           priceMin, priceMax,
           availability, certifications } = req.body;
@@ -211,6 +218,11 @@ router.patch('/me', requireAuth, (req, res) => {
   if (typeof lastName     === 'string') updates.lastName     = lastName.trim();
   if (typeof phone        === 'string') updates.phone        = phone.trim();
   if (typeof location     === 'string') updates.location     = location.trim();
+  if (Number.isFinite(locationLat) && Number.isFinite(locationLng) &&
+      locationLat >= -90 && locationLat <= 90 && locationLng >= -180 && locationLng <= 180) {
+    updates.locationLat = locationLat;
+    updates.locationLng = locationLng;
+  }
   if (typeof bio          === 'string') updates.bio          = bio.trim();
   // Minder-specific fields
   if (typeof serviceArea  === 'string') updates.serviceArea  = serviceArea.trim();

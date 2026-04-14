@@ -1027,6 +1027,10 @@ async function handleRegister() {
 
   try {
     const signupPayload = { firstName, lastName, email, password: pwd, role: selectedRole, location };
+    if (_pickedRegLocationCoord) {
+      signupPayload.locationLat = _pickedRegLocationCoord.lat;
+      signupPayload.locationLng = _pickedRegLocationCoord.lng;
+    }
     if (payoutForSignup) signupPayload.payout = payoutForSignup;
     const { token, user } = await api.signup(signupPayload);
     api.setToken(token);
@@ -2491,6 +2495,10 @@ function openEditProfileModal() {
   document.getElementById('edit-email').value = userProfile.email;
   document.getElementById('edit-phone').value = userProfile.phone;
   document.getElementById('edit-location').value = userProfile.location;
+  _pickedEditLocationCoord = null;
+  attachLocationAutocomplete(document.getElementById('edit-location'), (lat, lng) => {
+    _pickedEditLocationCoord = (lat != null && lng != null) ? { lat, lng } : null;
+  });
   document.getElementById('edit-bio').value = userProfile.bio;
   // Show minder fields only for minder accounts
   const minderFields = document.getElementById('minder-fields');
@@ -2524,6 +2532,10 @@ function saveProfile() {
       location:  document.getElementById('edit-location').value.trim(),
       bio:       document.getElementById('edit-bio').value.trim(),
     };
+    if (_pickedEditLocationCoord) {
+      updates.locationLat = _pickedEditLocationCoord.lat;
+      updates.locationLng = _pickedEditLocationCoord.lng;
+    }
     // Include minder-specific fields if user is a minder
     if (userProfile.role === 'minder') {
       updates.serviceArea  = (document.getElementById('edit-service-area') || {}).value || '';
@@ -2791,6 +2803,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const pageToScreen = { 'home.html':'home', 'search.html':'search', 'bookings.html':'bookings', 'messages.html':'messages', 'profile.html':'profile' };
   if (pageToScreen[page]) currentScreen = pageToScreen[page];
 
+  // Wire Places Autocomplete on the registration location field if present.
+  const regLoc = document.getElementById('reg-location');
+  if (regLoc) {
+    attachLocationAutocomplete(regLoc, (lat, lng) => {
+      _pickedRegLocationCoord = (lat != null && lng != null) ? { lat, lng } : null;
+    });
+  }
+
   if (!PROTECTED.includes(page)) return;
 
   if (!api.getToken()) {
@@ -2827,6 +2847,37 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
+// ===== Places Autocomplete helper =====
+// Picked coordinates — set on place_changed, cleared when the user edits the
+// field after picking (so stale coords don't get attached to a typed value).
+let _pickedRegLocationCoord  = null;
+let _pickedEditLocationCoord = null;
+let _pickedAskLocationCoord  = null;
+
+function attachLocationAutocomplete(inputEl, onPick) {
+  if (!inputEl || inputEl._pawpalAutocompleteAttached) return;
+  inputEl._pawpalAutocompleteAttached = true;
+  // Clear picked coord whenever the user edits after picking
+  inputEl.addEventListener('input', () => { onPick(null, null); });
+  const wire = () => {
+    if (!(window.google && window.google.maps && window.google.maps.places)) return;
+    const ac = new google.maps.places.Autocomplete(inputEl, {
+      types: ['geocode'],
+      fields: ['geometry', 'formatted_address', 'name']
+    });
+    ac.addListener('place_changed', () => {
+      const place = ac.getPlace();
+      if (!place || !place.geometry || !place.geometry.location) { onPick(null, null); return; }
+      const lat = place.geometry.location.lat();
+      const lng = place.geometry.location.lng();
+      const name = place.formatted_address || place.name || inputEl.value;
+      if (name) inputEl.value = name;
+      onPick(lat, lng, name);
+    });
+  };
+  if (typeof window.whenMapsReady === 'function') window.whenMapsReady(wire); else wire();
+}
+
 // ===== Location prompt (for accounts created before we asked at signup) =====
 function maybeAskLocation() {
   const loc = (userProfile && userProfile.location) ? String(userProfile.location).trim() : '';
@@ -2835,7 +2886,14 @@ function maybeAskLocation() {
   if (!modal || loc || skipped) return;
   modal.classList.add('open');
   const input = document.getElementById('ask-location-input');
-  if (input) { input.value = ''; setTimeout(() => input.focus(), 50); }
+  if (input) {
+    input.value = '';
+    _pickedAskLocationCoord = null;
+    attachLocationAutocomplete(input, (lat, lng) => {
+      _pickedAskLocationCoord = (lat != null && lng != null) ? { lat, lng } : null;
+    });
+    setTimeout(() => input.focus(), 50);
+  }
 }
 
 function skipAskLocation() {
@@ -2849,11 +2907,16 @@ async function submitAskLocation() {
   const value = input ? input.value.trim() : '';
   if (!value) { showToast('Please enter a town or city'); return; }
   try {
-    const saved = await api.updateMe({ location: value });
+    const payload = { location: value };
+    if (_pickedAskLocationCoord) {
+      payload.locationLat = _pickedAskLocationCoord.lat;
+      payload.locationLng = _pickedAskLocationCoord.lng;
+    }
+    const saved = await api.updateMe(payload);
     hydrateUserProfile(saved);
     store.setUser(userProfile);
     const modal = document.getElementById('ask-location-modal');
-    if (modal) modal.classList.remove('active');
+    if (modal) modal.classList.remove('open');
     showToast('✅ Location saved');
     // Re-init tracking now that we have a start coord
     if (allBookingsCache) initLiveTracking(allBookingsCache);
@@ -2891,8 +2954,18 @@ function pathMeters(path) {
 function metersToKmStr(m)      { return (m / 1000).toFixed(2) + ' km'; }
 function msToMinutesStr(ms)    { return Math.max(0, Math.round(ms / 60000)) + 'min'; }
 
+// Pick the best start coordinate for tracking: prefer the precise lat/lng
+// captured by Places Autocomplete at signup/edit, fall back to the offline
+// city dictionary for legacy accounts.
+function resolveUserStartCoord() {
+  if (userProfile && Number.isFinite(userProfile.locationLat) && Number.isFinite(userProfile.locationLng)) {
+    return { lat: userProfile.locationLat, lng: userProfile.locationLng };
+  }
+  return PawTracking.geocodeCity(userProfile && userProfile.location);
+}
+
 function initLiveTracking(bookings) {
-  if (typeof PawTracking === 'undefined' || typeof L === 'undefined') return;
+  if (typeof PawTracking === 'undefined') return;
   const card = document.getElementById('bookings-gps-live');
   if (!card) return;
 
@@ -2900,41 +2973,59 @@ function initLiveTracking(bookings) {
   if (!live) {
     card.dataset.hasLive = '';
     card.style.display = 'none';
-    // Re-check in a minute — a booking may become live.
     scheduleLiveWatchdog(bookings);
     return;
   }
 
-  const startCoord = PawTracking.geocodeCity(userProfile && userProfile.location);
+  const startCoord = resolveUserStartCoord();
   _liveStartCoord = startCoord;
   _liveBookingId  = live.id;
 
   card.dataset.hasLive = '1';
-  // Only actually show if the Upcoming tab is currently visible.
   const upcomingVisible = document.getElementById('bookings-upcoming').style.display !== 'none';
   card.style.display = upcomingVisible ? 'block' : 'none';
 
   const titleEl = document.getElementById('gps-live-title');
   if (titleEl) titleEl.textContent = '📍 Live Tracking · ' + (live.service || 'Walk') + ' · ' + (live.minderName || 'Minder');
 
-  // Lazy-init the Leaflet map.
-  setTimeout(() => {
-    const mapEl = document.getElementById('live-map');
-    if (!mapEl) return;
-    if (!_liveMap) {
-      _liveMap = L.map(mapEl, { zoomControl: true, attributionControl: false })
-        .setView([startCoord.lat, startCoord.lng], 15);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(_liveMap);
-    } else {
-      _liveMap.setView([startCoord.lat, startCoord.lng], 15);
-    }
-    L.marker([startCoord.lat, startCoord.lng]).addTo(_liveMap).bindTooltip('Start', { permanent: false });
-    if (_liveMarker) { _liveMap.removeLayer(_liveMarker); _liveMarker = null; }
-    if (_livePolyline) { _liveMap.removeLayer(_livePolyline); _livePolyline = null; }
-    _liveMarker = L.circleMarker([startCoord.lat, startCoord.lng], { radius: 8, color: '#d97350', fillColor: '#d97350', fillOpacity: 1 }).addTo(_liveMap);
-    _livePolyline = L.polyline([], { color: '#d97350', weight: 4, opacity: 0.85 }).addTo(_liveMap);
-    setTimeout(() => _liveMap.invalidateSize(), 50);
-  }, 0);
+  // Lazy-init the Google map once the API script has loaded.
+  if (typeof window.whenMapsReady !== 'function' || !window.hasGoogleMapsKey || !window.hasGoogleMapsKey()) {
+    console.warn('[PawPal] Google Maps key missing — live map will not render. Set GOOGLE_MAPS_API_KEY in js/config.js.');
+  } else {
+    window.whenMapsReady(() => {
+      const mapEl = document.getElementById('live-map');
+      if (!mapEl) return;
+      if (!_liveMap) {
+        _liveMap = new google.maps.Map(mapEl, {
+          center: { lat: startCoord.lat, lng: startCoord.lng },
+          zoom: 15,
+          disableDefaultUI: true,
+          zoomControl: true,
+          gestureHandling: 'greedy'
+        });
+      } else {
+        _liveMap.setCenter({ lat: startCoord.lat, lng: startCoord.lng });
+      }
+      // Static "start" marker.
+      new google.maps.Marker({
+        position: { lat: startCoord.lat, lng: startCoord.lng },
+        map: _liveMap,
+        title: 'Start',
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 5, fillColor: '#3d2b1f', fillOpacity: 1, strokeColor: 'white', strokeWeight: 2 }
+      });
+      // Moving "current" marker + polyline (reset on each init).
+      if (_liveMarker)   { _liveMarker.setMap(null);   _liveMarker = null; }
+      if (_livePolyline) { _livePolyline.setMap(null); _livePolyline = null; }
+      _liveMarker = new google.maps.Marker({
+        position: { lat: startCoord.lat, lng: startCoord.lng },
+        map: _liveMap,
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: '#d97350', fillOpacity: 1, strokeColor: '#d97350', strokeWeight: 2 }
+      });
+      _livePolyline = new google.maps.Polyline({
+        path: [], strokeColor: '#d97350', strokeOpacity: 0.85, strokeWeight: 4, map: _liveMap
+      });
+    });
+  }
 
   const w = PawTracking.windowFor(live);
   PawTracking.startTracking({
@@ -2947,13 +3038,18 @@ function initLiveTracking(bookings) {
 
   if (_liveTickListener) PawTracking.offTick(_liveTickListener);
   _liveTickListener = (bid, path, state) => {
-    if (bid !== _liveBookingId || !_liveMap) return;
-    const latlngs = path.map(p => [p.lat, p.lng]);
-    if (_livePolyline) _livePolyline.setLatLngs(latlngs);
-    if (latlngs.length && _liveMarker) _liveMarker.setLatLng(latlngs[latlngs.length - 1]);
-    if (latlngs.length > 1) _liveMap.fitBounds(_livePolyline.getBounds(), { padding: [24, 24] });
+    if (bid !== _liveBookingId) return;
+    if (_liveMap && _livePolyline && _liveMarker) {
+      const latlngs = path.map(p => ({ lat: p.lat, lng: p.lng }));
+      _livePolyline.setPath(latlngs);
+      if (latlngs.length) _liveMarker.setPosition(latlngs[latlngs.length - 1]);
+      if (latlngs.length > 1) {
+        const bounds = new google.maps.LatLngBounds();
+        latlngs.forEach(ll => bounds.extend(ll));
+        _liveMap.fitBounds(bounds, 24);
+      }
+    }
 
-    // Stats
     const distEl = document.getElementById('gps-live-distance');
     const durEl  = document.getElementById('gps-live-duration');
     const statEl = document.getElementById('gps-live-status');
@@ -2961,10 +3057,9 @@ function initLiveTracking(bookings) {
     if (durEl)  durEl.textContent  = msToMinutesStr(Date.now() - state.startedAt);
     if (statEl) statEl.textContent = Date.now() >= state.endsAt ? 'Completed' : 'Active';
 
-    // When the walk ends, refresh past routes so the new one appears immediately.
     if (Date.now() >= state.endsAt) {
       renderPastRoutes();
-      initLiveTracking(allBookingsCache); // hide the card & look for the next live booking
+      initLiveTracking(allBookingsCache);
     }
   };
   PawTracking.onTick(_liveTickListener);
@@ -3029,23 +3124,35 @@ async function openRouteViewModal(bookingId) {
   if (durEl)  durEl.textContent  = msToMinutesStr(lastT - firstT);
 
   // Build/refresh the modal's own map.
-  setTimeout(() => {
+  if (typeof window.whenMapsReady !== 'function' || !window.hasGoogleMapsKey || !window.hasGoogleMapsKey()) {
+    showToast('⚠️ Google Maps key missing in js/config.js');
+    return;
+  }
+  window.whenMapsReady(() => {
     const el = document.getElementById('route-view-map');
     if (!el) return;
-    if (_routeViewMap) { _routeViewMap.remove(); _routeViewMap = null; }
-    _routeViewMap = L.map(el, { zoomControl: true, attributionControl: false });
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(_routeViewMap);
-    const latlngs = route.path.map(p => [p.lat, p.lng]);
-    const line = L.polyline(latlngs, { color: '#d97350', weight: 4, opacity: 0.9 }).addTo(_routeViewMap);
-    L.marker(latlngs[0]).addTo(_routeViewMap).bindTooltip('Start', { permanent: false });
-    L.marker(latlngs[latlngs.length - 1]).addTo(_routeViewMap).bindTooltip('End', { permanent: false });
-    _routeViewMap.fitBounds(line.getBounds(), { padding: [24, 24] });
-    setTimeout(() => _routeViewMap.invalidateSize(), 50);
-  }, 50);
+    _routeViewMap = new google.maps.Map(el, {
+      disableDefaultUI: true,
+      zoomControl: true,
+      gestureHandling: 'greedy'
+    });
+    const latlngs = route.path.map(p => ({ lat: p.lat, lng: p.lng }));
+    new google.maps.Polyline({
+      path: latlngs, strokeColor: '#d97350', strokeOpacity: 0.9, strokeWeight: 4, map: _routeViewMap
+    });
+    new google.maps.Marker({ position: latlngs[0], map: _routeViewMap, title: 'Start' });
+    new google.maps.Marker({ position: latlngs[latlngs.length - 1], map: _routeViewMap, title: 'End' });
+    const bounds = new google.maps.LatLngBounds();
+    latlngs.forEach(ll => bounds.extend(ll));
+    _routeViewMap.fitBounds(bounds, 24);
+  });
 }
 
 function closeRouteViewModal() {
   const modal = document.getElementById('route-view-modal');
   if (modal) modal.classList.remove('open');
-  if (_routeViewMap) { _routeViewMap.remove(); _routeViewMap = null; }
+  // Google maps don't need explicit .remove() — GC when element is gone.
+  _routeViewMap = null;
+  const el = document.getElementById('route-view-map');
+  if (el) el.innerHTML = '';
 }

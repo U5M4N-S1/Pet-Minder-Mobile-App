@@ -67,7 +67,6 @@ router.post('/', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'You cannot review yourself' });
   }
 
-  const reviewer = db.get('users').find({ id: req.user.userId }).value();
   const review = {
     id:         nextId(),
     minderId:   Number(minderId),

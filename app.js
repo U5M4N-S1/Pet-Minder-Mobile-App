@@ -148,6 +148,8 @@ const api = {
   deleteMessage(chatId, msgId) { return this._req('DELETE', '/chats/' + chatId + '/messages/' + msgId); },
   hideChat(chatId)          { return this._req('DELETE', '/chats/' + chatId); },
   adminDeleteQualification(userId, imgId){ return this._req('DELETE', '/admin/qualifications/' + userId + '/' + imgId); },
+  getAdminUserReviews(userId)            { return this._req('GET',    '/admin/users/' + userId + '/reviews'); },
+  adminDeleteReview(id)                  { return this._req('DELETE', '/admin/reviews/' + id); },
   // Reviews
   getMinderReviews(minderId) { return this._req('GET',    '/reviews/minder/' + minderId); },
   submitReview(data)         { return this._req('POST',   '/reviews', data); },
@@ -3017,11 +3019,20 @@ function openAdminUserDetail(userId) {
   document.getElementById('admin-detail-body').innerHTML =
     '<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">' +
       '<div style="width:64px;height:64px;border-radius:50%;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--sand-light)">' + avatarHTML + '</div>' +
-      '<div><div style="font-family:"Playfair Display",serif;font-size:18px;font-weight:600;color:var(--bark)">' + u.name + statusBadge + '</div>' +
+      '<div><div style="font-family:\'Playfair Display\',serif;font-size:18px;font-weight:600;color:var(--bark)">' + u.name + statusBadge + '</div>' +
       '<div style="font-size:13px;color:var(--bark-light);margin-top:2px">' + u.role + '</div></div>' +
     '</div>' +
     '<div>' + rows + '</div>' +
     minderSection +
+    '<div style="margin-top:14px;border:1.5px solid var(--sand-light);border-radius:var(--radius-sm);overflow:hidden">' +
+      '<button onclick="toggleAdminReviews(this,' + u.id + ')" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--sand-light);border:none;cursor:pointer;font-family:\'DM Sans\',sans-serif;font-size:13px;font-weight:600;color:var(--bark)">' +
+        '<span>⭐ Reviews Written</span>' +
+        '<span class="admin-reviews-chevron" style="transition:transform 0.2s;display:inline-block">▼</span>' +
+      '</button>' +
+      '<div class="admin-reviews-body" style="display:none;padding:12px;flex-direction:column;gap:8px" id="admin-reviews-body-' + u.id + '">' +
+        '<div style="font-size:13px;color:var(--bark-light);text-align:center;padding:8px">Loading…</div>' +
+      '</div>' +
+    '</div>' +
     '<div style="display:flex;gap:8px;margin-top:18px">' +
       '<button class="btn-outline" style="flex:1;padding:12px;color:var(--bark-light);border-color:var(--sand);font-size:13px" onclick="openAdminEditUser(' + u.id + ');closeAdminDetailPanel()">✏️ Edit</button>' +
       '<button class="btn-outline" style="flex:1;padding:12px;color:#e53935;border-color:#e53935;font-size:13px" onclick="adminRemoveUser(' + u.id + ');closeAdminDetailPanel()">🗑 Remove</button>' +
@@ -3032,6 +3043,59 @@ function openAdminUserDetail(userId) {
 
 function closeAdminDetailPanel() {
   document.getElementById('admin-detail-panel').classList.remove('open');
+}
+
+async function toggleAdminReviews(btn, userId) {
+  const body    = btn.nextElementSibling;
+  const chevron = btn.querySelector('.admin-reviews-chevron');
+  const isOpen  = body.style.display === 'flex';
+  if (isOpen) {
+    body.style.display = 'none';
+    if (chevron) chevron.style.transform = '';
+    return;
+  }
+  body.style.display = 'flex';
+  if (chevron) chevron.style.transform = 'rotate(180deg)';
+
+  // Load reviews if not yet loaded
+  if (body.dataset.loaded === 'true') return;
+  body.dataset.loaded = 'true';
+  body.innerHTML = '<div style="font-size:13px;color:var(--bark-light);text-align:center;padding:8px;width:100%">Loading…</div>';
+  try {
+    const reviews = await api.getAdminUserReviews(userId);
+    if (reviews.length === 0) {
+      body.innerHTML = '<div style="font-size:13px;color:var(--bark-light);text-align:center;padding:8px;width:100%">No reviews written yet.</div>';
+      return;
+    }
+    body.innerHTML = reviews.map(r => {
+      const stars = '★'.repeat(r.stars) + '☆'.repeat(5 - r.stars);
+      const date  = new Date(r.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      return '<div id="admin-review-row-' + r.id + '" style="display:flex;align-items:flex-start;gap:8px;padding:8px;border-radius:8px;background:white;border:1px solid var(--sand-light);width:100%">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">' +
+            '<span style="font-size:12px;font-weight:600;color:var(--terra)">' + escapeHTML(r.minderName) + '</span>' +
+            '<span style="color:#f5a623;font-size:12px">' + stars + '</span>' +
+          '</div>' +
+          '<p style="font-size:12px;color:var(--bark);margin:0 0 2px;line-height:1.4">"' + escapeHTML(r.text) + '"</p>' +
+          '<span style="font-size:11px;color:var(--bark-light)">' + date + '</span>' +
+        '</div>' +
+        '<button onclick="adminDeleteReviewItem(' + r.id + ')" style="background:none;border:none;color:#e53935;font-size:17px;cursor:pointer;flex-shrink:0;padding:2px 4px" title="Delete">🗑</button>' +
+      '</div>';
+    }).join('');
+  } catch {
+    body.innerHTML = '<div style="font-size:13px;color:var(--bark-light);text-align:center;padding:8px;width:100%">Could not load reviews.</div>';
+  }
+}
+
+async function adminDeleteReviewItem(reviewId) {
+  try {
+    await api.adminDeleteReview(reviewId);
+    const row = document.getElementById('admin-review-row-' + reviewId);
+    if (row) row.remove();
+    showToast('✅ Review deleted');
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Could not delete review'));
+  }
 }
 
 function toggleAdminQuals(btn) {

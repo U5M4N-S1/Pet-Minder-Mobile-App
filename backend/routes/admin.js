@@ -263,3 +263,25 @@ router.delete('/qualifications/:userId/:imageId', requireAuth, requireAdmin, (re
 });
 
 module.exports = router;
+
+// GET /api/admin/users/:id/reviews — all reviews written by a user
+router.get('/users/:id/reviews', requireAuth, requireAdmin, (req, res) => {
+  const userId = Number(req.params.id);
+  const reviews = db.get('reviews')
+    .filter({ reviewerId: userId })
+    .sortBy('createdAt')
+    .value()
+    .reverse();
+  const enriched = reviews.map(r => {
+    const minder = db.get('users').find({ id: r.minderId }).value();
+    return { ...r, minderName: minder ? ((minder.firstName || '') + ' ' + (minder.lastName || '')).trim() : 'Unknown' };
+  });
+  res.json(enriched);
+});
+
+// DELETE /api/admin/reviews/:id — hard delete any review
+router.delete('/reviews/:id', requireAuth, requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  db.get('reviews').remove({ id }).write();
+  res.status(204).end();
+});

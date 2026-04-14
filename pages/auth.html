@@ -72,6 +72,14 @@
           <div id="cert-file-names" style="margin-top:8px;font-size:12px;color:var(--moss)"></div>
           <div id="reg-certs-grid" class="reg-pets-grid"></div>
         </div>
+        <div class="reg-extras-box" id="reg-minder-payout-box" style="margin-top:12px">
+          <p class="reg-extras-title">💷 Payout Details <span style="color:var(--terra)">*</span></p>
+          <p class="reg-extras-sub">Required — how you get paid for completed bookings. <em>Demo only — no real bank data is sent.</em></p>
+          <div class="field-group" style="margin-top:10px"><label>Account holder name</label><input type="text" id="reg-payout-name" placeholder="Name on bank account"></div>
+          <div class="field-group"><label>Bank name</label><input type="text" id="reg-payout-bank" placeholder="e.g. Barclays"></div>
+          <div class="field-group"><label>Sort code</label><input type="text" id="reg-payout-sort" inputmode="numeric" placeholder="12-34-56" maxlength="8"></div>
+          <div class="field-group"><label>Account number</label><input type="text" id="reg-payout-account" inputmode="numeric" placeholder="12345678" maxlength="8"></div>
+        </div>
       </div>
       <button class="btn-primary" onclick="handleRegister()">Create Account</button>
     </div>

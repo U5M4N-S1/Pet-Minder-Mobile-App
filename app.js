@@ -116,6 +116,9 @@ const api = {
   // Profile image
   uploadAvatar(image)       { return this._req('POST',   '/auth/avatar', { image }); },
   deleteAvatar()            { return this._req('DELETE', '/auth/avatar'); },
+  // Payout (minder-only)
+  getPayout()               { return this._req('GET',    '/auth/payout'); },
+  updatePayout(data)        { return this._req('PUT',    '/auth/payout', data); },
   // Minders (public)
   getMinders()              { return this._req('GET',    '/minders'); },
   // Admin
@@ -431,6 +434,59 @@ function notifIcon(type) {
 function notifAction(n) {
   if (n.type === 'booking_request') return "window.location.href='bookings.html?tab=requests'";
   return 'handleOwnerNotifClick(' + n.id + ')';
+}
+
+// ===== PAYOUT (minder-only, hosted on pages/payout-details.html) =====
+// Never log or render the raw account number — we always ask the backend
+// for the masked DTO and only write raw digits on save.
+async function loadPayoutDetails() {
+  const card  = document.getElementById('payout-saved-card');
+  const body  = document.getElementById('payout-saved-body');
+  const title = document.getElementById('payout-form-title');
+  const err   = document.getElementById('payout-error');
+  if (err)  { err.style.display = 'none'; err.textContent = ''; }
+  if (card) card.style.display = 'none';
+  try {
+    const p = await api.getPayout();
+    if (p && p.hasPayout) {
+      if (card) card.style.display = 'block';
+      if (body) body.innerHTML =
+        '<div><strong>Holder:</strong> ' + escapeHTML(p.accountHolderName || '—') + '</div>' +
+        '<div><strong>Bank:</strong> ' + escapeHTML(p.bankName || '—') + '</div>' +
+        '<div><strong>Sort code:</strong> ' + escapeHTML(p.sortCodeMasked || '—') + '</div>' +
+        '<div><strong>Account:</strong> ' + escapeHTML(p.accountNumberMasked || '—') + '</div>' +
+        (p.updatedAt ? '<div style="margin-top:6px;font-size:11px;opacity:0.7">Last updated ' + new Date(p.updatedAt).toLocaleDateString() + '</div>' : '');
+      if (title) title.textContent = 'Update payout details';
+    } else {
+      if (title) title.textContent = 'Add payout details';
+    }
+  } catch { /* silent — treat as unset */ }
+  // Always wipe any previously typed values — the form is write-only.
+  ['payout-name-input','payout-bank-input','payout-sort-input','payout-account-input'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+}
+
+async function savePayoutDetails() {
+  const name    = (document.getElementById('payout-name-input').value || '').trim();
+  const bank    = (document.getElementById('payout-bank-input').value || '').trim();
+  const sort    = (document.getElementById('payout-sort-input').value || '').replace(/\D/g, '');
+  const account = (document.getElementById('payout-account-input').value || '').replace(/\D/g, '');
+  const errEl   = document.getElementById('payout-error');
+  const setErr  = msg => { if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; } };
+
+  if (name.length < 2) return setErr('Please enter the account holder name.');
+  if (bank.length < 2) return setErr('Please enter the bank name.');
+  if (sort.length !== 6)    return setErr('Sort code must be 6 digits.');
+  if (account.length !== 8) return setErr('Account number must be 8 digits.');
+
+  try {
+    await api.updatePayout({ accountHolderName: name, bankName: bank, sortCode: sort, accountNumber: account });
+    showToast('✅ Payout details saved');
+    openPayoutPage();
+  } catch (err) {
+    setErr(err.message || 'Failed to save payout details');
+  }
 }
 
 function openNotifications() {
@@ -945,6 +1001,7 @@ async function handleRegister() {
     showToast('❌ Please add at least one pet before creating your account');
     return;
   }
+  let payoutForSignup = null;
   if (selectedRole === 'minder') {
     const certBox = document.getElementById('reg-minder-extras-box');
     if (regPendingCerts.length === 0) {
@@ -953,10 +1010,25 @@ async function handleRegister() {
       return;
     }
     if (certBox) certBox.style.borderColor = 'var(--sand)';
+
+    const pName    = (document.getElementById('reg-payout-name')    || {}).value || '';
+    const pBank    = (document.getElementById('reg-payout-bank')    || {}).value || '';
+    const pSort    = ((document.getElementById('reg-payout-sort')   || {}).value || '').replace(/\D/g, '');
+    const pAccount = ((document.getElementById('reg-payout-account')|| {}).value || '').replace(/\D/g, '');
+    const payoutBox = document.getElementById('reg-minder-payout-box');
+    if (!pName.trim() || !pBank.trim() || pSort.length !== 6 || pAccount.length !== 8) {
+      showToast('❌ Please complete your payout details (sort code 6 digits, account 8 digits)');
+      if (payoutBox) payoutBox.style.borderColor = 'var(--terra)';
+      return;
+    }
+    if (payoutBox) payoutBox.style.borderColor = 'var(--sand)';
+    payoutForSignup = { accountHolderName: pName.trim(), bankName: pBank.trim(), sortCode: pSort, accountNumber: pAccount };
   }
 
   try {
-    const { token, user } = await api.signup({ firstName, lastName, email, password: pwd, role: selectedRole, location });
+    const signupPayload = { firstName, lastName, email, password: pwd, role: selectedRole, location };
+    if (payoutForSignup) signupPayload.payout = payoutForSignup;
+    const { token, user } = await api.signup(signupPayload);
     api.setToken(token);
     store.setUser(user);
     hydrateUserProfile(user);
@@ -1091,6 +1163,9 @@ function renderProfileAvatar() {
     const label = userProfile.role === 'minder' ? 'Pet Minder' : 'Pet Owner';
     roleEl.textContent = label;
   }
+  // Payout menu item is minder-only. Owners never see it.
+  const payoutMenu = document.getElementById('menu-payout');
+  if (payoutMenu) payoutMenu.style.display = userProfile.role === 'minder' ? '' : 'none';
 }
 
 async function handleAvatarUpload(event) {
@@ -1974,7 +2049,16 @@ function updateBookingSummary() {
   const multiPetInfo = document.getElementById('multi-pet-info');
   if (multiPetInfo) multiPetInfo.classList.toggle('visible', selectedPets.length > 1);
 }
+// Stash the booking payload built from the form so the payment modal can
+// submit it after the card form is validated.
+let _pendingBookingPayload = null;
+
 async function confirmBooking() {
+  // Kept for backwards-compat; routes straight to the payment modal.
+  return openPaymentModal();
+}
+
+async function openPaymentModal() {
   const m           = window._activeMinder || { name: 'your minder', avatar: '🧑‍🦱', id: 'sarah' };
   const serviceEl   = document.querySelector('.service-option.selected .service-name');
   const serviceName = serviceEl ? serviceEl.textContent : 'Dog Walk';
@@ -1982,7 +2066,6 @@ async function confirmBooking() {
   const timeEl      = document.querySelector('.time-chip.selected');
   const time        = timeEl ? timeEl.textContent.trim() : '08:00';
 
-  // Build an ISO date string (YYYY-MM-DD) from the chip's data attributes
   const day   = dateEl ? (dateEl.dataset.day   || String(new Date().getDate()).padStart(2,'0')) : String(new Date().getDate()).padStart(2,'0');
   const month = dateEl ? (dateEl.dataset.month || 'Apr') : 'Apr';
   const monthNums = { Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12 };
@@ -1991,14 +2074,8 @@ async function confirmBooking() {
 
   if (selectedPets.length === 0) { showToast('❌ Please add a pet before booking'); return; }
 
-  // Pre-submit availability guard. The backend re-validates this on POST
-  // /api/bookings, but checking here gives instant feedback and prevents a
-  // round-trip when the user has somehow landed on an unavailable slot.
   const availCheck = checkMinderAvailability(m, bookingDate, time);
-  if (!availCheck.ok) {
-    showToast('❌ ' + availCheck.reason);
-    return;
-  }
+  if (!availCheck.ok) { showToast('❌ ' + availCheck.reason); return; }
 
   const selectedPetNames = selectedPets.map(id => (petData[id] && petData[id].name) || id);
   const selectedPetIds = selectedPets.slice();
@@ -2006,10 +2083,8 @@ async function confirmBooking() {
   const totalEl = document.getElementById('summary-total');
   const price   = totalEl ? totalEl.textContent : '£15.00';
 
+  // Client-side same-pet pre-check for a nicer error message.
   try {
-    // Client-side same-pet pre-check for a nicer error message. The real
-    // authoritative conflict enforcement (same-pet AND same-minder-accepted)
-    // happens in POST /api/bookings on the server.
     const existingBookings = await api.getBookings();
     const conflict = existingBookings.find(b => {
       if (b.bookingDate !== bookingDate || b.bookingTime !== time) return false;
@@ -2021,28 +2096,104 @@ async function confirmBooking() {
       const existingNames = String(b.petNames || '').split(/\s*&\s*/).map(n => n.trim().toLowerCase());
       return selectedPetNames.some(name => existingNames.includes(name.trim().toLowerCase()));
     });
+    if (conflict) { showToast('❌ One of your selected pets already has a booking at that date/time'); return; }
+  } catch { /* silent — backend will re-check */ }
 
-    if (conflict) {
-      showToast('❌ One of your selected pets already has a booking at that date/time');
-      return;
-    }
+  _pendingBookingPayload = {
+    minderKey:    m.id,
+    minderName:   m.name,
+    minderAvatar: m.avatar,
+    minderImage:  m.profileImage || '',
+    service:      serviceName,
+    bookingDate,
+    bookingTime:  time,
+    petNames,
+    petIds:       selectedPetIds,
+    price
+  };
 
-    await api.createBooking({
-      minderKey:    m.id,
-      minderName:   m.name,
-      minderAvatar: m.avatar,
-      minderImage:  m.profileImage || '',
-      service:      serviceName,
-      bookingDate,
-      bookingTime:  time,
-      petNames,
-      petIds:       selectedPetIds,
-      price
-    });
-    showToast('✅ Booking sent to ' + m.name + '!');
+  const amt = document.getElementById('pay-modal-amount');
+  if (amt) amt.textContent = price;
+  const err = document.getElementById('pay-error');
+  if (err) { err.style.display = 'none'; err.textContent = ''; }
+  const modal = document.getElementById('pay-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function closePaymentModal() {
+  const modal = document.getElementById('pay-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+// Input formatters
+function formatCardNumber(el) {
+  const digits = el.value.replace(/\D/g, '').slice(0, 16);
+  el.value = digits.replace(/(.{4})/g, '$1 ').trim();
+}
+function formatExpiry(el) {
+  let d = el.value.replace(/\D/g, '').slice(0, 4);
+  if (d.length >= 3) d = d.slice(0, 2) + '/' + d.slice(2);
+  el.value = d;
+}
+
+// Luhn checksum for card-number realism
+function luhnValid(num) {
+  const d = String(num).replace(/\D/g, '');
+  if (d.length < 13 || d.length > 19) return false;
+  let sum = 0, alt = false;
+  for (let i = d.length - 1; i >= 0; i--) {
+    let n = +d[i];
+    if (alt) { n *= 2; if (n > 9) n -= 9; }
+    sum += n; alt = !alt;
+  }
+  return sum % 10 === 0;
+}
+
+async function submitPayment() {
+  if (!_pendingBookingPayload) { showToast('❌ Booking data missing'); return; }
+  const name     = document.getElementById('pay-name').value.trim();
+  const number   = document.getElementById('pay-number').value.replace(/\s/g, '');
+  const expiry   = document.getElementById('pay-expiry').value.trim();
+  const cvv      = document.getElementById('pay-cvv').value.trim();
+  const postcode = document.getElementById('pay-postcode').value.trim().toUpperCase();
+  const errEl    = document.getElementById('pay-error');
+  const setErr   = msg => { if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; } };
+
+  if (name.length < 2) return setErr('Please enter the cardholder name.');
+  if (!/^\d{13,19}$/.test(number)) return setErr('Card number must be 13–19 digits.');
+  if (!/^\d{2}\/\d{2}$/.test(expiry)) return setErr('Expiry must be in MM/YY format.');
+  const [mm] = expiry.split('/').map(Number);
+  if (mm < 1 || mm > 12) return setErr('Expiry month is invalid.');
+  if (!/^\d{3,4}$/.test(cvv)) return setErr('CVV must be 3 or 4 digits.');
+  if (!/^[A-Z0-9 ]{3,8}$/.test(postcode)) return setErr('Please enter a valid postcode.');
+
+  const btn = document.getElementById('pay-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Authorising…'; }
+
+  const last4 = number.slice(-4);
+  const txnId = 'txn_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+  const payment = {
+    method:         'card',
+    cardholderName: name,
+    last4,
+    expiry,
+    postcode,
+    status:         'authorised',
+    transactionId:  txnId,
+    amount:         _pendingBookingPayload.price,
+    authorisedAt:   new Date().toISOString()
+  };
+
+  try {
+    const payload = Object.assign({}, _pendingBookingPayload, { payment });
+    const m = window._activeMinder || { name: 'your minder' };
+    await api.createBooking(payload);
+    closePaymentModal();
+    showToast('✅ Payment authorised — booking sent to ' + m.name);
     setTimeout(() => window.location.href = 'bookings.html', 1200);
   } catch (err) {
-    showToast('❌ ' + (err.message || 'Booking failed — are you logged in?'));
+    if (btn) { btn.disabled = false; btn.textContent = 'Authorise Payment'; }
+    setErr(err.message || 'Booking failed — are you logged in?');
   }
 }
 

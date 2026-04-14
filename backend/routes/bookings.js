@@ -16,6 +16,36 @@ function nextNotifId() {
   return last ? last.id + 1 : 1;
 }
 
+// Booking duration in minutes — used for end-time + auto-completion.
+const BOOKING_DURATION_MIN = 60;
+
+function bookingEndTime(b) {
+  if (!b || !b.bookingDate || !b.bookingTime) return null;
+  const start = new Date(b.bookingDate + 'T' + b.bookingTime + ':00');
+  if (isNaN(start.getTime())) return null;
+  return new Date(start.getTime() + BOOKING_DURATION_MIN * 60 * 1000);
+}
+
+// Sweep: any confirmed booking whose end-time has passed becomes
+// `completed` and its authorised payment is captured. Called lazily on
+// every read so state survives a page refresh without a background worker.
+function sweepCompletions() {
+  const now = Date.now();
+  const confirmed = db.get('bookings').filter({ status: 'confirmed' }).value();
+  confirmed.forEach(b => {
+    const end = bookingEndTime(b);
+    if (!end || end.getTime() > now) return;
+    const updates = { status: 'completed' };
+    if (b.payment && b.payment.status === 'authorised') {
+      updates.payment = Object.assign({}, b.payment, {
+        status:     'captured',
+        capturedAt: new Date().toISOString()
+      });
+    }
+    db.get('bookings').find({ id: b.id }).assign(updates).write();
+  });
+}
+
 function toDTO(b) {
   const d = new Date(b.bookingDate + 'T00:00:00');
   // Re-hydrate the minder's live name + profile image from the users
@@ -45,12 +75,14 @@ function toDTO(b) {
     bookingDate: b.bookingDate,
     bookingTime: b.bookingTime,
     service:     b.service,
-    petIds:      Array.isArray(b.petIds) ? b.petIds : []
+    petIds:      Array.isArray(b.petIds) ? b.petIds : [],
+    payment:     b.payment || null
   };
 }
 
 // GET /api/bookings
 router.get('/', requireAuth, (req, res) => {
+  sweepCompletions();
   const bookings = db.get('bookings')
     .filter({ ownerId: req.user.userId })
     .sortBy('bookingDate')
@@ -60,7 +92,7 @@ router.get('/', requireAuth, (req, res) => {
 
 // POST /api/bookings
 router.post('/', requireAuth, (req, res) => {
-  const { minderKey, minderName, minderAvatar, minderImage, service, bookingDate, bookingTime, petNames, petIds, price } = req.body;
+  const { minderKey, minderName, minderAvatar, minderImage, service, bookingDate, bookingTime, petNames, petIds, price, payment } = req.body;
   const selectedPetIds = Array.isArray(petIds) ? petIds.map(String).filter(Boolean) : [];
   const selectedPetNames = String(petNames || '').split(/\s*&\s*/).map(n => n.trim().toLowerCase()).filter(Boolean);
 
@@ -132,6 +164,25 @@ router.post('/', requireAuth, (req, res) => {
     }
   }
 
+  // Normalise the demo payment record. We only persist the safe/display
+  // bits (never raw PAN/CVV) and force the status to `authorised` — the
+  // server is the source of truth for payment state. If no payment block
+  // was supplied (legacy demo flow), leave it null.
+  let paymentRecord = null;
+  if (payment && typeof payment === 'object') {
+    paymentRecord = {
+      method:         String(payment.method || 'card'),
+      cardholderName: String(payment.cardholderName || '').slice(0, 80),
+      last4:          String(payment.last4 || '').replace(/\D/g, '').slice(-4),
+      expiry:         String(payment.expiry || '').slice(0, 5),
+      postcode:       String(payment.postcode || '').slice(0, 8),
+      transactionId:  String(payment.transactionId || ('txn_' + Date.now().toString(36))),
+      amount:         payment.amount || price || '£15.00',
+      status:         'authorised',
+      authorisedAt:   new Date().toISOString()
+    };
+  }
+
   const booking = {
     id:           nextId(),
     ownerId:      req.user.userId,
@@ -146,6 +197,7 @@ router.post('/', requireAuth, (req, res) => {
     petIds:       selectedPetIds,
     price:        price || '£15.00',
     status:       'pending',
+    payment:      paymentRecord,
     createdAt:    new Date().toISOString()
   };
 
@@ -172,6 +224,7 @@ router.post('/', requireAuth, (req, res) => {
 
 // GET /api/bookings/requests — bookings where the logged-in user is the minder
 router.get('/requests', requireAuth, (req, res) => {
+  sweepCompletions();
   const bookings = db.get('bookings')
     .filter(b => Number(b.minderKey) === req.user.userId)
     .sortBy('createdAt')
@@ -201,7 +254,14 @@ router.patch('/:id', requireAuth, (req, res) => {
   const isOwner  = booking.ownerId === req.user.userId;
 
   if (isMinder && ['confirmed', 'declined'].includes(status)) {
-    row.assign({ status }).write();
+    const patch = { status };
+    // Declined bookings void the authorised payment — nothing is ever
+    // captured. Confirmed bookings leave the payment in `authorised`
+    // state; capture happens at end-time via sweepCompletions().
+    if (status === 'declined' && booking.payment && booking.payment.status === 'authorised') {
+      patch.payment = Object.assign({}, booking.payment, { status: 'void', voidedAt: new Date().toISOString() });
+    }
+    row.assign(patch).write();
 
     let chatId = null;
     if (status === 'confirmed') {
@@ -223,7 +283,11 @@ router.patch('/:id', requireAuth, (req, res) => {
         .value();
 
       competing.forEach(c => {
-        db.get('bookings').find({ id: c.id }).assign({ status: 'declined' }).write();
+        const cascadePatch = { status: 'declined' };
+        if (c.payment && c.payment.status === 'authorised') {
+          cascadePatch.payment = Object.assign({}, c.payment, { status: 'void', voidedAt: new Date().toISOString() });
+        }
+        db.get('bookings').find({ id: c.id }).assign(cascadePatch).write();
         const minderUser = db.get('users').find({ id: Number(booking.minderKey) }).value();
         const minderName = minderUser ? ((minderUser.firstName || '') + ' ' + (minderUser.lastName || '')).trim() : (booking.minderName || 'The minder');
         db.get('notifications').push({
@@ -286,7 +350,13 @@ router.patch('/:id', requireAuth, (req, res) => {
     return res.json(dto);
   }
   if (isOwner && status === 'cancelled') {
-    row.assign({ status }).write();
+    // Cancelling before completion must void any authorised payment.
+    // Already-captured (completed) payments cannot be cancelled.
+    const patch = { status };
+    if (booking.payment && booking.payment.status === 'authorised') {
+      patch.payment = Object.assign({}, booking.payment, { status: 'void', voidedAt: new Date().toISOString() });
+    }
+    row.assign(patch).write();
     return res.json(toDTO(row.value()));
   }
 

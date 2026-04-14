@@ -141,9 +141,18 @@ img, video { max-width: 100%; height: auto; }
   .chat-messages { padding: 14px; gap: 10px; }
   .msg-bubble { max-width: 85%; font-size: 13px; padding: 10px 14px; }
   .chat-input-bar { padding: 10px 12px; gap: 8px; }
-  .chat-input { padding: 10px 14px; font-size: 14px; }
+  .chat-input { padding: 10px 14px; font-size: 16px; }
   .send-btn { width: 38px; height: 38px; font-size: 16px; }
+  .chat-image-btn { width: 38px; height: 38px; font-size: 16px; }
   .chat-report-btn { padding: 4px 8px !important; font-size: 18px !important; }
+  .msg-bubble .msg-image { max-height: 220px; }
+  .msg-bubble:has(.msg-image) { max-width: 75%; }
+
+  /* On mobile, chat fills the viewport between the mobile header (top)
+     and the bottom nav, so the input bar is always visible and never
+     covered by the fixed bottom nav. Uses safe-area-inset for notched
+     devices. */
+  #screen-messages.active .messages-container { top: 40px; bottom: calc(58px + env(safe-area-inset-bottom)); }
 
   /* ── Profile page ── */
   .profile-screen-hero { padding: 24px 16px 32px; }

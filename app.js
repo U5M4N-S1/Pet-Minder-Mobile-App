@@ -101,6 +101,7 @@ const api = {
   resetPassword(email, code, newPassword) { return this._req('POST', '/auth/reset-password', { email, code, newPassword }); },
   getMe()                   { return this._req('GET',    '/auth/me'); },
   updateMe(data)            { return this._req('PATCH',  '/auth/me', data); },
+  becomeMinder(data)        { return this._req('POST',   '/auth/become-minder', data); },
   getBookings()             { return this._req('GET',    '/bookings'); },
   getBookingRequests()      { return this._req('GET',    '/bookings/requests'); },
   updateBooking(id, data)   { return this._req('PATCH',  '/bookings/' + id, data); },
@@ -1170,6 +1171,9 @@ function renderProfileAvatar() {
   // Payout menu item is minder-only. Owners never see it.
   const payoutMenu = document.getElementById('menu-payout');
   if (payoutMenu) payoutMenu.style.display = userProfile.role === 'minder' ? '' : 'none';
+  // Become-a-Minder menu item is owner-only. Once they upgrade, it disappears.
+  const becomeMenu = document.getElementById('menu-become-minder');
+  if (becomeMenu) becomeMenu.style.display = userProfile.role === 'owner' ? '' : 'none';
 }
 
 async function handleAvatarUpload(event) {
@@ -2227,10 +2231,109 @@ async function submitReview() {
 }
 
 // ===== BECOME MINDER =====
-function openBecomeMinder(){
-  //ask for any qualifications 
-    // if yes ask for pictures (something like auth.html lines 62-69)
-    // if no dont ask for pictures (can still provide basic services like feeding or walking)
+// Owners upgrade to a minder account from their profile. We only ask for the
+// bits the system doesn't already know (certifications + payout); everything
+// else (name, email, location, bio) is reused. Service area, availability,
+// services, price range and experience can be set afterwards from Edit Profile.
+let bmPendingCerts = [];
+let bmCertNextId = 1;
+
+function openBecomeMinder() {
+  if (userProfile.role === 'minder') { showToast('You are already a Pet Minder'); return; }
+  // Reset modal state each open
+  bmPendingCerts = [];
+  refreshBMCerts();
+  ['bm-payout-name','bm-payout-bank','bm-payout-sort','bm-payout-account'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const certBox = document.getElementById('bm-certs-box');
+  const payoutBox = document.getElementById('bm-payout-box');
+  if (certBox)   certBox.style.borderColor = 'var(--sand)';
+  if (payoutBox) payoutBox.style.borderColor = 'var(--sand)';
+  document.getElementById('become-minder-modal').classList.add('open');
+}
+
+function closeBecomeMinderModal() {
+  document.getElementById('become-minder-modal').classList.remove('open');
+}
+
+function handleBMCertUpload() {
+  const input = document.getElementById('bm-cert-upload-input');
+  if (!input || !input.files) return;
+  Array.from(input.files).forEach(file => {
+    bmPendingCerts.push({ id: bmCertNextId++, name: file.name, size: file.size, type: file.type, file });
+  });
+  input.value = '';
+  refreshBMCerts();
+  const certBox = document.getElementById('bm-certs-box');
+  if (certBox && bmPendingCerts.length > 0) certBox.style.borderColor = 'var(--sand)';
+}
+
+function removeBMCert(certId) {
+  bmPendingCerts = bmPendingCerts.filter(c => c.id !== certId);
+  refreshBMCerts();
+}
+
+function refreshBMCerts() {
+  const grid = document.getElementById('bm-certs-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  bmPendingCerts.forEach(c => {
+    const card = document.createElement('div');
+    card.className = 'reg-pet-card';
+    const icon = (c.type && c.type.startsWith('image/')) ? '🖼️' : '📄';
+    card.innerHTML =
+      '<span>' + icon + '</span>' +
+      '<span style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + c.name + '</span>' +
+      '<span class="reg-cert-remove" title="Remove" style="margin-left:4px;color:#e53935;font-weight:700;cursor:pointer">×</span>';
+    card.querySelector('.reg-cert-remove').onclick = (e) => { e.stopPropagation(); removeBMCert(c.id); };
+    grid.appendChild(card);
+  });
+  const label = document.getElementById('bm-cert-file-names');
+  if (label) {
+    label.textContent = bmPendingCerts.length > 0
+      ? '✅ ' + bmPendingCerts.length + ' file' + (bmPendingCerts.length === 1 ? '' : 's') + ' added'
+      : '';
+  }
+}
+
+async function submitBecomeMinder() {
+  const certBox   = document.getElementById('bm-certs-box');
+  const payoutBox = document.getElementById('bm-payout-box');
+
+  if (bmPendingCerts.length === 0) {
+    showToast('❌ Please upload at least one certification');
+    if (certBox) certBox.style.borderColor = 'var(--terra)';
+    return;
+  }
+  if (certBox) certBox.style.borderColor = 'var(--sand)';
+
+  const pName    = (document.getElementById('bm-payout-name')    || {}).value || '';
+  const pBank    = (document.getElementById('bm-payout-bank')    || {}).value || '';
+  const pSort    = ((document.getElementById('bm-payout-sort')   || {}).value || '').replace(/\D/g, '');
+  const pAccount = ((document.getElementById('bm-payout-account')|| {}).value || '').replace(/\D/g, '');
+  if (!pName.trim() || !pBank.trim() || pSort.length !== 6 || pAccount.length !== 8) {
+    showToast('❌ Please complete your payout details (sort code 6 digits, account 8 digits)');
+    if (payoutBox) payoutBox.style.borderColor = 'var(--terra)';
+    return;
+  }
+  if (payoutBox) payoutBox.style.borderColor = 'var(--sand)';
+
+  showConfirmModal('🐾', 'Become a Pet Minder?', 'You\'ll get minder features like availability, payouts and booking requests. You can still book minders for your own pets.', async function() {
+    try {
+      const payout = { accountHolderName: pName.trim(), bankName: pBank.trim(), sortCode: pSort, accountNumber: pAccount };
+      const saved = await api.becomeMinder({ payout });
+      hydrateUserProfile(saved);
+      store.setUser(userProfile);
+      bmPendingCerts = [];
+      refreshBMCerts();
+      closeBecomeMinderModal();
+      renderProfileAvatar();
+      showToast('✅ You\'re now a Pet Minder! Head to Edit Profile to set your services, rates and availability.');
+    } catch (err) {
+      showToast('❌ ' + (err.message || 'Failed to upgrade account'));
+    }
+  });
 }
 
 // ===== REVIEWS (from profile section) =====

@@ -355,6 +355,27 @@
       },
       "online": false,
       "lastSeenAt": "2026-04-14T17:39:52.784Z"
+    },
+    {
+      "id": 1020,
+      "firstName": "d",
+      "lastName": "g",
+      "email": "d@g.com",
+      "passwordHash": "$2b$12$gTOSf0SKodWshEEqUp2N/ebJgBW/9z3wdlRrHD41YZehfsU0FjsZi",
+      "role": "minder",
+      "location": "Barking, UK",
+      "createdAt": "2026-04-14T20:47:59.822Z",
+      "locationLat": 51.5377369,
+      "locationLng": 0.076127,
+      "online": false,
+      "lastSeenAt": "2026-04-14T20:49:03.488Z",
+      "payout": {
+        "accountHolderName": "tom",
+        "bankName": "natwest",
+        "sortCode": "333333",
+        "accountNumber": "33333333",
+        "updatedAt": "2026-04-14T20:48:28.443Z"
+      }
     }
   ],
   "bookings": [
@@ -1131,6 +1152,18 @@
       "care": "t",
       "emoji": "🐕",
       "createdAt": "2026-04-14T13:03:20.770Z"
+    },
+    {
+      "id": 18,
+      "ownerId": 1020,
+      "name": "dd",
+      "type": "Dog",
+      "breed": "dd",
+      "age": "5",
+      "medical": "dd",
+      "care": "d",
+      "emoji": "🐕",
+      "createdAt": "2026-04-14T20:47:59.837Z"
     }
   ],
   "disputes": [

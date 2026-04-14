@@ -49,7 +49,7 @@
       <div class="menu-item" id="menu-payout" onclick="window.location.href='payout-details.html'" style="display:none"><span class="menu-icon">💷</span><span class="menu-label">Payout Details</span><span class="menu-arrow">›</span></div>
       <div class="menu-item" onclick="openNotifications()"><span class="menu-icon">🔔</span><span class="menu-label">Notifications<span id="notif-badge" class="notif-badge" style="display:none">0</span></span><span class="menu-arrow">›</span></div>
       <div class="menu-item" onclick="openProfileReviews()"><span class="menu-icon">⭐</span><span class="menu-label">Reviews</span><span class="menu-arrow">›</span></div>
-      <div class="menu-item" onclick="openBecomeMinder()"><span class="menu-icon">🐾❤️</span><span class="menu-label">Become a Minder</span><span class="menu-arrow">›</span></div>
+      <div class="menu-item" id="menu-become-minder" onclick="openBecomeMinder()" style="display:none"><span class="menu-icon">🐾❤️</span><span class="menu-label">Become a Minder</span><span class="menu-arrow">›</span></div>
       <div class="menu-section-title">Support</div>
       <div class="menu-item" onclick="openHelpCentre()"><span class="menu-icon">❓</span><span class="menu-label">Help Centre</span><span class="menu-arrow">›</span></div>
       <div class="menu-item" onclick="showToast('Terms coming soon!')"><span class="menu-icon">📄</span><span class="menu-label">Terms & Privacy</span><span class="menu-arrow">›</span></div>
@@ -141,6 +141,35 @@
   <div class="field-group"><label>Certifications &amp; Qualifications</label><textarea id="edit-certifications" placeholder="e.g. Pet First Aid Certified, DBS Checked, Canine Care Level 2..." style="width:100%;padding:12px 14px;border:1.5px solid var(--sand);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--bark);resize:vertical;min-height:70px;outline:none"></textarea></div>
 </div>
 <div class="pet-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="closeEditProfileModal()">Cancel</button><button class="btn-primary" style="flex:2;padding:14px" onclick="saveProfile()">Save Changes</button></div></div></div>
+
+<!-- BECOME A MINDER MODAL -->
+<div class="pet-modal-overlay" id="become-minder-modal" onclick="if(event.target===this)closeBecomeMinderModal()">
+  <div class="pet-modal">
+    <h3>🐾❤️ Become a Pet Minder</h3>
+    <p style="font-size:13px;color:var(--bark-light);margin:-6px 0 14px">We already have your name, email and location — just add the bits we need to set you up as a minder.</p>
+
+    <div class="reg-extras-box" id="bm-certs-box">
+      <p class="reg-extras-title">📜 Upload Certifications <span style="color:var(--terra)">*</span></p>
+      <p class="reg-extras-sub">Required — add your qualifications &amp; certifications. You can add more than one.</p>
+      <label class="file-upload-label"><input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple id="bm-cert-upload-input" onchange="handleBMCertUpload()" style="display:none">＋ Add Certification</label>
+      <div id="bm-cert-file-names" style="margin-top:8px;font-size:12px;color:var(--moss)"></div>
+      <div id="bm-certs-grid" class="reg-pets-grid"></div>
+    </div>
+
+    <div class="reg-extras-box" id="bm-payout-box" style="margin-top:12px">
+      <p class="reg-extras-title">💷 Payout Details <span style="color:var(--terra)">*</span></p>
+      <p class="reg-extras-sub">Required — how you get paid for completed bookings. <em>Demo only — no real bank data is sent.</em></p>
+      <div class="field-group" style="margin-top:10px"><label>Account holder name</label><input type="text" id="bm-payout-name" placeholder="Name on bank account"></div>
+      <div class="field-group"><label>Bank name</label><input type="text" id="bm-payout-bank" placeholder="e.g. Barclays"></div>
+      <div class="field-group"><label>Sort code</label><input type="text" id="bm-payout-sort" inputmode="numeric" placeholder="12-34-56" maxlength="8"></div>
+      <div class="field-group"><label>Account number</label><input type="text" id="bm-payout-account" inputmode="numeric" placeholder="12345678" maxlength="8"></div>
+    </div>
+
+    <p style="font-size:12px;color:var(--bark-light);margin:14px 0 0;text-align:center">You can set your service area, availability, rates and services from Edit Profile after you're a minder.</p>
+
+    <div class="pet-modal-actions" style="margin-top:14px"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:14px" onclick="closeBecomeMinderModal()">Cancel</button><button class="btn-primary" style="flex:2;padding:14px" onclick="submitBecomeMinder()">Become a Minder</button></div>
+  </div>
+</div>
 
 <script src="../app.js"></script>
 </body>

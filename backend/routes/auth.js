@@ -204,6 +204,27 @@ router.put('/payout', requireAuth, (req, res) => {
   });
 });
 
+// POST /api/auth/become-minder — upgrade an existing owner account to a
+// minder account. Reuses the name/email/location the user already registered
+// with; only asks for the fields that are genuinely new (payout details).
+// Minder-specific profile fields (service area, availability, price range,
+// etc.) stay blank and are set later via PATCH /me from Edit Profile.
+router.post('/become-minder', requireAuth, (req, res) => {
+  const user = db.get('users').find({ id: req.user.userId });
+  const u = user.value();
+  if (!u) return res.status(404).json({ error: 'User not found' });
+  if (u.role === 'minder') return res.status(400).json({ error: 'You are already a Pet Minder' });
+  if (u.role !== 'owner')  return res.status(403).json({ error: 'Only pet owner accounts can upgrade to Pet Minder' });
+
+  const payout = sanitisePayout(req.body && req.body.payout);
+  if (!payout) {
+    return res.status(400).json({ error: 'Payout details are required (sort code 6 digits, account 8 digits)' });
+  }
+
+  user.assign({ role: 'minder', payout }).write();
+  res.json(userDTO(user.value()));
+});
+
 // PATCH /api/auth/me — update profile fields
 router.patch('/me', requireAuth, (req, res) => {
   const user = db.get('users').find({ id: req.user.userId });

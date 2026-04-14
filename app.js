@@ -1397,10 +1397,6 @@ function renderProfileAvatar() {
   const bmItem = document.getElementById('become-minder-item');
   if (bmItem) bmItem.style.display = (isOwner && !isMinder) ? 'flex' : 'none';
 
-  // Show "Become a Pet Owner" only for minders who aren't yet owners
-  const boItem = document.getElementById('become-owner-item');
-  if (boItem) boItem.style.display = (isMinder && !isOwner) ? 'flex' : 'none';
-
   // Show qualifications upload only for minders
   const qualItem = document.getElementById('upload-quals-item');
   if (qualItem) qualItem.style.display = isMinder ? 'flex' : 'none';

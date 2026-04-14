@@ -39,6 +39,7 @@ function userDTO(u) {
     // Per-day availability schedule (used for booking validation)
     availability:     normalizeAvailability(u),
     certifications:   u.certifications || '',
+    qualificationImages: Array.isArray(u.qualificationImages) ? u.qualificationImages : [],
     online:           u.online === true && u.lastSeenAt &&
                       (Date.now() - new Date(u.lastSeenAt).getTime()) < 2 * 60 * 1000,
   };

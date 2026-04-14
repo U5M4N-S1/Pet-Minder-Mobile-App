@@ -186,6 +186,7 @@ function hydrateUserProfile(u) {
   userProfile.priceMax         = u.priceMax != null ? u.priceMax : 50;
   userProfile.availableForBooking = u.availableForBooking !== false;
   userProfile.enabledServices  = Array.isArray(u.enabledServices) ? u.enabledServices : [];
+  userProfile.qualificationImages = Array.isArray(u.qualificationImages) ? u.qualificationImages : [];
 }
 (function initUserFromCache() { hydrateUserProfile(store.getUser()); }());
 
@@ -1125,6 +1126,12 @@ async function handleRegister() {
   // Owners must add at least one pet before registering
   if (selectedRole === 'owner' && regPendingPets.length === 0) {
     showToast('❌ Please add at least one pet to create an owner account');
+    const petBox = document.querySelector('#reg-owner-extras .reg-extras-box');
+    if (petBox) {
+      petBox.style.outline = '2px solid var(--terra)';
+      petBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => { petBox.style.outline = ''; }, 2500);
+    }
     return;
   }
 
@@ -1143,23 +1150,6 @@ async function handleRegister() {
     if (selectedRole === 'owner' && regPendingPets.length > 0) {
       await Promise.all(regPendingPets.map(p => api.createPet(p).catch(() => {})));
       regPendingPets = [];
-    }
-
-    // For minders: upload qualification image if one was selected
-    if (selectedRole === 'minder') {
-      const certInput = document.getElementById('cert-upload-input');
-      const certFile  = certInput && certInput.files && certInput.files[0];
-      if (certFile) {
-        try {
-          const dataUri = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload  = () => resolve(reader.result);
-            reader.onerror = () => reject(new Error('Failed to read file'));
-            reader.readAsDataURL(certFile);
-          });
-          await api.uploadQualification(dataUri);
-        } catch { /* non-fatal — account is already created */ }
-      }
     }
 
     goToHome();
@@ -1226,14 +1216,86 @@ function closeBecomeMinder() {
   document.getElementById('become-minder-modal').classList.remove('open');
 }
 
-function openQualifications(){
-  document.getElementById('become-minder-modal').classList.add('open');
-  document.getElementById('bm-step-1').style.display = 'none';
-  document.getElementById('bm-step-quals').style.display = 'block';
-  document.querySelectorAll('#qual-service-checkboxes input[type="checkbox"]').forEach(cb => { cb.checked = false; });
-  document.getElementById('bm-cert-names').textContent = '';
-  document.getElementById('bm-cert-input').value = '';
-  document.getElementById('bm-cert-input').accept = 'image/png';
+function openQualifications() {
+  const modal = document.getElementById('quals-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  renderQualsModalGrid();
+  // Reset upload input
+  const inp = document.getElementById('quals-file-input');
+  const status = document.getElementById('quals-upload-status');
+  if (inp) inp.value = '';
+  if (status) status.textContent = '';
+}
+
+function closeQualsModal() {
+  const modal = document.getElementById('quals-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function renderQualsModalGrid() {
+  const grid = document.getElementById('quals-modal-grid');
+  if (!grid) return;
+  const quals = userProfile.qualificationImages || [];
+  if (quals.length === 0) {
+    grid.innerHTML = '<p style="font-size:13px;color:var(--bark-light);width:100%">No qualifications uploaded yet.</p>';
+    return;
+  }
+  grid.innerHTML = quals.map(q =>
+    '<div style="position:relative;width:calc(50% - 5px)">' +
+      '<img src="' + q.image + '" alt="Qualification" style="width:100%;max-height:140px;object-fit:contain;border-radius:8px;border:1.5px solid var(--sand-light);cursor:zoom-in" onclick="openImagePreview(this.src)">' +
+      '<button onclick="deleteMyQual(\'' + q.id + '\')" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:24px;height:24px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1" title="Remove">×</button>' +
+    '</div>'
+  ).join('');
+}
+
+async function handleQualsFileSelect(input) {
+  const file = input.files && input.files[0];
+  const status = document.getElementById('quals-upload-status');
+  if (!file) return;
+  if (file.type !== 'image/png') {
+    showToast('❌ Only PNG images are accepted');
+    input.value = '';
+    return;
+  }
+  if (file.size > 3 * 1024 * 1024) {
+    showToast('❌ Image must be under 3 MB');
+    input.value = '';
+    return;
+  }
+  if (status) status.textContent = '⏳ Uploading…';
+  try {
+    const dataUri = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+    const result = await api.uploadQualification(dataUri);
+    userProfile.qualificationImages = [
+      ...(userProfile.qualificationImages || []),
+      { id: result.id, image: dataUri, uploadedAt: result.uploadedAt }
+    ];
+    if (status) status.textContent = '';
+    input.value = '';
+    renderQualsModalGrid();
+    showToast('✅ Qualification uploaded');
+  } catch (err) {
+    if (status) status.textContent = '';
+    showToast('❌ ' + (err.message || 'Upload failed'));
+    input.value = '';
+  }
+}
+
+async function deleteMyQual(imageId) {
+  try {
+    await api.deleteQualification(imageId);
+    userProfile.qualificationImages = (userProfile.qualificationImages || []).filter(q => q.id !== imageId);
+    renderQualsModalGrid();
+    showToast('✅ Qualification removed');
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Could not remove qualification'));
+  }
 }
 
 async function bmSubmitQuals() {

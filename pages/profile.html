@@ -280,6 +280,34 @@
   </div>
 </div>
 
+<!-- QUALIFICATIONS MODAL -->
+<div class="pet-modal-overlay" id="quals-modal" onclick="if(event.target===this)closeQualsModal()">
+  <div class="pet-modal" style="max-height:85vh;overflow-y:auto">
+    <h3>📜 My Qualifications</h3>
+    <p style="font-size:13px;color:var(--bark-light);margin-bottom:16px">Upload PNG images of your certifications. Admins review these to approve advanced services.</p>
+
+    <!-- Existing images grid -->
+    <div id="quals-modal-grid" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px"></div>
+
+    <!-- Upload new -->
+    <div class="reg-extras-box" style="margin-bottom:0">
+      <label class="file-upload-label" style="cursor:pointer">
+        <input type="file" accept="image/png" id="quals-file-input" onchange="handleQualsFileSelect(this)" style="display:none">
+        ＋ Upload PNG
+      </label>
+      <div id="quals-upload-status" style="margin-top:8px;font-size:12px;color:var(--moss)"></div>
+    </div>
+
+    <button class="btn-outline" style="width:100%;margin-top:16px;padding:13px;color:var(--bark-light);border-color:var(--sand)" onclick="closeQualsModal()">Done</button>
+  </div>
+</div>
+
+<!-- Image preview overlay -->
+<div class="image-preview-overlay" id="image-preview-overlay" onclick="closeImagePreview()" style="display:none">
+  <button class="image-preview-close" onclick="closeImagePreview()">×</button>
+  <img id="image-preview-img" class="image-preview-img" src="" alt="Preview">
+</div>
+
 <script src="../app.js"></script>
 </body>
 </html>

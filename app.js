@@ -11,10 +11,6 @@ let currentReviewMinder = null;
 // Chat state
 let chatListCache = [];
 
-// Registration certs
-let regPendingCerts = [];
-let regCertNextId   = 1;
-
 // Registration pets (staged before account exists)
 let regPendingPets = [];
 let regPetNextId   = 1;
@@ -31,7 +27,6 @@ const AVAIL_SLOT_RANGES = {
 const AVAIL_DAY_KEYS   = ['sun','mon','tue','wed','thu','fri','sat'];
 const AVAIL_DAY_LABELS = { mon:'Monday', tue:'Tuesday', wed:'Wednesday', thu:'Thursday', fri:'Friday', sat:'Saturday', sun:'Sunday' };
 
-let _openMinderIsBackend = false; // true when viewing a real (numeric-id) minder
 let reportSelectedUser = null;
 
 // User profile — populated from the session cache or API on page load
@@ -197,20 +192,7 @@ function hydrateUserProfile(u) {
 (function initUserFromCache() { hydrateUserProfile(store.getUser()); }());
 
 // Minder data for profiles
-const minderData = {
-  sarah: { name: 'Sarah K.', avatar: '🧑‍🦱', stars: '★★★★★', reviews: 48, loc: '📍 Shoreditch, London · 0.8mi away', bio: "Hi! I'm Sarah, a passionate animal lover with 5 years of pet care experience. I specialise in dog walking and home visits. Your pet will be treated like royalty! 🐾" },
-  james: { name: 'James M.', avatar: '👩‍🦰', stars: '★★★★☆', reviews: 32, loc: '📍 Hackney, London · 1.2mi away', bio: "Hello! I'm James. I love cats and have been caring for pets for 3 years. I offer home visits and cat sitting services." },
-  emma:  { name: 'Emma T.',  avatar: '🧔',    stars: '★★★★★', reviews: 61, loc: '📍 Bethnal Green, London · 1.5mi away', bio: "I'm Emma, an experienced pet carer who loves all animals. I offer walking, grooming and home visits for dogs and cats." },
-  priya: { name: 'Priya S.', avatar: '👨‍🦳', stars: '★★★★☆', reviews: 19, loc: '📍 Stepney, London · 1.8mi away', bio: "Hi, I'm Priya! I specialise in dog training and walking. I have a certificate in animal behaviour and love working with all breeds." }
-};
-
 // Previously booked minders (for review system)
-const bookedMinders = [
-  { id: 'sarah', name: 'Sarah K.', avatar: '🧑‍🦱', lastBooking: '7 Apr – Dog Walk' },
-  { id: 'emma', name: 'Emma T.', avatar: '🧔', lastBooking: '9 Apr – Home Visit' },
-  { id: 'james', name: 'James M.', avatar: '👩‍🦰', lastBooking: '20 Mar – Home Visit' }
-];
-
 // Booking lists are always fetched from `GET /api/bookings` (filtered by
 // ownerId on the server). These empty arrays exist purely as a fallback
 // shape for when the fetch fails — never populated with mock data, so a
@@ -708,8 +690,7 @@ async function initActiveBookingPage() {
     } catch { /* silent — fall through to hardcoded */ }
   }
   if (!resolved) {
-    const legacy = minderData[minderId] || { name: 'Your Minder', avatar: '🧑‍🦱' };
-    resolved = { ...legacy, id: minderId, profileImage: '' };
+    resolved = { name: 'Your Minder', avatar: '🧑‍🦱', id: minderId, profileImage: '' };
   }
 
   window._activeMinder = resolved;
@@ -1189,29 +1170,11 @@ function selectRole(el, role) {
   if (priceEl)      priceEl.style.display      = role === 'minder' ? 'block' : 'none';
 }
 
-function handleCertUpload() {
-  const input = document.getElementById('cert-upload-input');
-  const file  = input.files && input.files[0];
-  if (!file) return;
-  if (file.type !== 'image/png') {
-    showToast('❌ Only PNG images are accepted');
-    input.value = '';
-    document.getElementById('cert-file-names').textContent = '';
-    return;
-  }
-  if (file.size > 3 * 1024 * 1024) {
-    showToast('❌ Image must be under 3 MB');
-    input.value = '';
-    document.getElementById('cert-file-names').textContent = '';
-    return;
-  }
-  document.getElementById('cert-file-names').textContent = '✅ ' + file.name;
-}
 
 // ===== BECOME A MINDER =====
 const BM_ALL_SERVICES = [
   { name: 'Walking',  icon: '🚶', desc: '1 hour walk',   basic: true  },
-  { name: 'Home Visit',   icon: '🏠', desc: '1 hour check-in',     basic: true  },
+  { name: 'Home Visit',   icon: '🏠', desc: '30 min check-in',     basic: true  },
 ];
 let _bmHasQuals = false;
 
@@ -1834,8 +1797,8 @@ function switchProfileTab(btn, tabId) {
   document.querySelectorAll('[id^="tab-"]').forEach(t => t.classList.add('hidden'));
   document.getElementById(tabId).classList.remove('hidden');
 
-  // Lazy-load real reviews when the Reviews tab is opened on a backend minder
-  if (tabId === 'tab-reviews' && _openMinderIsBackend && currentReviewMinder) {
+  // Lazy-load reviews when the Reviews tab is opened
+  if (tabId === 'tab-reviews' && currentReviewMinder) {
     const container = document.getElementById('minder-reviews-list');
     if (container && container.dataset.loaded !== 'done') {
       if (_cachedMinderReviews) {
@@ -3411,34 +3374,6 @@ function checkMinderAvailability(minder, bookingDate, bookingTime) {
   return { ok: true };
 }
 
-function removeRegCert(certId) {
-  regPendingCerts = regPendingCerts.filter(c => c.id !== certId);
-  refreshRegCerts();
-}
-
-function refreshRegCerts() {
-  const grid = document.getElementById('reg-certs-grid');
-  if (!grid) return;
-  grid.innerHTML = '';
-  regPendingCerts.forEach(c => {
-    const card = document.createElement('div');
-    card.className = 'reg-pet-card';
-    const icon = (c.type && c.type.startsWith('image/')) ? '🖼️' : '📄';
-    card.innerHTML =
-      '<span>' + icon + '</span>' +
-      '<span style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + c.name + '</span>' +
-      '<span class="reg-cert-remove" title="Remove" style="margin-left:4px;color:#e53935;font-weight:700;cursor:pointer">×</span>';
-    card.querySelector('.reg-cert-remove').onclick = (e) => { e.stopPropagation(); removeRegCert(c.id); };
-    grid.appendChild(card);
-  });
-  const label = document.getElementById('cert-file-names');
-  if (label) {
-    label.textContent = regPendingCerts.length > 0
-      ? '✅ ' + regPendingCerts.length + ' file' + (regPendingCerts.length === 1 ? '' : 's') + ' added'
-      : '';
-  }
-}
-
 async function initMinderPage() {
   const params = new URLSearchParams(window.location.search);
   const raw    = params.get('id');
@@ -3453,11 +3388,7 @@ async function initMinderPage() {
     if (!Number.isNaN(numericId)) {
       minder = loadedMinders.find(m => m.id === numericId) || null;
     }
-    // Fall back to legacy hardcoded demo data (sarah/james/emma/priya)
-    if (!minder && minderData[raw]) minder = minderData[raw];
-  } catch {
-    if (minderData[raw]) minder = minderData[raw];
-  }
+  } catch { /* silent */ }
   if (!minder) {
     document.getElementById('mp-name').textContent = 'Minder not found';
     return;
@@ -3556,10 +3487,6 @@ async function loadMinderReviews(minderId) {
 function renderMinderReviews(reviews) {
   const list = document.getElementById('minder-reviews-list');
   if (!list) return;
-
-  const _rvRoles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role || ''];
-  const _isOwner  = _rvRoles.includes('owner');
-  const _isSelf   = currentMinderId != null && String(currentMinderId) === String(store.currentUserId());
 
   const myId = String(store.currentUserId());
 

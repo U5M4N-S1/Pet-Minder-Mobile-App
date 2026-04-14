@@ -168,6 +168,7 @@ const api = {
 // the correct name before the async /me call completes.
 function hydrateUserProfile(u) {
   if (!u) return;
+  userProfile.id           = u.id;
   userProfile.firstName    = u.firstName    || '';
   userProfile.lastName     = u.lastName     || '';
   userProfile.email        = u.email        || '';
@@ -1206,7 +1207,7 @@ function handleCertUpload() {
 // ===== BECOME A MINDER =====
 const BM_ALL_SERVICES = [
   { name: 'Walking',  icon: '🚶', desc: '1 hour walk',   basic: true  },
-  { name: 'Home Visit',   icon: '🏠', desc: '30 min check-in',     basic: true  },
+  { name: 'Home Visit',   icon: '🏠', desc: '1 hour check-in',     basic: true  },
 ];
 let _bmHasQuals = false;
 
@@ -1714,7 +1715,7 @@ async function openChatInline(chatId) {
     const myId = store.currentUserId();
     msgs.innerHTML = '';
     history.forEach(m => {
-      const isMine = m.fromUserId === myId;
+      const isMine = String(m.fromUserId) === String(myId);
       const b = document.createElement('div');
       b.className = 'msg-bubble ' + (isMine ? 'sent' : 'received');
       if (m.deleted) {
@@ -2108,7 +2109,7 @@ function renderMinders(minders) {
         (tags.length ? '<div class="minder-list-tags">' + tags.join('') + '</div>' : '') +
         (price ? '<div class="minder-list-rate">' + price + '</div>' : '') +
         '<div class="minder-btns">' +
-          '<button class="btn-msg-minder" onclick="event.stopPropagation();showToast(\'Chat coming soon!\')">💬 Message</button>' +
+          '<button class="btn-msg-minder" onclick="event.stopPropagation();messageMinder(' + m.id + ')">💬 Message</button>' +
           (String(m.id) === String(store.currentUserId())
             ? '<span style="font-size:12px;color:var(--bark-light);padding:10px 12px">Your listing</span>'
             : ((Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role || '']).includes('owner')

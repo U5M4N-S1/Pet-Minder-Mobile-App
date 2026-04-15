@@ -3986,7 +3986,7 @@ if (document.getElementById('notif-badge')) loadNotificationCount();
 
 // ===== AUTH GUARD =====
 // Pages that require a valid session. auth.html and index.html are excluded.
-const PROTECTED = ['home.html','search.html','bookings.html','messages.html','profile.html','admin.html','active-booking.html'];
+const PROTECTED = ['home.html','search.html','bookings.html','messages.html','profile.html','admin.html','active-booking.html','payout-details.html'];
 
 document.addEventListener('DOMContentLoaded', async () => {
   const page = window.location.pathname.split('/').pop() || 'index.html';
@@ -4026,6 +4026,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       renderBookingPetPicker();
       updateBookingSummary();
     }
+    // Payout details page — guarded by inline script in payout-details.html
   } catch {
     api.clearSession();
     window.location.href = 'auth.html';

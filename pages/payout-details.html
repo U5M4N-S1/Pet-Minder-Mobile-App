@@ -48,14 +48,12 @@
 <script src="../app.js"></script>
 <script>
 (async () => {
-  // Access control: only minders can view this page. If the user is not
-  // logged in or is an owner, bounce them back to profile. We hit /auth/me
-  // to re-verify the role against the server, not just the cached profile.
   try {
     const me = await api.getMe();
     hydrateUserProfile(me);
-    if (me.role !== 'minder') {
-      showToast('❌ Payout details are only available for Pet Minder accounts');
+    const roles = Array.isArray(me.role) ? me.role : [me.role || ''];
+    if (!roles.includes('minder')) {
+      showToast('❌ Payout details are only available for minders');
       setTimeout(() => { window.location.href = 'profile.html'; }, 800);
       return;
     }

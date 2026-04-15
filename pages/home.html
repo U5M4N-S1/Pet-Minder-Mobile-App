@@ -37,7 +37,7 @@
       <div class="stats-row">
         <div class="stat-card"><div class="stat-icon">📅</div><div class="stat-value" id="home-upcoming-count">0</div><div class="stat-label">Upcoming</div></div>
         <div class="stat-card"><div class="stat-icon">🐾</div><div class="stat-value" id="home-pet-count">2</div><div class="stat-label">My Pets</div></div>
-        <div class="stat-card"><div class="stat-icon">⭐</div><div class="stat-value">4.9</div><div class="stat-label">Avg Score</div></div>
+        <div class="stat-card"><div class="stat-icon">📆</div><div class="stat-value" id="home-past-count">0</div><div class="stat-label">Past</div></div>
       </div>
     </div>
     <div class="section-pad" style="margin-top:24px">
@@ -143,17 +143,21 @@
 <script src="../app.js"></script>
 <script>
 (async () => {
-  let upcoming;
+  let upcoming, past;
   try {
     const bookings = await api.getBookings();
     allBookingsCache = bookings;
     upcoming = filterUpcoming(bookings);
+    past = filterPast(bookings);
   } catch {
     upcoming = upcomingBookings;
+    past = [];
   }
   renderBookingCards('home-upcoming-list', upcoming);
-  const countEl = document.getElementById('home-upcoming-count');
-  if (countEl) countEl.textContent = upcoming.length;
+  const upcomingEl = document.getElementById('home-upcoming-count');
+  if (upcomingEl) upcomingEl.textContent = upcoming.length;
+  const pastEl = document.getElementById('home-past-count');
+  if (pastEl) pastEl.textContent = past.length;
 })();
 </script>
 </body>

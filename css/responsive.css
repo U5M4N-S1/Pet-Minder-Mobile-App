@@ -58,8 +58,8 @@ img, video { max-width: 100%; height: auto; }
   .stat-card { padding: 12px 8px; }
   .stat-value { font-size: 18px; }
   .stat-label { font-size: 10px; }
-  .card-row { padding: 0 16px 8px; gap: 10px; justify-content: flex-start; flex-wrap: nowrap; }
-  .minder-card { min-width: 170px; max-width: 200px; padding: 14px; }
+  .card-row { padding: 0 16px 8px; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .minder-card { flex: 0 0 calc(50% - 5px); min-width: 0; max-width: calc(50% - 5px); padding: 14px; box-sizing: border-box; }
   .pets-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .pet-card { padding: 16px 12px; }
   .pet-emoji { font-size: 32px; margin-bottom: 8px; }

@@ -458,7 +458,24 @@ async function loadNotificationCount() {
   try {
     // Both roles load from /api/notifications which now contains all
     // booking request, confirmation, decline, and reminder notifications.
-    notifOwnerMessages = await api.getNotifications();
+    const real = await api.getNotifications();
+
+    // Each chat with unread messages becomes one synthetic notification entry
+    // so message pings live alongside booking notifs and feed the same badge.
+    let chatNotifs = [];
+    try {
+      const chats = await api.getChats();
+      chatNotifs = chats.filter(c => c.unread && c.unread > 0).map(c => ({
+        id: 'msg-' + c.id,
+        type: 'message',
+        title: 'Message from ' + (c.other && c.other.name ? c.other.name : 'someone'),
+        message: c.lastPreview || 'New message',
+        read: false,
+        chatId: c.id,
+      }));
+    } catch { /* chats optional */ }
+
+    notifOwnerMessages = [...chatNotifs, ...real];
     notifCount = notifOwnerMessages.filter(n => !n.read).length;
 
     // Minders also need the requests list for the Bookings > Requests tab
@@ -466,12 +483,15 @@ async function loadNotificationCount() {
       notifRequests = await api.getBookingRequests();
     }
 
-    const badge = document.getElementById('notif-badge');
-    if (badge) {
-      badge.textContent = notifCount;
-      badge.style.display = notifCount > 0 ? 'inline-flex' : 'none';
-    }
+    updateNotifBadge();
   } catch { /* silent */ }
+}
+
+function updateNotifBadge() {
+  const badge = document.getElementById('notif-badge');
+  if (!badge) return;
+  badge.textContent = notifCount;
+  badge.style.display = notifCount > 0 ? 'inline-flex' : 'none';
 }
 
 function notifIcon(type) {
@@ -480,11 +500,13 @@ function notifIcon(type) {
     case 'booking_confirmed': return '✅';
     case 'booking_declined':  return '❌';
     case 'booking_reminder':  return '⏰';
+    case 'message':           return '💬';
     default:                  return '🔔';
   }
 }
 function notifAction(n) {
-  if (n.type === 'booking_request') return "window.location.href='bookings.html?tab=requests'";
+  if (n.type === 'message') return 'handleMessageNotifClick(' + n.chatId + ')';
+  if (n.type === 'booking_request') return 'handleRequestNotifClick(' + n.id + ')';
   return 'handleOwnerNotifClick(' + n.id + ')';
 }
 
@@ -565,9 +587,32 @@ function openNotifications() {
   currentScreen = 'notifications';
 }
 
+// Every notification click decrements the unread badge by one immediately —
+// viewing the item counts as "seen" so the user doesn't need to wait for a
+// page reload to watch the number go down.
+function markNotifSeenLocally(predicate) {
+  const target = notifOwnerMessages.find(n => !n.read && predicate(n));
+  if (!target) return;
+  target.read = true;
+  notifCount = Math.max(0, notifCount - 1);
+  updateNotifBadge();
+}
+
 async function handleOwnerNotifClick(id) {
+  markNotifSeenLocally(n => n.id === id);
   try { await api.markNotificationRead(id); } catch { /* silent */ }
   window.location.href = 'bookings.html';
+}
+
+async function handleRequestNotifClick(id) {
+  markNotifSeenLocally(n => n.id === id);
+  try { await api.markNotificationRead(id); } catch { /* silent */ }
+  window.location.href = 'bookings.html?tab=requests';
+}
+
+function handleMessageNotifClick(chatId) {
+  markNotifSeenLocally(n => n.type === 'message' && n.chatId === chatId);
+  window.location.href = 'messages.html?chat=' + chatId;
 }
 
 // Active booking page

@@ -575,6 +575,15 @@ async function initActiveBookingPage() {
   const params = new URLSearchParams(window.location.search);
   const minderId = params.get('minder') || 'sarah';
 
+  // Hard-stop: a user can never book themselves. Compared by id (strict)
+  // because names can collide and the URL is user-controlled.
+  const meId = store.currentUserId();
+  if (meId != null && /^\d+$/.test(String(minderId)) && Number(minderId) === Number(meId)) {
+    showToast('❌ You cannot book yourself');
+    setTimeout(() => { window.location.href = 'search.html'; }, 800);
+    return;
+  }
+
   // Resolve the minder from the real backend list first (numeric ids),
   // then fall back to the legacy hardcoded minderData (string keys). This
   // is what lets the booking carry the real name + profile picture instead
@@ -583,7 +592,7 @@ async function initActiveBookingPage() {
   if (/^\d+$/.test(String(minderId))) {
     try {
       if (!loadedMinders || loadedMinders.length === 0) {
-        loadedMinders = await api.getMinders();
+        loadedMinders = await fetchVisibleMinders();
       }
       const match = loadedMinders.find(x => String(x.id) === String(minderId));
       if (match) {
@@ -1321,11 +1330,21 @@ async function handleAvatarUpload(event) {
 // Cached array of minders loaded from the API (used by search + profile view).
 let loadedMinders = [];
 
+// Fetch minders from the API, always excluding the logged-in user's own
+// account. Used everywhere instead of calling api.getMinders() directly so
+// a minder can never see (or open) their own profile from the Find Minders
+// list, and numeric-id comparison is applied consistently.
+async function fetchVisibleMinders() {
+  const raw = await api.getMinders();
+  const meId = store.currentUserId();
+  return meId != null ? raw.filter(m => Number(m.id) !== Number(meId)) : raw;
+}
+
 async function loadMinders() {
   const list = document.getElementById('minders-list');
   if (!list) return;
   try {
-    loadedMinders = await api.getMinders();
+    loadedMinders = await fetchVisibleMinders();
     // Attach live review stats (avg rating + count) to each minder so the
     // search page can filter by rating and sort by review count.
     try {
@@ -1417,7 +1436,13 @@ async function initMinderPage() {
   const numericId = Number(raw);
   let minder = null;
   try {
-    if (!loadedMinders.length) loadedMinders = await api.getMinders();
+    if (!loadedMinders.length) loadedMinders = await fetchVisibleMinders();
+    // Hard-block direct URL access to one's own profile page too.
+    const meId = store.currentUserId();
+    if (meId != null && !Number.isNaN(numericId) && Number(numericId) === Number(meId)) {
+      document.getElementById('mp-name').textContent = 'Minder not found';
+      return;
+    }
     if (!Number.isNaN(numericId)) {
       minder = loadedMinders.find(m => m.id === numericId) || null;
     }
@@ -2284,6 +2309,13 @@ async function submitPayment() {
   try {
     const payload = Object.assign({}, _pendingBookingPayload, { payment });
     const m = window._activeMinder || { name: 'your minder' };
+    // Final self-book guard: payload.minderId is the source of truth the
+    // backend will use, so compare against it (not just window._activeMinder).
+    const meId = store.currentUserId();
+    if (meId != null && payload.minderId != null && Number(payload.minderId) === Number(meId)) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Authorise Payment'; }
+      return setErr('You cannot book yourself.');
+    }
     await api.createBooking(payload);
     closePaymentModal();
     showToast('✅ Payment authorised — booking sent to ' + m.name);

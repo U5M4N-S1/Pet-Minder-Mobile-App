@@ -108,6 +108,10 @@ router.post('/', requireAuth, (req, res) => {
   // the users table and have no availability data, so we skip them to keep
   // the seeded demo flow working. Real numeric ids must validate.
   if (minderKey != null && /^\d+$/.test(String(minderKey))) {
+    // Hard-stop: a user may never book themselves, even by bypassing the UI.
+    if (Number(minderKey) === Number(req.user.userId)) {
+      return res.status(400).json({ error: 'You cannot book yourself' });
+    }
     const minderUser = db.get('users').find({ id: Number(minderKey) }).value();
     if (!minderUser || minderUser.role !== 'minder') {
       return res.status(404).json({ error: 'Minder not found' });

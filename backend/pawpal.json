@@ -99,8 +99,8 @@
       "priceMax": 30,
       "resetCode": null,
       "resetCodeExpires": null,
-      "online": false,
-      "lastSeenAt": "2026-04-15T10:49:58.822Z",
+      "online": true,
+      "lastSeenAt": "2026-04-15T17:15:24.288Z",
       "availableDays": [
         "tue",
         "wed",
@@ -868,7 +868,7 @@
         "3"
       ],
       "price": "£15.00",
-      "status": "confirmed",
+      "status": "completed",
       "createdAt": "2026-04-12T07:34:56.960Z"
     },
     {
@@ -1229,6 +1229,18 @@
       "care": "d",
       "emoji": "🐕",
       "createdAt": "2026-04-14T20:47:59.837Z"
+    },
+    {
+      "id": 19,
+      "ownerId": 1004,
+      "name": "a",
+      "type": "Dog",
+      "breed": "Golden Retriever",
+      "age": "14",
+      "medical": "sad",
+      "care": "sddas",
+      "emoji": "🐕",
+      "createdAt": "2026-04-15T17:15:37.615Z"
     }
   ],
   "disputes": [

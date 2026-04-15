@@ -152,6 +152,7 @@ const api = {
   },
 
   login(email, password)    { return this._req('POST',   '/auth/login',  { email, password }); },
+  logout()                  { return this._req('POST',   '/auth/logout', {}).catch(() => {}); },
   signup(data)              { return this._req('POST',   '/auth/signup', data); },
   forgotPassword(email)     { return this._req('POST',   '/auth/forgot-password', { email }); },
   resetPassword(email, code, newPassword) { return this._req('POST', '/auth/reset-password', { email, code, newPassword }); },
@@ -890,7 +891,7 @@ async function handleLogin() {
     // page load (so they follow the user across devices). We still reset
     // the in-memory object here in case any pre-redirect render fires.
     petData = {};
-    isAdmin = Array.isArray(user.role) ? user.role.includes('admin') : user.role === 'admin';
+    isAdmin = Array.isArray(user.role) ? user.role.includes('admin') : false;
     if (isAdmin) { window.location.href = 'admin.html'; } else { goToHome(); }
   } catch (err) {
     showToast('❌ ' + err.message);
@@ -1077,9 +1078,9 @@ function selectRole(el, role) {
   const ownerExtras  = document.getElementById('reg-owner-extras');
   const minderExtras = document.getElementById('reg-minder-extras');
   const priceEl      = document.getElementById('bm-minder-price');
-  if (ownerExtras)  ownerExtras.style.display  = role === 'owner'  ? 'block' : 'none';
-  if (minderExtras) minderExtras.style.display = role === 'minder' ? 'block' : 'none';
-  if (priceEl)      priceEl.style.display      = role === 'minder' ? 'block' : 'none';
+  if (ownerExtras)  ownerExtras.style.display  = selectedRole === 'owner'  ? 'block' : 'none';
+  if (minderExtras) minderExtras.style.display = selectedRole === 'minder' ? 'block' : 'none';
+  if (priceEl)      priceEl.style.display      = selectedRole === 'minder' ? 'block' : 'none';
 }
 
 
@@ -3043,7 +3044,8 @@ function closeConfirmModal() { document.getElementById('confirm-modal').classLis
 function confirmLogout() {
   showConfirmModal('🚪', 'Log Out?', 'Are you sure you want to log out?', function() { logout(); });
 }
-function logout() {
+async function logout() {
+  await api.logout();
   isAdmin = false;
   api.clearSession();
   window.location.href = '../index.html';
@@ -3498,7 +3500,8 @@ async function dismissDispute(disputeId) {
 async function loadAllBookingsForUser() {
   const owned = await api.getBookings().catch(() => []);
   let received = [];
-  if (userProfile.role === 'minder') {
+  const roles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role || ''];
+  if (roles.includes('minder')) {
     received = await api.getBookingRequests().catch(() => []);
     received = received.map(b => Object.assign({}, b, { _recipient: true }));
   }
@@ -3687,7 +3690,7 @@ function renderMinderReviews(reviews) {
 
   const reviewCards = reviews.length
     ? reviews.map(r => {
-        const stars = '★'.repeat(r.rating || r.stars || 0) + '☆'.repeat(5 - (r.rating || r.stars || 0));
+        const stars = '★'.repeat(r.stars || 0) + '☆'.repeat(5 - (r.stars || 0));
         const when  = formatChatTime(r.createdAt);
         const isOwn = String(r.reviewerId) === myId;
         const deleteBtn = isOwn

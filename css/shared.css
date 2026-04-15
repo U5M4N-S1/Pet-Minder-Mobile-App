@@ -157,3 +157,33 @@ body {
 
 .status-declined  { background: #fce4ec; color: #c62828; }
 .status-cancelled { background: #f5f5f5; color: #9e9e9e; }
+
+/* ── Google Maps autocomplete ───────────────────────────────────────── */
+.pac-container { z-index: 2000; }
+
+/* ── Per-service pricing grid ───────────────────────────────────────── */
+.service-prices-grid { display: flex; flex-direction: column; gap: 8px; }
+.service-price-row { display: flex; align-items: center; gap: 12px; background: var(--warm-white); border: 1px solid var(--sand-light); border-radius: 10px; padding: 8px 12px; }
+.service-price-row label { flex: 1; font-size: 14px; color: var(--bark); font-weight: 500; }
+.service-price-input { display: flex; align-items: center; gap: 4px; background: var(--cream); border: 1px solid var(--sand); border-radius: 8px; padding: 4px 8px; }
+.service-price-input .currency { color: var(--bark-light); font-size: 13px; }
+.service-price-input .per { color: var(--bark-light); font-size: 12px; }
+.service-price-input input { width: 60px; border: none; background: transparent; outline: none; font-size: 14px; color: var(--bark); text-align: right; font-family: inherit; }
+
+/* ── Service price chips ────────────────────────────────────────────── */
+.svc-chip-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.svc-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 1.3; border: 1px solid var(--sand); background: var(--warm-white); color: var(--bark); white-space: nowrap; }
+.svc-chip-emoji { font-size: 13px; line-height: 1; }
+.svc-chip-name  { font-weight: 600; }
+.svc-chip-price { font-weight: 700; opacity: 0.85; padding-left: 6px; margin-left: 2px; border-left: 1px solid currentColor; }
+.svc-chip--walk  { background: #eaf4ee; border-color: #8ec5a1; color: #2f6b45; }
+.svc-chip--home  { background: #fdf1e4; border-color: #e6b184; color: #8a4a1c; }
+.svc-chip--groom { background: #f1e9f7; border-color: #b893d1; color: #5e2d80; }
+.svc-chip--vet   { background: #fbe8e8; border-color: #e59a9a; color: #883030; }
+.svc-chip--train { background: #e8eff9; border-color: #8fb0da; color: #2e4d7a; }
+.svc-chip-picker { padding: 4px 0; flex-direction: row !important; flex-wrap: wrap; gap: 8px; }
+.svc-chip-picker .svc-chip { cursor: pointer; padding: 8px 14px; font-size: 13px; transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease; }
+.svc-chip-picker .svc-chip:hover { filter: brightness(0.97); }
+.svc-chip-picker .svc-chip.selected { box-shadow: 0 0 0 2px currentColor inset, 0 2px 8px rgba(0,0,0,0.08); transform: translateY(-1px); }
+.info-row--svc { align-items: flex-start; }
+.info-row--svc .info-value.svc-chip-group { justify-content: flex-end; max-width: 65%; }

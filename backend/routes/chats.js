@@ -35,7 +35,7 @@ function findOrCreateChat(userAId, userBId) {
 // last heartbeat (lastSeenAt, refreshed on every /auth/me call) is within
 // the presence window. This way a user who closes the tab without hitting
 // logout falls back to offline on their own.
-const PRESENCE_WINDOW_MS = 2 * 60 * 1000;
+const PRESENCE_WINDOW_MS = 5 * 60 * 1000;
 function isOnline(u) {
   if (!u || !u.online) return false;
   if (!u.lastSeenAt) return false;

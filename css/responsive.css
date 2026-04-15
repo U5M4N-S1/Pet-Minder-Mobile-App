@@ -91,3 +91,276 @@ img, video { max-width: 100%; height: auto; }
   .profile-menu { padding: 24px 64px; }
   .admin-panel { padding: 24px 64px; }
 }
+/* ── Large desktop (1024px +) ───────────────────────────────────────── */
+@media (min-width: 1024px) {
+  .home-hero { padding: 48px 64px 64px; }
+  .section-pad { padding: 40px 64px 0; }
+  .minders-list { padding: 32px 64px; grid-template-columns: repeat(3, 1fr); }
+  .search-filters { padding: 24px 64px; }
+  .book-section { padding: 40px 64px; }
+  .profile-menu { padding: 24px 64px; }
+  .admin-panel { padding: 24px 64px; }
+}
+
+/* ── Mobile (max 767px) ─────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  /* Nav chrome */
+  .bottom-nav { display: flex !important; }
+  .app-nav { display: none !important; }
+  .mobile-header { display: flex !important; }
+  .page-content { padding-bottom: 80px; }
+
+  /* ── Typography ── */
+  .home-greeting { font-size: 22px; }
+  .home-sub { font-size: 13px; }
+  .section-title { font-size: 18px; }
+  .profile-name-lg { font-size: 20px; }
+  .profile-loc-sm { font-size: 12px; }
+
+  /* ── Home page ── */
+  .home-hero { padding: 22px 16px 32px; }
+  .home-avatar-row { gap: 12px; }
+  .home-avatar { width: 48px; height: 48px; font-size: 24px; }
+  .stats-row { grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 100%; }
+  .stat-card { padding: 12px 8px; }
+  .stat-value { font-size: 18px; }
+  .stat-label { font-size: 10px; }
+  .card-row { padding: 0 16px 8px; gap: 10px; justify-content: flex-start; flex-wrap: nowrap; }
+  .minder-card { min-width: 170px; max-width: 200px; padding: 14px; }
+  .pets-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .pet-card { padding: 16px 12px; }
+  .pet-emoji { font-size: 32px; margin-bottom: 8px; }
+  .pet-add-card { min-height: 110px; }
+
+  /* ── Search / minder cards ── */
+  .search-filters { padding: 14px 16px; gap: 8px; }
+  .search-bar-row { flex-wrap: nowrap; gap: 6px; }
+  .filter-btn { padding: 10px 12px; font-size: 13px; }
+  .minders-list { padding: 14px 16px; }
+  .minder-list-card { padding: 14px; gap: 10px; flex-direction: row; }
+  .minder-list-avatar { width: 48px; height: 48px; font-size: 24px; border-radius: 12px; }
+  .minder-list-name { font-size: 14px; }
+  .minder-list-loc { font-size: 11px; margin-bottom: 4px; }
+  .minder-list-rate { font-size: 14px; margin-top: 6px; }
+  .minder-list-tags { gap: 4px; }
+  .tag { font-size: 10px; padding: 2px 6px; }
+  .minder-btns { gap: 6px; }
+  .btn-msg-minder, .btn-book-sm { padding: 8px 10px; font-size: 11px; }
+
+  /* ── Minder profile ── */
+  .profile-hero { padding: 20px 16px; }
+  .profile-big-avatar { width: 64px; height: 64px; font-size: 32px; }
+  .profile-section { padding: 16px; }
+  .profile-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .profile-tab { padding: 12px 10px; font-size: 13px; white-space: nowrap; }
+  .info-row { padding: 10px 0; font-size: 13px; flex-wrap: wrap; gap: 4px; }
+  .info-label { font-size: 12px; }
+  .info-value { font-size: 13px; }
+  .avail-grid { gap: 4px; }
+  .avail-day { font-size: 9px; }
+  .mp-report-btn { padding: 5px 10px; font-size: 11px; top: 10px; right: 10px; }
+
+  /* ── Booking flow ── */
+  .book-section { padding: 16px; }
+  .book-section h3 { font-size: 16px; margin-bottom: 12px; }
+  .date-grid { gap: 6px; }
+  .date-chip { padding: 10px 12px; min-width: 54px; }
+  .date-chip .day-num { font-size: 16px; }
+  .date-chip .day-name { font-size: 10px; }
+  .time-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .time-chip { padding: 10px 6px; font-size: 12px; }
+  .service-option { padding: 14px 12px; gap: 10px; }
+  .service-icon { font-size: 20px; }
+  .service-name { font-size: 13px; }
+  .service-desc { font-size: 11px; }
+  .service-price { font-size: 14px; }
+  .booking-summary { padding: 16px; }
+  .summary-row { font-size: 13px; }
+  .summary-total { font-size: 15px; }
+  .multi-pet-info { font-size: 12px; padding: 10px 12px; }
+
+  /* ── Bookings list ── */
+  .booking-card { padding: 12px; gap: 10px; }
+  .booking-date-block { min-width: 40px; }
+  .booking-date-day { font-size: 20px; }
+  .booking-date-month { font-size: 10px; }
+  .booking-avatar { width: 38px; height: 38px; font-size: 18px; }
+  .booking-info { min-width: 0; }
+  .booking-minder { font-size: 13px; }
+  .booking-detail { font-size: 11px; }
+  .booking-status { padding: 4px 8px; font-size: 10px; }
+  .booking-report-btn { padding: 4px 8px; font-size: 10px; }
+
+  /* ── Messages / chat ── */
+  .messages-sidebar { width: 100%; border-right: none; }
+  .messages-main { display: none; }
+  .messages-container.chat-open .messages-sidebar { display: none; }
+  .messages-container.chat-open .messages-main { display: flex; }
+  .chat-back-btn { display: flex !important; }
+  .messages-sidebar-header { padding: 16px 16px 10px; }
+  .messages-sidebar-header h2 { font-size: 20px; }
+  .chat-list { padding: 6px 12px; }
+  .chat-item { padding: 10px 6px; gap: 10px; }
+  .chat-avatar { width: 42px; height: 42px; font-size: 20px; }
+  .chat-name { font-size: 14px; }
+  .chat-preview { font-size: 12px; }
+  .chat-header-bar { padding: 12px 14px; gap: 10px; }
+  .chat-messages { padding: 14px; gap: 10px; }
+  .msg-bubble { max-width: 85%; font-size: 13px; padding: 10px 14px; }
+  .chat-input-bar { padding: 10px 12px; gap: 8px; }
+  .chat-input { padding: 10px 14px; font-size: 16px; }
+  .send-btn { width: 38px; height: 38px; font-size: 16px; }
+  .chat-image-btn { width: 38px; height: 38px; font-size: 16px; }
+  .chat-report-btn { padding: 4px 8px !important; font-size: 18px !important; }
+  .msg-bubble .msg-image { max-height: 220px; }
+  .msg-bubble:has(.msg-image) { max-width: 75%; }
+
+  /* On mobile, chat fills the viewport between the mobile header (top)
+     and the bottom nav, so the input bar is always visible and never
+     covered by the fixed bottom nav. Uses safe-area-inset for notched
+     devices. */
+  #screen-messages.active .messages-container { top: 40px; bottom: calc(58px + env(safe-area-inset-bottom)); }
+
+  /* ── Profile page ── */
+  .profile-screen-hero { padding: 24px 16px 32px; }
+  .profile-screen-avatar { width: 72px; height: 72px; }
+  .profile-screen-avatar span { font-size: 36px; }
+  .profile-screen-name { font-size: 20px; }
+  .profile-screen-role { font-size: 12px; }
+  .profile-menu { padding: 12px 16px; }
+  .menu-item { padding: 14px 12px; font-size: 14px; }
+  .profile-sub-header { padding: 0 16px; }
+
+  /* Edit profile modal on mobile */
+  .pet-modal-overlay { padding: 16px 12px; align-items: flex-start; }
+  .pet-modal { padding: 22px 18px; max-height: 90vh; }
+  .pet-modal h3 { font-size: 18px; margin-bottom: 16px; }
+  .pet-modal-actions { flex-direction: row; }
+  .avail-day-row { flex-wrap: nowrap; gap: 6px; }
+  .avail-day-row .avail-day-label { width: 36px !important; font-size: 12px !important; }
+  .avail-day-row .chip-btn { padding: 5px 7px !important; font-size: 11px !important; }
+
+  /* Chip selectors */
+  .chip-group { gap: 6px; }
+  .chip-btn { padding: 7px 12px; font-size: 12px; }
+
+  /* Price range row */
+  .price-range-row { gap: 6px; }
+  .price-input-wrap input { padding: 8px 10px; font-size: 14px; }
+
+  /* ── Auth page ── */
+  #screen-auth { padding: 20px 16px; }
+  .auth-card { padding: 28px 20px; }
+  .auth-logo { font-size: 20px; margin-bottom: 20px; }
+  .auth-tabs { margin-bottom: 20px; }
+  .auth-tab { padding: 10px 8px; font-size: 13px; }
+  .auth-form { gap: 14px; }
+  .role-selector { gap: 8px; }
+  .role-btn { padding: 10px 8px; font-size: 13px; }
+  .role-btn span { font-size: 20px; }
+
+  /* ── Filter modal ── */
+  .filter-modal { padding: 20px 16px; max-height: 85vh; }
+  .filter-modal h3 { font-size: 18px; margin-bottom: 16px; }
+  .filter-opt { padding: 7px 10px; font-size: 11px; }
+  .filter-section { margin-bottom: 16px; }
+  .filter-section-title { font-size: 12px; margin-bottom: 8px; }
+  .filter-range input { padding: 8px 10px; font-size: 13px; }
+  .filter-actions { flex-direction: row; }
+  .btn-filter-clear, .btn-filter-apply { padding: 12px; font-size: 13px; }
+
+  /* ── Modals (confirm, report) ── */
+  .confirm-modal-overlay { padding: 16px; }
+  .confirm-modal { padding: 24px 20px; max-width: 100%; }
+  .confirm-modal h3 { font-size: 18px; }
+  .confirm-modal p { font-size: 13px; }
+  .confirm-modal-actions { flex-direction: row; }
+  .confirm-modal-actions button { padding: 12px 8px !important; font-size: 14px; }
+
+  .report-modal-overlay { padding: 20px 12px 12px; }
+  .report-modal { padding: 20px 16px; max-height: 90vh; }
+  .report-modal-header h3 { font-size: 18px; }
+  .report-modal textarea { min-height: 80px; font-size: 14px; }
+  .report-modal-actions .btn-outline,
+  .report-modal-actions .btn-primary { padding: 12px 8px; font-size: 13px; }
+
+  /* ── Admin ── */
+  .admin-hero { padding: 18px 16px; }
+  .admin-panel { padding: 16px; }
+  .admin-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .admin-tab { padding: 12px 10px; font-size: 13px; white-space: nowrap; }
+  .admin-section-title { font-size: 16px; }
+  .admin-user-card { flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px; }
+  .admin-user-info { min-width: 0; width: 100%; }
+  .admin-user-name { font-size: 14px; }
+  .admin-user-actions { width: 100%; }
+  .admin-btn { flex: 1; text-align: center; padding: 8px 6px; font-size: 11px; }
+  .dispute-card { padding: 16px; }
+  .dispute-header { flex-wrap: wrap; gap: 6px; }
+  .dispute-actions { flex-direction: column; }
+  .dispute-actions .admin-btn { width: 100%; text-align: center; padding: 10px; }
+
+  /* ── GPS tracking ── */
+  .gps-card { padding: 14px; }
+  .gps-map-placeholder { height: 130px; }
+  .gps-info { gap: 10px; }
+  .gps-stat-val { font-size: 16px; }
+
+  /* ── Reviews ── */
+  .review-card { padding: 14px; }
+  .review-header { flex-wrap: wrap; gap: 4px; }
+  .review-author { font-size: 13px; }
+  .review-text { font-size: 12px; }
+  .star-rating-input { gap: 4px; }
+  .star-btn { font-size: 24px; }
+
+  /* ── Buttons (touch targets min 44px) ── */
+  .btn-primary { padding: 14px 24px; font-size: 15px; }
+  .btn-outline { padding: 13px 24px; font-size: 15px; }
+  .back-btn { width: 40px; height: 40px; }
+
+  /* ── Landing page ── */
+  .landing-inner { padding: 40px 20px 32px; gap: 20px; }
+  .landing-sub { font-size: 15px; }
+  .landing-cta { max-width: 100%; }
+  .landing-trust { gap: 16px; flex-wrap: wrap; justify-content: center; }
+
+  /* ── Toast ── */
+  .toast { max-width: calc(100vw - 24px); font-size: 13px; padding: 10px 16px; top: 16px; }
+
+  /* Notification menu items */
+  .menu-item { gap: 10px; }
+  .menu-icon { font-size: 18px; flex-shrink: 0; }
+
+  /* Fixed bottom confirm bar (active-booking page) */
+  #screen-active-booking > div:last-of-type:not(.toast) {
+    padding: 12px 16px !important;
+    gap: 8px !important;
+  }
+  #screen-active-booking .btn-primary { padding: 14px 12px; font-size: 14px; }
+}
+
+/* ── Small phones (max 374px) ───────────────────────────────────────── */
+@media (max-width: 374px) {
+  .auth-card { padding: 22px 16px; }
+  .stats-row { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .stat-card { padding: 10px 6px; }
+  .stat-value { font-size: 16px; }
+  .time-grid { grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .time-chip { padding: 8px 4px; font-size: 11px; }
+  .date-chip { padding: 8px 10px; min-width: 48px; }
+  .date-chip .day-num { font-size: 14px; }
+  .service-option { padding: 12px 10px; }
+  .minder-list-card { padding: 12px; gap: 8px; }
+  .minder-list-avatar { width: 42px; height: 42px; font-size: 20px; }
+  .booking-card { padding: 10px; gap: 8px; }
+  .chat-item { padding: 8px 4px; gap: 8px; }
+  .chat-avatar { width: 38px; height: 38px; font-size: 18px; }
+  .avail-day-row .chip-btn { padding: 4px 5px !important; font-size: 10px !important; }
+  .avail-day-row .avail-day-label { width: 30px !important; font-size: 11px !important; }
+  .filter-modal { padding: 16px 12px; }
+  .landing-trust { gap: 12px; }
+  .trust-num { font-size: 18px; }
+  .profile-big-avatar { width: 56px; height: 56px; font-size: 28px; }
+  .pet-modal { padding: 18px 14px; }
+}

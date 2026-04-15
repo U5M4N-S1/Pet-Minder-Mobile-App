@@ -61,7 +61,7 @@ function userDTO(u) {
     qualificationImages: Array.isArray(u.qualificationImages) ? u.qualificationImages : [],
     servicePrices: (u.servicePrices && typeof u.servicePrices === 'object') ? u.servicePrices : {},
     online:           u.online === true && u.lastSeenAt &&
-                      (Date.now() - new Date(u.lastSeenAt).getTime()) < 2 * 60 * 1000,
+                      (Date.now() - new Date(u.lastSeenAt).getTime()) < 5 * 60 * 1000,
   };
 }
 
@@ -417,7 +417,7 @@ router.get('/minders', requireAuth, (req, res) => {
         certificationTags:  Array.isArray(u.certificationTags) ? u.certificationTags : [],
         servicePrices:      (u.servicePrices && typeof u.servicePrices === 'object') ? u.servicePrices : {},
         online:         u.online === true && u.lastSeenAt &&
-                        (Date.now() - new Date(u.lastSeenAt).getTime()) < 2 * 60 * 1000,
+                        (Date.now() - new Date(u.lastSeenAt).getTime()) < 5 * 60 * 1000,
       };
     });
   res.json(minders);
@@ -512,6 +512,14 @@ router.put('/payout', requireAuth, (req, res) => {
     accountNumberMasked: maskAccountNumber(payout.accountNumber),
     updatedAt:           payout.updatedAt
   });
+});
+
+// POST /api/auth/logout — marks the user offline immediately
+router.post('/logout', requireAuth, (req, res) => {
+  db.get('users').find({ id: req.user.userId })
+    .assign({ online: false, lastSeenAt: null })
+    .write();
+  res.status(204).end();
 });
 
 module.exports = router;

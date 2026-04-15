@@ -43,7 +43,7 @@ function isOnline(u) {
 }
 
 function otherUserDTO(u) {
-  if (!u) return { id: null, name: 'Unknown', avatar: '', online: false };
+  if (!u) return { id: null, name: 'Deleted User', avatar: '🗑', online: false };
   return {
     id:     u.id,
     name:   ((u.firstName || '') + ' ' + (u.lastName || '')).trim() || u.email || 'User',

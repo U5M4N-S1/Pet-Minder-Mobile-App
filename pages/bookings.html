@@ -9,7 +9,6 @@
 <link rel="stylesheet" href="../css/auth.css">
 <link rel="stylesheet" href="../css/bookings.css">
 <link rel="stylesheet" href="../css/responsive.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 </head>
 <body>
 
@@ -32,8 +31,26 @@
     <!-- Main bookings view (tabs + lists) -->
     <div id="bookings-main-section">
       <div style="padding:24px 24px 0"><h1 style="font-family:'Playfair Display',serif;font-size:26px;color:var(--bark);margin-bottom:16px">My Bookings</h1><div class="auth-tabs" id="bookings-tabs-row" style="max-width:420px"><button class="auth-tab active" id="bookings-tab-upcoming" onclick="switchBookingTab(this,'upcoming')">Upcoming</button><button class="auth-tab" id="bookings-tab-past" onclick="switchBookingTab(this,'past')">Past</button><button class="auth-tab" id="bookings-tab-requests" style="display:none" onclick="switchBookingTab(this,'requests')">Requests</button></div></div>
-      <div style="padding:20px 24px" id="bookings-upcoming"><div class="booking-list" id="bookings-upcoming-list"></div></div>
-      <div style="padding:20px 24px;display:none" id="bookings-past"><div class="booking-list" id="bookings-past-list"></div></div>
+      <div style="padding:20px 24px" id="bookings-upcoming">
+        <!-- Live tracking card (shown when a booking is in progress) -->
+        <div id="bookings-gps-live" style="display:none;background:white;border-radius:var(--radius);padding:16px;box-shadow:0 2px 12px var(--shadow);margin-bottom:16px">
+          <div id="gps-live-title" style="font-weight:600;font-size:14px;color:var(--bark);margin-bottom:8px">📍 Live Tracking</div>
+          <div style="display:flex;gap:20px;font-size:13px;color:var(--bark-light)">
+            <span>📏 <span id="gps-live-distance">0 m</span></span>
+            <span>⏱ <span id="gps-live-duration">0 min</span></span>
+            <span>🔵 <span id="gps-live-status">Active</span></span>
+          </div>
+        </div>
+        <div class="booking-list" id="bookings-upcoming-list"></div>
+      </div>
+      <div style="padding:20px 24px;display:none" id="bookings-past">
+        <div class="booking-list" id="bookings-past-list"></div>
+        <!-- Past walk routes -->
+        <div id="bookings-past-routes" style="margin-top:16px;display:none">
+          <div style="font-size:12px;font-weight:600;color:var(--bark-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">🗺️ Walk History</div>
+          <div id="bookings-past-routes-list"></div>
+        </div>
+      </div>
       <div style="padding:20px 24px;display:none" id="bookings-requests"><div class="booking-list" id="bookings-requests-list"></div></div>
     </div>
     <!-- Booking detail view (shown when a card is clicked) -->
@@ -76,22 +93,7 @@
 <!-- CONFIRM MODAL -->
 <div class="confirm-modal-overlay" id="confirm-modal" onclick="if(event.target===this)closeConfirmModal()"><div class="confirm-modal"><div class="confirm-modal-icon" id="confirm-modal-icon">⚠️</div><h3 id="confirm-modal-title">Are you sure?</h3><p id="confirm-modal-message">This action cannot be undone.</p><div class="confirm-modal-actions"><button class="btn-outline" style="color:var(--bark-light);border-color:var(--sand);flex:1;padding:12px" onclick="closeConfirmModal()">Cancel</button><button class="btn-primary" style="flex:1;padding:12px" id="confirm-modal-btn">Confirm</button></div></div></div>
 
-<!-- LIVE TRACKING MODAL -->
-<div id="tracking-modal" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.55);align-items:flex-end;justify-content:center">
-  <div style="background:var(--warm-white);border-radius:24px 24px 0 0;width:100%;max-width:520px;overflow:hidden;display:flex;flex-direction:column">
-    <div style="padding:18px 20px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--sand-light)">
-      <div>
-        <div style="font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:var(--bark)">📍 Live Location</div>
-        <div id="tracking-status" style="font-size:12px;color:var(--bark-light);margin-top:3px">Connecting…</div>
-      </div>
-      <button onclick="closeLiveTracking()" style="background:var(--sand-light);border:none;border-radius:50%;width:34px;height:34px;font-size:18px;cursor:pointer;color:var(--bark);line-height:1">×</button>
-    </div>
-    <div id="tracking-map" style="width:100%;height:360px"></div>
-    <div style="padding:12px 20px 22px;font-size:12px;color:var(--bark-light);text-align:center">Updates every 5 seconds · <a href="https://www.openstreetmap.org" target="_blank" style="color:var(--terra)">© OpenStreetMap</a></div>
-  </div>
-</div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="../app.js"></script>
 <script>
 (async () => {
@@ -128,5 +130,24 @@
   }
 })();
 </script>
+
+<!-- Route view modal -->
+<div class="pet-modal-overlay" id="route-view-modal" onclick="if(event.target===this)closeRouteViewModal()">
+  <div class="pet-modal" style="max-height:90vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <h3 id="route-view-title" style="margin:0;font-size:16px">Walk Route</h3>
+      <button onclick="closeRouteViewModal()" style="background:var(--sand-light);border:none;border-radius:50%;width:32px;height:32px;font-size:16px;cursor:pointer">×</button>
+    </div>
+    <div style="display:flex;gap:16px;margin-bottom:12px;font-size:13px;color:var(--bark-light)">
+      <span>📏 <span id="route-view-distance">—</span></span>
+      <span>⏱ <span id="route-view-duration">—</span></span>
+    </div>
+    <div id="route-view-map" style="width:100%;height:300px;border-radius:var(--radius-sm);background:var(--sand-light);display:flex;align-items:center;justify-content:center;color:var(--bark-light);font-size:13px">Loading map…</div>
+  </div>
+</div>
+
+<script src="../js/config.js"></script>
+<script src="../js/maps-loader.js"></script>
+<script src="../js/tracking.js"></script>
 </body>
 </html>

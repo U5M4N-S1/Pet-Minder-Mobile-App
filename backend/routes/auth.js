@@ -8,6 +8,25 @@ const { normalizeAvailability } = require('../lib/availability');
 const router      = express.Router();
 const SALT_ROUNDS = 12;
 
+// ── Payout helpers ────────────────────────────────────────────────────
+function maskSortCode(raw) {
+  const d = String(raw || '').replace(/\D/g, '');
+  return d.length === 6 ? '**-**-' + d.slice(4) : '';
+}
+function maskAccountNumber(raw) {
+  const d = String(raw || '').replace(/\D/g, '');
+  return d.length >= 4 ? '****' + d.slice(-4) : '';
+}
+function sanitisePayout(input) {
+  if (!input || typeof input !== 'object') return null;
+  const name = String(input.accountHolderName || '').trim().slice(0, 80);
+  const bank = String(input.bankName || '').trim().slice(0, 80);
+  const sort = String(input.sortCode || '').replace(/\D/g, '');
+  const account = String(input.accountNumber || '').replace(/\D/g, '');
+  if (!name || !bank || sort.length !== 6 || account.length !== 8) return null;
+  return { accountHolderName: name, bankName: bank, sortCode: sort, accountNumber: account, updatedAt: new Date().toISOString() };
+}
+
 function nextId(collection) {
   const last = db.get(collection).maxBy('id').value();
   return last ? last.id + 1 : 1;
@@ -32,7 +51,7 @@ function userDTO(u) {
     services:        u.services        || '',
     rate:            u.rate            || '',
     experience:      u.experience      || '',
-    priceMin:        u.priceMin != null ? u.priceMin : 0,
+    priceMin:        u.priceMin != null ? u.priceMin : 10,
     priceMax:        u.priceMax != null ? u.priceMax : 25,
     availableForBooking: u.availableForBooking !== false, // default true
     enabledServices:  Array.isArray(u.enabledServices) ? u.enabledServices : [],
@@ -40,6 +59,7 @@ function userDTO(u) {
     availability:     normalizeAvailability(u),
     certificationTags: Array.isArray(u.certificationTags) ? u.certificationTags : [],
     qualificationImages: Array.isArray(u.qualificationImages) ? u.qualificationImages : [],
+    servicePrices: (u.servicePrices && typeof u.servicePrices === 'object') ? u.servicePrices : {},
     online:           u.online === true && u.lastSeenAt &&
                       (Date.now() - new Date(u.lastSeenAt).getTime()) < 2 * 60 * 1000,
   };
@@ -144,7 +164,7 @@ router.patch('/me', requireAuth, (req, res) => {
   const { firstName, lastName, email, phone, location, bio,
           serviceArea, petsCaredFor, services, rate, experience,
           priceMin, priceMax, addMinderRole, minderServices, availableForBooking,
-          certifications, certificationTags, availability } = req.body;
+          certifications, certificationTags, availability, servicePrices, payout } = req.body;
   const updates = {};
   if (typeof firstName    === 'string' && firstName.trim()) updates.firstName    = firstName.trim();
   if (typeof lastName     === 'string') updates.lastName     = lastName.trim();
@@ -175,6 +195,20 @@ router.patch('/me', requireAuth, (req, res) => {
   if (availableForBooking !== undefined) updates.availableForBooking = !!availableForBooking;
   // Certifications stored as array only
   if (Array.isArray(certificationTags)) updates.certificationTags = certificationTags;
+  // Per-service prices
+  if (servicePrices && typeof servicePrices === 'object') {
+    const cleaned = {};
+    ['Walking','Home Visit','Grooming','Vet','Training'].forEach(k => {
+      const n = Math.floor(Number(servicePrices[k]));
+      if (isFinite(n) && n >= 0) cleaned[k] = Math.min(n, 999);
+    });
+    updates.servicePrices = cleaned;
+  }
+  // Payout details (minders only)
+  if (payout) {
+    const p = sanitisePayout(payout);
+    if (p) updates.payout = p;
+  }
   // Per-day availability schedule
   if (availability && typeof availability === 'object' && !Array.isArray(availability)) updates.availability = availability;
 
@@ -375,12 +409,13 @@ router.get('/minders', requireAuth, (req, res) => {
                         ])].join(', '),
         rate:           u.rate         || '',
         experience:     u.experience   || '',
-        priceMin:       u.priceMin != null ? u.priceMin : 0,
+        priceMin:       u.priceMin != null ? u.priceMin : 10,
         priceMax:       u.priceMax != null ? u.priceMax : 25,
         avgRating,
         reviewCount,
         availability:       normalizeAvailability(u),
         certificationTags:  Array.isArray(u.certificationTags) ? u.certificationTags : [],
+        servicePrices:      (u.servicePrices && typeof u.servicePrices === 'object') ? u.servicePrices : {},
         online:         u.online === true && u.lastSeenAt &&
                         (Date.now() - new Date(u.lastSeenAt).getTime()) < 2 * 60 * 1000,
       };
@@ -439,6 +474,44 @@ router.patch('/me/service-applications', requireAuth, (req, res) => {
   });
 
   res.json({ pendingServices: requested });
+});
+
+// GET /api/auth/payout — returns masked payout details (minders only)
+router.get('/payout', requireAuth, (req, res) => {
+  const user = db.get('users').find({ id: req.user.userId }).value();
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const roles = Array.isArray(user.role) ? user.role : [user.role || ''];
+  if (!roles.includes('minder')) return res.status(403).json({ error: 'Payout details are only available for minders' });
+  const p = user.payout;
+  if (!p) return res.json({ hasPayout: false });
+  res.json({
+    hasPayout:           true,
+    accountHolderName:   p.accountHolderName || '',
+    bankName:            p.bankName || '',
+    sortCodeMasked:      maskSortCode(p.sortCode),
+    accountNumberMasked: maskAccountNumber(p.accountNumber),
+    updatedAt:           p.updatedAt || ''
+  });
+});
+
+// PUT /api/auth/payout — saves payout details (minders only)
+router.put('/payout', requireAuth, (req, res) => {
+  const row = db.get('users').find({ id: req.user.userId });
+  const u = row.value();
+  if (!u) return res.status(404).json({ error: 'User not found' });
+  const roles = Array.isArray(u.role) ? u.role : [u.role || ''];
+  if (!roles.includes('minder')) return res.status(403).json({ error: 'Payout details are only available for minders' });
+  const payout = sanitisePayout(req.body);
+  if (!payout) return res.status(400).json({ error: 'All payout fields required (sort code 6 digits, account 8 digits)' });
+  row.assign({ payout }).write();
+  res.json({
+    hasPayout:           true,
+    accountHolderName:   payout.accountHolderName,
+    bankName:            payout.bankName,
+    sortCodeMasked:      maskSortCode(payout.sortCode),
+    accountNumberMasked: maskAccountNumber(payout.accountNumber),
+    updatedAt:           payout.updatedAt
+  });
 });
 
 module.exports = router;

@@ -357,30 +357,4 @@ router.get('/minder/:id/taken', requireAuth, (req, res) => {
   res.json({ minderId, date, taken, availability });
 });
 
-// PUT /api/bookings/:id/location — minder pushes live GPS coordinates
-router.put('/:id/location', requireAuth, (req, res) => {
-  const id      = Number(req.params.id);
-  const booking = db.get('bookings').find({ id }).value();
-  if (!booking) return res.status(404).json({ error: 'Booking not found' });
-  if (Number(booking.minderKey) !== req.user.userId)
-    return res.status(403).json({ error: 'Only the minder can update location' });
-  const { lat, lng } = req.body;
-  if (lat == null || lng == null) return res.status(400).json({ error: 'lat and lng required' });
-  db.get('bookings').find({ id }).assign({
-    liveLocation: { lat: Number(lat), lng: Number(lng), updatedAt: new Date().toISOString() }
-  }).write();
-  res.json({ ok: true });
-});
-
-// GET /api/bookings/:id/location — owner or minder polls current live location
-router.get('/:id/location', requireAuth, (req, res) => {
-  const id      = Number(req.params.id);
-  const booking = db.get('bookings').find({ id }).value();
-  if (!booking) return res.status(404).json({ error: 'Booking not found' });
-  const isParty = booking.ownerId === req.user.userId ||
-                  Number(booking.minderKey) === req.user.userId;
-  if (!isParty) return res.status(403).json({ error: 'Forbidden' });
-  res.json(booking.liveLocation || null);
-});
-
 module.exports = router;

@@ -6,7 +6,19 @@ const adapter = new FileSync(path.join(__dirname, 'pawpal.json'));
 const db      = low(adapter);
 
 // Seed the schema with empty collections if the file is brand new
-db.defaults({ users: [], bookings: [], pets: [], disputes: [], notifications: [], reviews: [], chats: [], messages: [] }).write();
+db.defaults({ users: [], bookings: [], pets: [], disputes: [], notifications: [], reviews: [], chats: [], messages: [], routes: [] }).write();
+
+// Migrate legacy string roles to arrays
+(function migrateRoles() {
+  let changed = false;
+  db.get('users').value().forEach(u => {
+    if (!Array.isArray(u.role)) {
+      db.get('users').find({ id: u.id }).assign({ role: [u.role || 'owner'] }).value();
+      changed = true;
+    }
+  });
+  if (changed) db.write();
+}());
 
 const bcrypt = require('bcrypt');
 

@@ -112,15 +112,51 @@ router.patch('/users/:id', requireAuth, requireAdmin, (req, res) => {
   });
 });
 
-// DELETE /api/admin/users/:id — permanently remove a user + their pets + bookings
+// DELETE /api/admin/users/:id — permanently remove a user and ALL their data
 router.delete('/users/:id', requireAuth, requireAdmin, (req, res) => {
   const id = Number(req.params.id);
   const user = db.get('users').find({ id }).value();
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  db.get('users').remove({ id }).write();
+  // Pets
   db.get('pets').remove({ ownerId: id }).write();
-  db.get('bookings').remove({ ownerId: id }).write();
+
+  // Bookings (as owner or minder)
+  db.get('bookings').remove(b => b.ownerId === id || Number(b.minderKey) === id).write();
+
+  // Chats: only hard-delete if the other participant is also gone
+  const userChats = db.get('chats')
+    .filter(c => c.userA === id || c.userB === id)
+    .value();
+
+  userChats.forEach(c => {
+    const otherId = c.userA === id ? c.userB : c.userA;
+    const otherExists = !!db.get('users').find({ id: otherId }).value();
+    if (otherExists) {
+      // Keep the chat — the other user can still see it.
+      // Mark the deleted side so the UI shows "Deleted User".
+      db.get('chats').find({ id: c.id }).assign({ deletedUsers: [...(c.deletedUsers || []), id] }).write();
+    } else {
+      // Both users gone — purge
+      db.get('messages').remove({ chatId: c.id }).write();
+      db.get('chats').remove({ id: c.id }).write();
+    }
+  });
+
+  // Reviews written by this user
+  db.get('reviews').remove({ reviewerId: id }).write();
+
+  // Reviews written about this user (as a minder)
+  db.get('reviews').remove({ minderId: id }).write();
+
+  // Notifications for this user
+  db.get('notifications').remove({ userId: id }).write();
+
+  // Disputes filed by or against this user
+  db.get('disputes').remove(d => d.reporterId === id).write();
+
+  // Finally remove the user
+  db.get('users').remove({ id }).write();
 
   res.status(204).end();
 });

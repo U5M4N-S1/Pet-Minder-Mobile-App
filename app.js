@@ -18,6 +18,49 @@ let regPetNextId   = 1;
 // Report modal
 let currentReportTarget = null;
 
+// Canonical minder services + visual metadata
+const MINDER_SERVICES = ['Walking', 'Home Visit', 'Grooming', 'Vet', 'Training'];
+const SERVICE_META = {
+  'Walking':    { emoji: '🚶', theme: 'walk'  },
+  'Home Visit': { emoji: '🏠', theme: 'home'  },
+  'Grooming':   { emoji: '✂️', theme: 'groom' },
+  'Vet':        { emoji: '🩺', theme: 'vet'   },
+  'Training':   { emoji: '🎾', theme: 'train' }
+};
+
+function servicePriceChip(name, price) {
+  const meta = SERVICE_META[name] || { emoji: '🐾', theme: 'walk' };
+  return '<span class="svc-chip svc-chip--' + meta.theme + '">' +
+    '<span class="svc-chip-emoji">' + meta.emoji + '</span>' +
+    '<span class="svc-chip-name">' + escapeHTML(name) + '</span>' +
+    '<span class="svc-chip-price">£' + Number(price) + '/hr</span>' +
+    '</span>';
+}
+function buildServicePricesHTML(prefix, current) {
+  const c = current || {};
+  return MINDER_SERVICES.map(name => {
+    const id  = prefix + '-price-' + name.toLowerCase().replace(/\s+/g, '-');
+    const val = Number(c[name]) > 0 ? Number(c[name]) : '';
+    return '<div class="service-price-row">' +
+      '<label for="' + id + '">' + name + '</label>' +
+      '<div class="service-price-input">' +
+        '<span class="currency">£</span>' +
+        '<input type="number" id="' + id + '" min="0" max="999" step="1" placeholder="0" value="' + val + '">' +
+        '<span class="per">/ hr</span>' +
+      '</div></div>';
+  }).join('');
+}
+function readServicePrices(prefix) {
+  const out = {};
+  MINDER_SERVICES.forEach(name => {
+    const el = document.getElementById(prefix + '-price-' + name.toLowerCase().replace(/\s+/g, '-'));
+    if (!el) return;
+    const n = Math.floor(Number(el.value));
+    out[name] = (isFinite(n) && n > 0) ? Math.min(n, 999) : 0;
+  });
+  return out;
+}
+
 // Availability helpers (mirror backend SLOT_RANGES)
 const AVAIL_SLOT_RANGES = {
   morning:   { start: 8,  end: 12 },
@@ -35,7 +78,7 @@ let userProfile = {
   role: ['owner'], profileImage: '',
   // Minder-specific (blank for owners)
   serviceArea: '', petsCaredFor: '', services: '', rate: '', experience: '',
-  priceMin: 10, priceMax: 25,
+  priceMin: 10, priceMax: 25, servicePrices: {},
   availableForBooking: true,
   enabledServices: [],
 };
@@ -117,8 +160,6 @@ const api = {
   getBookings()             { return this._req('GET',    '/bookings'); },
   getBookingRequests()      { return this._req('GET',    '/bookings/requests'); },
   updateBooking(id, data)   { return this._req('PATCH',  '/bookings/' + id, data); },
-  pushLocation(id, lat, lng){ return this._req('PUT',    '/bookings/' + id + '/location', { lat, lng }); },
-  getLocation(id)           { return this._req('GET',    '/bookings/' + id + '/location'); },
   getMinderTakenTimes(minderId, date) { return this._req('GET', '/bookings/minder/' + minderId + '/taken?date=' + encodeURIComponent(date)); },
   getNotifications()        { return this._req('GET',    '/notifications'); },
   markNotificationRead(id)  { return this._req('PATCH',  '/notifications/' + id, { read: true }); },
@@ -150,6 +191,12 @@ const api = {
   submitReview(data)         { return this._req('POST',   '/reviews', data); },
   deleteReview(id)           { return this._req('DELETE', '/reviews/' + id); },
   getMyReviews()             { return this._req('GET',    '/reviews/mine'); },
+  // Payout
+  getPayout()                { return this._req('GET',    '/auth/payout'); },
+  updatePayout(data)         { return this._req('PUT',    '/auth/payout', data); },
+  // Routes
+  getRoute(bookingId)        { return this._req('GET',    '/routes/' + bookingId); },
+  getUserRoutes()            { return this._req('GET',    '/routes/mine'); },
   // Admin service toggle
   toggleAdminService(id, service, enabled) { return this._req('PATCH', '/admin/users/' + id + '/services', { service, enabled }); },
   // Minders (public)
@@ -181,10 +228,11 @@ function hydrateUserProfile(u) {
   userProfile.services     = u.services     || '';
   userProfile.rate         = u.rate         || '';
   userProfile.experience   = u.experience   || '';
-  userProfile.priceMin         = u.priceMin != null ? u.priceMin : 0;
+  userProfile.priceMin         = u.priceMin != null ? u.priceMin : 10;
   userProfile.priceMax         = u.priceMax != null ? u.priceMax : 25;
   userProfile.availableForBooking = u.availableForBooking !== false;
   userProfile.availability     = (u.availability && typeof u.availability === 'object' && !Array.isArray(u.availability)) ? u.availability : {};
+  userProfile.servicePrices    = (u.servicePrices && typeof u.servicePrices === 'object') ? u.servicePrices : {};
   userProfile.enabledServices  = Array.isArray(u.enabledServices) ? u.enabledServices : [];
   userProfile.qualificationImages  = Array.isArray(u.qualificationImages) ? u.qualificationImages : [];
   userProfile.certificationTags = Array.isArray(u.certificationTags) ? u.certificationTags : [];
@@ -197,8 +245,6 @@ function hydrateUserProfile(u) {
 // ownerId on the server). These empty arrays exist purely as a fallback
 // shape for when the fetch fails — never populated with mock data, so a
 // fresh account can't accidentally see another user's bookings.
-const upcomingBookings = [];
-const pastBookings = [];
 const statusLabels = { confirmed: 'Confirmed', pending: 'Pending', completed: 'Done', declined: 'Declined', cancelled: 'Cancelled' };
 
 // All loaded bookings — stored so the detail view can look them up by id
@@ -259,9 +305,6 @@ function openBookingDetail(bookingId) {
   const isMinder        = String(b.minder) === String(store.currentUserId());
   const canComplete     = isMinder && b.status === 'confirmed';
   const minderCanCancel = isMinder && (b.status === 'pending' || b.status === 'confirmed');
-  const canStartWalk    = isMinder && b.status === 'confirmed';
-  const canLiveTrack    = !isMinder && b.status === 'confirmed' && String(b.ownerId) === String(store.currentUserId());
-  const isTracking      = activeTrackingBookingId === b.id;
 
   el.innerHTML =
     '<div style="background:white;border-radius:var(--radius);padding:20px;box-shadow:0 2px 12px var(--shadow)">' +
@@ -278,21 +321,11 @@ function openBookingDetail(bookingId) {
         (b.price ? '<div class="info-row" style="display:flex;justify-content:space-between;padding:10px 0"><span style="color:var(--bark-light);font-size:13px">Price</span><span style="font-weight:700;font-size:16px;color:var(--terra)">' + b.price + '</span></div>' : '') +
       '</div>' +
     '</div>' +
-    // Minder: walk tracking + complete
-    (canStartWalk ?
-      '<div style="display:flex;gap:10px;margin-top:16px">' +
-        '<button class="btn-outline" style="flex:1;padding:13px;font-size:14px;' + (isTracking ? 'background:#fff3e0;border-color:#f57c00;color:#f57c00' : '') + '" id="walk-track-btn" onclick="toggleWalkTracking(' + b.id + ')">' +
-          (isTracking ? '⏹ Stop Walk' : '🟢 Start Walk') +
-        '</button>' +
-        '<button class="btn-primary" style="flex:1;padding:13px;font-size:14px" onclick="markBookingComplete(' + b.id + ')">✅ Mark Complete</button>' +
-      '</div>'
+    (canComplete ?
+      '<button class="btn-primary" style="width:100%;margin-top:16px;padding:14px;font-size:14px" onclick="markBookingComplete(' + b.id + ')">✅ Mark Complete</button>'
     : '') +
     (minderCanCancel ?
       '<button class="btn-outline" style="width:100%;margin-top:10px;padding:13px;color:#e53935;border-color:#e53935;font-size:14px" onclick="minderCancelBooking(' + b.id + ')">Cancel Booking</button>'
-    : '') +
-    // Owner: live track + cancel
-    (canLiveTrack ?
-      '<button class="btn-primary" style="width:100%;margin-top:16px;padding:14px;font-size:14px" onclick="openLiveTracking(' + b.id + ')">📍 View Live Location</button>'
     : '') +
     (canCancel ?
       '<button class="btn-outline" style="width:100%;margin-top:10px;padding:13px;color:#e53935;border-color:#e53935;font-size:14px" onclick="cancelBooking(' + b.id + ')">Cancel Booking</button>'
@@ -306,112 +339,10 @@ function closeBookingDetail() {
   document.getElementById('bookings-main-section').style.display = 'block';
 }
 
-// ===== WALK TRACKING — MINDER SIDE =====
-
-function toggleWalkTracking(bookingId) {
-  if (activeTrackingBookingId === bookingId) {
-    stopWalkTracking();
-  } else {
-    startWalkTracking(bookingId);
-  }
-  // Refresh button label in place without closing the detail panel
-  const btn = document.getElementById('walk-track-btn');
-  if (btn) {
-    const isNowTracking = activeTrackingBookingId === bookingId;
-    btn.textContent  = isNowTracking ? '⏹ Stop Walk' : '🟢 Start Walk';
-    btn.style.cssText = isNowTracking
-      ? 'flex:1;padding:13px;font-size:14px;background:#fff3e0;border-color:#f57c00;color:#f57c00'
-      : 'flex:1;padding:13px;font-size:14px';
-  }
-}
-
-function startWalkTracking(bookingId) {
-  if (!navigator.geolocation) {
-    showToast('❌ GPS not available on this device');
-    return;
-  }
-  if (activeWatchId !== null) navigator.geolocation.clearWatch(activeWatchId);
-  activeTrackingBookingId = bookingId;
-  showToast('📍 Walk tracking started');
-  activeWatchId = navigator.geolocation.watchPosition(
-    async pos => {
-      try {
-        await api.pushLocation(bookingId, pos.coords.latitude, pos.coords.longitude);
-      } catch { /* silent — don't spam toasts on transient network hiccup */ }
-    },
-    () => showToast('❌ GPS signal lost'),
-    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
-  );
-}
-
-function stopWalkTracking() {
-  if (activeWatchId !== null) {
-    navigator.geolocation.clearWatch(activeWatchId);
-    activeWatchId = null;
-  }
-  activeTrackingBookingId = null;
-  showToast('⏹ Walk tracking stopped');
-}
-
-// ===== LIVE TRACKING — OWNER SIDE =====
-
-function openLiveTracking(bookingId) {
-  const modal = document.getElementById('tracking-modal');
-  if (!modal) return;
-  modal.style.display = 'flex';
-
-  // Initialise Leaflet map once
-  if (!trackingMap) {
-    trackingMap = L.map('tracking-map').setView([51.515, -0.092], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      maxZoom: 19
-    }).addTo(trackingMap);
-  }
-
-  clearInterval(trackingPollInterval);
-  pollTrackingLocation(bookingId);
-  trackingPollInterval = setInterval(() => pollTrackingLocation(bookingId), 5000);
-}
-
-async function pollTrackingLocation(bookingId) {
-  try {
-    const loc = await api.getLocation(bookingId);
-    const statusEl = document.getElementById('tracking-status');
-    if (loc && loc.lat != null) {
-      const latlng = [loc.lat, loc.lng];
-      if (!trackingMarker) {
-        const pawIcon = L.divIcon({
-          html: '<div style="font-size:28px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3))">🐾</div>',
-          className: '',
-          iconAnchor: [14, 14]
-        });
-        trackingMarker = L.marker(latlng, { icon: pawIcon }).addTo(trackingMap);
-      } else {
-        trackingMarker.setLatLng(latlng);
-      }
-      trackingMap.setView(latlng, 16);
-      if (statusEl) {
-        const updated = new Date(loc.updatedAt);
-        statusEl.innerHTML = '<span style="color:#4caf50;font-weight:600">● Live</span> · Updated ' +
-          updated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      }
-    } else {
-      if (statusEl) statusEl.innerHTML = '<span style="color:var(--bark-light)">● Waiting for minder to start walk…</span>';
-    }
-  } catch { /* silent */ }
-}
-
-function closeLiveTracking() {
-  clearInterval(trackingPollInterval);
-  const modal = document.getElementById('tracking-modal');
-  if (modal) modal.style.display = 'none';
-}
 
 async function markBookingComplete(bookingId) {
   showConfirmModal('✅', 'Mark as Complete?', 'Confirm the service is finished. The owner will be notified and can leave a review.', async function() {
     try {
-      if (activeTrackingBookingId === bookingId) stopWalkTracking();
       await api.updateBooking(bookingId, { status: 'completed' });
       showToast('✅ Booking marked as complete!');
       closeBookingDetail();
@@ -419,6 +350,7 @@ async function markBookingComplete(bookingId) {
       allBookingsCache = bookings;
       renderBookingCards('bookings-upcoming-list', filterUpcoming(bookings));
       renderBookingCards('bookings-past-list',     filterPast(bookings));
+      initLiveTracking(bookings);
       loadNotificationCount();
     } catch (err) {
       showToast('❌ ' + (err.message || 'Failed to complete booking'));
@@ -884,26 +816,6 @@ let adminUsers    = [];
 let adminDisputes = [];
 
 // Chat data
-const chatData = {
-  sarah: { name: 'Sarah K.', avatar: '🧑‍🦱', online: true, messages: [
-    { from: 'them', text: "Hi Usman! Excited for Monday's walk with Buddy 🐕", time: '10:28' },
-    { from: 'me', text: "Hi Sarah! He's been looking forward to it all week 😄", time: '10:29' },
-    { from: 'them', text: 'Haha brilliant! Should I bring his usual treats?', time: '10:31' },
-    { from: 'me', text: 'Yes please! He loves the chicken ones 🍗', time: '10:31' },
-    { from: 'them', text: "Sounds good! I'll bring a treat for Buddy 🐕", time: '10:32' }
-  ]},
-  emma: { name: 'Emma T.', avatar: '🧔', online: false, messages: [
-    { from: 'them', text: "Hi! I've confirmed your booking for Wednesday", time: 'Yesterday' },
-    { from: 'me', text: 'Perfect, thank you! Luna will be ready', time: 'Yesterday' },
-    { from: 'them', text: 'Your booking is confirmed for Wednesday!', time: 'Yesterday' }
-  ]},
-  james: { name: 'James M.', avatar: '👩‍🦰', online: false, messages: [
-    { from: 'them', text: 'Just finished the visit with Luna!', time: 'Mon' },
-    { from: 'them', text: 'Luna was an absolute angel today 🐈', time: 'Mon' },
-    { from: 'me', text: 'Thank you so much James! 😊', time: 'Mon' }
-  ]}
-};
-
 let activeChat = null;
 let selectedPets = [];
 
@@ -1174,7 +1086,7 @@ function selectRole(el, role) {
 // ===== BECOME A MINDER =====
 const BM_ALL_SERVICES = [
   { name: 'Walking',  icon: '🚶', desc: '1 hour walk',   basic: true  },
-  { name: 'Home Visit',   icon: '🏠', desc: '1 hour check-in',     basic: true  },
+  { name: 'Home Visit',   icon: '🏠', desc: '30 min check-in',     basic: true  },
 ];
 let _bmHasQuals = false;
 
@@ -1537,6 +1449,8 @@ function renderProfileAvatar() {
   // Show qualifications upload only for minders
   const qualItem = document.getElementById('upload-quals-item');
   if (qualItem) qualItem.style.display = isMinder ? 'flex' : 'none';
+  const payoutItem = document.getElementById('payout-item');
+  if (payoutItem) payoutItem.style.display = isMinder ? 'flex' : 'none';
 
   // Availability toggle — only visible to minders
   const availRow = document.getElementById('minder-availability-item');
@@ -1607,11 +1521,6 @@ async function handleAvatarUpload(event) {
 // ===== FIND MINDERS =====
 // Cached array of minders loaded from the API (used by search + profile view).
 let loadedMinders = [];
-let activeWatchId           = null;  // geolocation watchPosition handle (minder)
-let activeTrackingBookingId = null;  // booking currently being GPS-tracked
-let trackingPollInterval    = null;  // owner-side poll timer
-let trackingMap             = null;  // Leaflet map instance
-let trackingMarker          = null;  // Leaflet 🐾 marker
 let userCoords = null;          // { lat, lng } once geolocation granted
 const geocodeCache = {};        // locationString -> { lat, lng } | null
 
@@ -1826,6 +1735,14 @@ function switchBookingTab(btn, tab) {
   const reqSection = document.getElementById('bookings-requests');
   if (reqSection) reqSection.style.display = tab === 'requests' ? 'block' : 'none';
   if (tab === 'requests') loadBookingRequests();
+  // Show live GPS card only on upcoming tab
+  const liveCard = document.getElementById('bookings-gps-live');
+  if (liveCard && liveCard.dataset.hasLive === '1') liveCard.style.display = tab === 'upcoming' ? 'block' : 'none';
+  // Load past routes when switching to past tab
+  if (tab === 'past') {
+    const routesSection = document.getElementById('bookings-past-routes');
+    if (routesSection) { routesSection.style.display = 'block'; renderPastRoutes(); }
+  }
 }
 
 // ===== BOOKING FLOW =====
@@ -2615,6 +2532,284 @@ async function submitProfileReview() {
   }
 }
 
+// ===== PAYOUT (pages/payout-details.html) =====
+async function loadPayoutDetails() {
+  const card = document.getElementById('payout-saved-card');
+  const body = document.getElementById('payout-saved-body');
+  const title = document.getElementById('payout-form-title');
+  const err   = document.getElementById('payout-error');
+  if (err)  { err.style.display = 'none'; err.textContent = ''; }
+  if (card) card.style.display = 'none';
+  try {
+    const p = await api.getPayout();
+    if (p && p.hasPayout) {
+      if (card) card.style.display = 'block';
+      if (body) body.innerHTML =
+        '<div><strong>Holder:</strong> ' + escapeHTML(p.accountHolderName || '—') + '</div>' +
+        '<div><strong>Bank:</strong> '   + escapeHTML(p.bankName || '—') + '</div>' +
+        '<div><strong>Sort code:</strong> ' + escapeHTML(p.sortCodeMasked || '—') + '</div>' +
+        '<div><strong>Account:</strong> ' + escapeHTML(p.accountNumberMasked || '—') + '</div>' +
+        (p.updatedAt ? '<div style="margin-top:6px;font-size:11px;opacity:0.7">Last updated ' + new Date(p.updatedAt).toLocaleDateString() + '</div>' : '');
+      if (title) title.textContent = 'Update payout details';
+    } else {
+      if (title) title.textContent = 'Add payout details';
+    }
+  } catch { /* treat as unset */ }
+  ['payout-name-input','payout-bank-input','payout-sort-input','payout-account-input'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+}
+
+async function savePayoutDetails() {
+  const name    = (document.getElementById('payout-name-input')?.value || '').trim();
+  const bank    = (document.getElementById('payout-bank-input')?.value || '').trim();
+  const sort    = (document.getElementById('payout-sort-input')?.value || '').replace(/\D/g, '');
+  const account = (document.getElementById('payout-account-input')?.value || '').replace(/\D/g, '');
+  const errEl   = document.getElementById('payout-error');
+  const setErr  = msg => { if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; } };
+  if (name.length < 2) return setErr('Please enter the account holder name.');
+  if (bank.length < 2) return setErr('Please enter the bank name.');
+  if (sort.length !== 6)    return setErr('Sort code must be 6 digits.');
+  if (account.length !== 8) return setErr('Account number must be 8 digits.');
+  try {
+    await api.updatePayout({ accountHolderName: name, bankName: bank, sortCode: sort, accountNumber: account });
+    showToast('✅ Payout details saved');
+    if (typeof loadPayoutDetails === 'function') loadPayoutDetails();
+  } catch (err) { setErr(err.message || 'Failed to save'); }
+}
+
+// ===== PAYMENT MODAL =====
+let _pendingBookingPayload = null;
+
+async function openPaymentModal() {
+  const m = window._activeMinder || { name: 'your minder', avatar: '🧑‍🦱' };
+  const serviceEl = document.querySelector('.service-option.selected .service-name');
+  const serviceName = serviceEl ? serviceEl.textContent : 'Dog Walk';
+  const dateEl = document.querySelector('.date-chip.selected');
+  const timeEl = document.querySelector('.time-chip.selected');
+  const time = timeEl ? timeEl.textContent.trim() : '08:00';
+  const day = dateEl ? (dateEl.dataset.day || String(new Date().getDate()).padStart(2,'0')) : String(new Date().getDate()).padStart(2,'0');
+  const month = dateEl ? (dateEl.dataset.month || 'Apr') : 'Apr';
+  const monthNums = { Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12 };
+  const bookingDate = new Date().getFullYear() + '-' + String(monthNums[month] || 4).padStart(2,'0') + '-' + day;
+
+  if (String(m.id) === String(store.currentUserId())) { showToast('❌ You cannot book yourself'); return; }
+  if (selectedPets.length === 0) { showToast('❌ Please add a pet before booking'); return; }
+
+  const availCheck = checkMinderAvailability(m, bookingDate, time);
+  if (!availCheck.ok) { showToast('❌ ' + availCheck.reason); return; }
+
+  const selectedPetNames = selectedPets.map(id => (petData[id] && petData[id].name) || id);
+  const selectedPetIds = selectedPets.slice();
+  const totalEl = document.getElementById('summary-total');
+  const price = totalEl ? totalEl.textContent : '£15.00';
+
+  try {
+    const existingBookings = await api.getBookings();
+    const conflict = existingBookings.find(b => {
+      if (b.bookingDate !== bookingDate || b.bookingTime !== time) return false;
+      if (b.status === 'cancelled' || b.status === 'declined') return false;
+      const ids = Array.isArray(b.petIds) ? b.petIds.map(String) : [];
+      return ids.length ? ids.some(id => selectedPetIds.map(String).includes(id))
+        : String(b.petNames||'').split(/\s*&\s*/).map(n=>n.toLowerCase()).some(n=>selectedPetNames.map(x=>x.toLowerCase()).includes(n));
+    });
+    if (conflict) { showToast('❌ One of your selected pets already has a booking at that time'); return; }
+  } catch { /* silent — backend will re-check */ }
+
+  _pendingBookingPayload = {
+    minderKey: m.id, minderName: m.name, minderAvatar: m.avatar, minderImage: m.profileImage || '',
+    service: serviceName, bookingDate, bookingTime: time,
+    petNames: selectedPetNames.join(' & '), petIds: selectedPetIds, price
+  };
+
+  const amtEl = document.getElementById('pay-modal-amount');
+  if (amtEl) amtEl.textContent = price;
+  const errEl = document.getElementById('pay-error');
+  if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+  const modal = document.getElementById('pay-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function formatCardNumber(el) {
+  el.value = el.value.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
+}
+function formatExpiry(el) {
+  let d = el.value.replace(/\D/g, '').slice(0, 4);
+  if (d.length >= 3) d = d.slice(0, 2) + '/' + d.slice(2);
+  el.value = d;
+}
+function luhnValid(num) {
+  const d = String(num).replace(/\D/g, '');
+  if (d.length < 13 || d.length > 19) return false;
+  let sum = 0, alt = false;
+  for (let i = d.length - 1; i >= 0; i--) {
+    let n = +d[i]; if (alt) { n *= 2; if (n > 9) n -= 9; } sum += n; alt = !alt;
+  }
+  return sum % 10 === 0;
+}
+function closePaymentModal() {
+  const modal = document.getElementById('pay-modal');
+  if (modal) modal.style.display = 'none';
+}
+async function submitPayment() {
+  if (!_pendingBookingPayload) { showToast('❌ Booking data missing'); return; }
+  const name     = document.getElementById('pay-name')?.value.trim();
+  const number   = document.getElementById('pay-number')?.value.replace(/\s/g, '');
+  const expiry   = document.getElementById('pay-expiry')?.value.trim();
+  const cvv      = document.getElementById('pay-cvv')?.value.trim();
+  const postcode = document.getElementById('pay-postcode')?.value.trim().toUpperCase();
+  const errEl    = document.getElementById('pay-error');
+  const setErr   = msg => { if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; } };
+  if (!name || name.length < 2) return setErr('Please enter the cardholder name.');
+  if (!/^\d{13,19}$/.test(number)) return setErr('Card number must be 13–19 digits.');
+  if (!/^\d{2}\/\d{2}$/.test(expiry)) return setErr('Expiry must be MM/YY.');
+  const [mm] = expiry.split('/').map(Number);
+  if (mm < 1 || mm > 12) return setErr('Invalid expiry month.');
+  if (!/^\d{3,4}$/.test(cvv)) return setErr('CVV must be 3 or 4 digits.');
+  if (!/^[A-Z0-9 ]{3,8}$/.test(postcode)) return setErr('Invalid postcode.');
+  const btn = document.getElementById('pay-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Authorising…'; }
+  const payment = {
+    method: 'card', cardholderName: name, last4: number.slice(-4), expiry, postcode,
+    status: 'authorised', transactionId: 'txn_' + Date.now().toString(36),
+    amount: _pendingBookingPayload.price, authorisedAt: new Date().toISOString()
+  };
+  try {
+    await api.createBooking(Object.assign({}, _pendingBookingPayload, { payment }));
+    closePaymentModal();
+    showToast('✅ Payment authorised — booking sent to ' + (window._activeMinder?.name || 'minder'));
+    setTimeout(() => window.location.href = 'bookings.html', 1200);
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Authorise Payment'; }
+    setErr(err.message || 'Booking failed');
+  }
+}
+
+// ===== ROUTE TRACKING & HISTORY =====
+let _liveTickListener = null, _liveBookingId = null, _liveStartCoord = null;
+let _liveWatchdog = null, _routeViewMap = null;
+
+function pathMeters(path) {
+  if (!path || path.length < 2) return 0;
+  let d = 0;
+  for (let i = 1; i < path.length; i++) {
+    const dLat = (path[i].lat - path[i-1].lat) * 111320;
+    const dLng = (path[i].lng - path[i-1].lng) * 111320 * Math.cos(path[i-1].lat * Math.PI / 180);
+    d += Math.hypot(dLat, dLng);
+  }
+  return d;
+}
+function metersToKmStr(m) { return m < 1000 ? Math.round(m) + ' m' : (m / 1000).toFixed(1) + ' km'; }
+function msToMinutesStr(ms) { const m = Math.round(ms / 60000); return m < 60 ? m + ' min' : Math.floor(m/60) + 'h ' + (m%60) + 'min'; }
+function metersBetween(a, b) {
+  const dLat = (b.lat - a.lat) * 111320;
+  const dLng = (b.lng - a.lng) * 111320 * Math.cos(a.lat * Math.PI / 180);
+  return Math.hypot(dLat, dLng);
+}
+function resolveUserStartCoord() {
+  if (userProfile && Number.isFinite(userProfile.locationLat) && Number.isFinite(userProfile.locationLng)) {
+    return { lat: userProfile.locationLat, lng: userProfile.locationLng };
+  }
+  return (typeof PawTracking !== 'undefined') ? PawTracking.geocodeCity(userProfile?.location) : { lat: 51.5074, lng: -0.1278 };
+}
+
+function initLiveTracking(bookings) {
+  if (typeof PawTracking === 'undefined') return;
+  const card = document.getElementById('bookings-gps-live');
+  if (!card) return;
+  const live = PawTracking.getLiveBooking(bookings || []);
+  if (!live) { card.dataset.hasLive = ''; card.style.display = 'none'; scheduleLiveWatchdog(bookings); return; }
+  const startCoord = resolveUserStartCoord();
+  _liveStartCoord = startCoord; _liveBookingId = live.id;
+  card.dataset.hasLive = '1';
+  card.style.display = document.getElementById('bookings-upcoming')?.style.display !== 'none' ? 'block' : 'none';
+  const titleEl = document.getElementById('gps-live-title');
+  if (titleEl) titleEl.textContent = '📍 Live · ' + (live.service || 'Walk') + ' · ' + (live.minderName || 'Minder');
+  const w = PawTracking.windowFor(live);
+  PawTracking.startTracking({ bookingId: live.id, startCoord, startsAt: w?.start, endsAt: w?.end, service: live.service });
+  if (_liveTickListener) PawTracking.offTick(_liveTickListener);
+  _liveTickListener = (bid, path, state) => {
+    if (bid !== _liveBookingId) return;
+    const distEl = document.getElementById('gps-live-distance');
+    const durEl  = document.getElementById('gps-live-duration');
+    const statEl = document.getElementById('gps-live-status');
+    if (distEl) distEl.textContent = metersToKmStr(pathMeters(path));
+    if (durEl)  durEl.textContent  = msToMinutesStr(Date.now() - state.startedAt);
+    if (statEl) statEl.textContent = Date.now() >= state.endsAt ? 'Completed' : 'Active';
+    if (Date.now() >= state.endsAt) { renderPastRoutes(); initLiveTracking(allBookingsCache); }
+  };
+  PawTracking.onTick(_liveTickListener);
+}
+
+function scheduleLiveWatchdog(bookings) {
+  if (_liveWatchdog) return;
+  _liveWatchdog = setInterval(() => {
+    if (_liveBookingId && PawTracking.isTracking(_liveBookingId)) return;
+    initLiveTracking(allBookingsCache || bookings || []);
+  }, 30000);
+}
+
+async function renderPastRoutes() {
+  const host = document.getElementById('bookings-past-routes-list');
+  if (!host) return;
+  let routes = [];
+  try { routes = await api._req('GET', '/routes'); } catch { routes = []; }
+  if (!routes?.length) { host.innerHTML = '<p style="font-size:13px;color:var(--bark-light);margin:8px 0">No recorded walks yet.</p>'; return; }
+  const byBooking = {};
+  (allBookingsCache || []).forEach(b => { byBooking[b.id] = b; });
+  routes.sort((a, b) => new Date(b.endedAt) - new Date(a.endedAt));
+  host.innerHTML = routes.map(r => {
+    const b = byBooking[r.bookingId] || {};
+    const distM = pathMeters(r.path || []);
+    const firstT = r.path?.[0]?.t, lastT = r.path?.[r.path.length-1]?.t;
+    const durMs = (firstT && lastT) ? lastT - firstT : 0;
+    const title = (b.petNames || 'Walk') + (b.minderName ? ' with ' + b.minderName : '');
+    const date  = b.bookingDate || (r.endedAt || '').slice(0, 10);
+    return '<div class="gps-route-card" onclick="openRouteViewModal(' + r.bookingId + ')"><div class="gps-route-icon">🗺️</div><div class="gps-route-info"><div class="gps-route-date">' + escapeHTML(date + ' – ' + title) + '</div><div class="gps-route-detail">' + metersToKmStr(distM) + ' · ' + msToMinutesStr(durMs) + '</div></div><span style="color:var(--bark-light);font-size:16px">›</span></div>';
+  }).join('');
+}
+
+async function openRouteViewModal(bookingId) {
+  const modal = document.getElementById('route-view-modal');
+  if (!modal) return;
+  modal.classList.add('open');
+  let route = null;
+  try { route = await api.getRoute(bookingId); } catch { showToast('❌ Could not load route'); return; }
+  if (!route?.path?.length) { showToast('Route is empty'); return; }
+  const b = (allBookingsCache || []).find(x => x.id === Number(bookingId)) || {};
+  const title = document.getElementById('route-view-title');
+  if (title) title.textContent = (b.bookingDate || '') + ' – ' + (b.petNames || 'Walk') + (b.minderName ? ' with ' + b.minderName : '');
+  const distEl = document.getElementById('route-view-distance');
+  const durEl  = document.getElementById('route-view-duration');
+  if (distEl) distEl.textContent = metersToKmStr(pathMeters(route.path));
+  const firstT = route.path[0].t, lastT = route.path[route.path.length-1].t;
+  if (durEl) durEl.textContent = msToMinutesStr(lastT - firstT);
+  if (typeof window.whenMapsReady !== 'function' || !window.hasGoogleMapsKey?.()) {
+    showToast('⚠️ Set GOOGLE_MAPS_API_KEY in js/config.js to view routes');
+    return;
+  }
+  window.whenMapsReady(() => {
+    const el = document.getElementById('route-view-map');
+    if (!el) return;
+    _routeViewMap = new google.maps.Map(el, { disableDefaultUI: true, zoomControl: true, gestureHandling: 'greedy' });
+    const latlngs = route.path.map(p => ({ lat: p.lat, lng: p.lng }));
+    new google.maps.Polyline({ path: latlngs, strokeColor: '#d97350', strokeOpacity: 0.9, strokeWeight: 4, map: _routeViewMap });
+    new google.maps.Marker({ position: latlngs[0], map: _routeViewMap, title: 'Start' });
+    new google.maps.Marker({ position: latlngs[latlngs.length-1], map: _routeViewMap, title: 'End' });
+    const bounds = new google.maps.LatLngBounds();
+    latlngs.forEach(ll => bounds.extend(ll));
+    _routeViewMap.fitBounds(bounds, 24);
+  });
+}
+
+function closeRouteViewModal() {
+  const modal = document.getElementById('route-view-modal');
+  if (modal) modal.classList.remove('open');
+  _routeViewMap = null;
+  const el = document.getElementById('route-view-map');
+  if (el) el.innerHTML = '';
+}
+
 // ===== HELP CENTRE / REPORT =====
 function openHelpCentre() {
   previousScreen = currentScreen;
@@ -2773,7 +2968,7 @@ function openEditProfileModal() {
           }
         }
       });
-      document.getElementById('edit-price-min').value = userProfile.priceMin != null ? userProfile.priceMin : 0;
+      document.getElementById('edit-price-min').value = userProfile.priceMin != null ? userProfile.priceMin : 10;
       document.getElementById('edit-price-max').value = userProfile.priceMax != null ? userProfile.priceMax : 25;
       document.getElementById('edit-experience').value = userProfile.experience || '';
       // Load certifications tags

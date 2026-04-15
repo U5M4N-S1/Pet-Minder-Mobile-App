@@ -2502,6 +2502,13 @@ function submitProfileReview() {
   showToast('✅ Review submitted!');
 }
 
+// ===== TERMS & PRIVACY =====
+function openTermsPrivacy() {
+  previousScreen = currentScreen;
+  show('terms');
+  currentScreen = 'terms';
+}
+
 // ===== HELP CENTRE / REPORT =====
 function openHelpCentre() {
   previousScreen = currentScreen;

@@ -6,14 +6,14 @@
 }
 .landing-logo-paw {
   font-family: 'Playfair Display', Georgia, serif;
-  font-size: clamp(48px, 12vw, 64px);
+  font-size: clamp(72px, 18vw, 104px);
   font-weight: 800;
   color: var(--cream);
   letter-spacing: -1px;
 }
 .landing-logo-pal {
   font-family: 'Caveat', cursive;
-  font-size: clamp(56px, 14vw, 74px);
+  font-size: clamp(84px, 20vw, 120px);
   font-weight: 700;
   color: var(--orange);
   margin-left: 2px;

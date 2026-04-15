@@ -1,6 +1,6 @@
 /* Home dashboard hero section */
 .home-hero { background: var(--bark); padding: 28px 24px 36px; position: relative; overflow: hidden; }
-.home-hero::after { content: ''; position: absolute; bottom: -20px; left: 0; right: 0; height: 40px; background: var(--cream); border-radius: 40px 40px 0 0; }
+.home-hero::after { content: ''; position: absolute; bottom: -20px; left: 0; right: 0; height: 40px; background: transparent; border-radius: 40px 40px 0 0; }
 .home-greeting { font-family: 'Playfair Display', serif; font-size: 26px; color: var(--cream); margin-bottom: 4px; }
 .home-greeting span { font-style: italic; color: var(--terra-light); }
 .home-sub { font-size: 14px; color: var(--sand); margin-bottom: 4px; }
@@ -9,7 +9,7 @@
 
 /* Stats cards */
 .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 500px; margin: 0 auto; }
-.stat-card { background: white; border-radius: var(--radius-sm); padding: 16px; text-align: center; box-shadow: 0 2px 12px var(--shadow); }
+.stat-card { background: var(--light-brown); border-radius: var(--radius-sm); padding: 16px; text-align: center; box-shadow: 0 2px 12px var(--shadow); }
 .stat-icon { font-size: 22px; margin-bottom: 6px; }
 .stat-value { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; color: var(--bark); }
 .stat-label { font-size: 11px; color: var(--bark-light); margin-top: 2px; }
@@ -17,7 +17,7 @@
 /* Minder cards on home page */
 .card-row { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; justify-content: center; flex-wrap: wrap; }
 .card-row::-webkit-scrollbar { display: none; }
-.minder-card { background: white; border-radius: var(--radius); padding: 18px; min-width: 200px; box-shadow: 0 2px 16px var(--shadow); transition: transform 0.2s, box-shadow 0.2s; flex-shrink: 0; display: flex; flex-direction: column; }
+.minder-card { background: var(--light-brown); border-radius: var(--radius); padding: 18px; min-width: 200px; box-shadow: 0 2px 16px var(--shadow); transition: transform 0.2s, box-shadow 0.2s; flex-shrink: 0; display: flex; flex-direction: column; }
 .minder-card:hover { transform: translateY(-3px); box-shadow: 0 6px 24px var(--shadow); }
 .minder-avatar { width: 56px; height: 56px; border-radius: 50%; background: var(--sand-light); display: flex; align-items: center; justify-content: center; font-size: 28px; margin-bottom: 12px; }
 .minder-name { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 600; color: var(--bark); margin-bottom: 2px; }
@@ -31,12 +31,12 @@
 .btn-book-now:hover { background: #333; transform: translateY(-1px); }
 
 /* Message button on minder cards */
-.btn-msg-minder { flex: 1; background: white; color: var(--bark); border: 1.5px solid var(--sand); padding: 9px 12px; border-radius: 50px; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; text-align: center; }
+.btn-msg-minder { flex: 1; background: var(--light-brown); color: var(--bark); border: 1.5px solid var(--sand); padding: 9px 12px; border-radius: 50px; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; text-align: center; }
 .btn-msg-minder:hover { border-color: var(--terra); color: var(--terra); }
 
 /* Pet cards on home page */
 .pets-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
-.pet-card { background: white; border-radius: var(--radius); padding: 20px 16px; text-align: center; box-shadow: 0 2px 16px var(--shadow); cursor: pointer; transition: transform 0.2s; }
+.pet-card { background: var(--light-brown); border-radius: var(--radius); padding: 20px 16px; text-align: center; box-shadow: 0 2px 16px var(--shadow); cursor: pointer; transition: transform 0.2s; }
 .pet-card:hover { transform: translateY(-3px); }
 .pet-emoji { font-size: 40px; margin-bottom: 10px; }
 .pet-name { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 600; color: var(--bark); }

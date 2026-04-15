@@ -83,7 +83,7 @@
       "firstName": "A",
       "lastName": "B",
       "email": "carer@gmail.com",
-      "passwordHash": "$2b$12$zPijstKnVcwv0jeJ3ua9heeMVwwoN8DF4yW1JTu6awNO.Rp0gKTje",
+      "passwordHash": "$2b$12$cwi.kkgzyJQ/.9oZionqoeOv3Jt49igt8xqdIJnDiqFc3Ugt69bnK",
       "role": "minder",
       "location": "London",
       "createdAt": "2026-04-10T10:13:24.930Z",
@@ -99,8 +99,8 @@
       "priceMax": 30,
       "resetCode": null,
       "resetCodeExpires": null,
-      "online": true,
-      "lastSeenAt": "2026-04-15T17:15:24.288Z",
+      "online": false,
+      "lastSeenAt": "2026-04-15T18:25:34.095Z",
       "availableDays": [
         "tue",
         "wed",
@@ -412,6 +412,20 @@
       "services": "Walking, Home Visit",
       "online": true,
       "lastSeenAt": "2026-04-14T23:15:26.564Z"
+    },
+    {
+      "id": 1022,
+      "firstName": "nn",
+      "lastName": "nnn",
+      "email": "n@gg.com",
+      "passwordHash": "$2b$12$p5HuKK9RYERtE7SBdQ/t8OrvbV.TVEyyymnruTvqzDbiC0i4LNZ86",
+      "role": "owner",
+      "location": "Barking, UK",
+      "createdAt": "2026-04-15T17:33:10.922Z",
+      "locationLat": 51.5377369,
+      "locationLng": 0.076127,
+      "online": false,
+      "lastSeenAt": "2026-04-15T17:39:22.889Z"
     }
   ],
   "bookings": [
@@ -1044,7 +1058,7 @@
       "name": "Buddy",
       "type": "Rabbit",
       "breed": "Golden Retriever",
-      "age": "3 years",
+      "age": "4",
       "medical": "",
       "care": "",
       "emoji": "🐇",
@@ -1241,6 +1255,18 @@
       "care": "sddas",
       "emoji": "🐕",
       "createdAt": "2026-04-15T17:15:37.615Z"
+    },
+    {
+      "id": 20,
+      "ownerId": 1022,
+      "name": "neemz",
+      "type": "Dog",
+      "breed": "Golden Retriever",
+      "age": "4",
+      "medical": "sss",
+      "care": "sss",
+      "emoji": "🐕",
+      "createdAt": "2026-04-15T17:33:10.940Z"
     }
   ],
   "disputes": [

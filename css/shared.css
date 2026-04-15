@@ -17,6 +17,7 @@
   --radius: 16px;
   --radius-sm: 10px;
   --orange: #F5A623;
+  --light-brown: #f5ead5;
 }
 
 /* Reset */
@@ -24,7 +25,9 @@
 
 body {
   font-family: 'DM Sans', sans-serif;
-  background: var(--cream);
+  background-color: var(--bark);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='110' height='110' viewBox='0 0 110 110'><g fill='%239b6dd1' opacity='0.22'><ellipse cx='26' cy='38' rx='7' ry='6'/><circle cx='17' cy='26' r='3.2'/><circle cx='24' cy='19' r='3.2'/><circle cx='33' cy='19' r='3.2'/><circle cx='40' cy='26' r='3.2'/><g transform='translate(70 72) rotate(25)'><ellipse cx='0' cy='12' rx='7' ry='6'/><circle cx='-9' cy='0' r='3.2'/><circle cx='-2' cy='-7' r='3.2'/><circle cx='7' cy='-7' r='3.2'/><circle cx='14' cy='0' r='3.2'/></g></g></svg>");
+  background-repeat: repeat;
   color: var(--bark);
   min-height: 100vh;
   overflow-x: hidden;
@@ -70,20 +73,37 @@ body {
 /* Form inputs */
 .field-group { display: flex; flex-direction: column; gap: 6px; }
 .field-group label { font-size: 13px; font-weight: 500; color: var(--bark-light); }
-.field-group input, .field-group select { padding: 10px 14px; border: 1.5px solid var(--sand); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 15px; color: var(--bark); background: white; outline: none; transition: border-color 0.2s; }
+.field-group input, .field-group select { padding: 10px 14px; border: 1.5px solid var(--sand); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 15px; color: var(--bark); background: var(--light-brown); outline: none; transition: border-color 0.2s, background-color 0.2s; }
 .field-group input:focus, .field-group select:focus { border-color: var(--terra); }
 
+/* Every editable control starts cream; once the user focuses it or types a
+   value the background flips to white so the active/filled field is obvious
+   against the other cream boxes. */
+input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+textarea,
+select {
+  background-color: var(--light-brown);
+  transition: background-color 0.2s, border-color 0.2s;
+}
+input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+textarea:focus,
+select:focus,
+input[placeholder]:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:placeholder-shown),
+textarea[placeholder]:not(:placeholder-shown) {
+  background-color: #ffffff;
+}
+
 /* Search bar */
-.home-search { display: flex; background: white; border-radius: 50px; padding: 6px 6px 6px 18px; align-items: center; gap: 8px; }
+.home-search { display: flex; background: var(--light-brown); border-radius: 50px; padding: 6px 6px 6px 18px; align-items: center; gap: 8px; }
 .home-search input { flex: 1; border: none; outline: none; font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--bark); min-width: 0; }
 .search-btn { background: var(--terra); color: white; border: none; padding: 10px 18px; border-radius: 50px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; flex-shrink: 0; }
 
 .section-pad { padding: 24px 24px 0; }
-.section-title { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--bark); margin-bottom: 16px; }
+.section-title { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--cream); margin-bottom: 16px; }
 
 /* Booking cards */
 .booking-list { display: flex; flex-direction: column; gap: 12px; }
-.booking-card { background: white; border-radius: var(--radius); padding: 18px; box-shadow: 0 2px 16px var(--shadow); display: flex; gap: 14px; align-items: center; cursor: pointer; transition: transform 0.2s; }
+.booking-card { background: var(--light-brown); border-radius: var(--radius); padding: 18px; box-shadow: 0 2px 16px var(--shadow); display: flex; gap: 14px; align-items: center; cursor: pointer; transition: transform 0.2s; }
 .booking-card:hover { transform: translateY(-2px); }
 .booking-date-block { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 48px; flex-shrink: 0; }
 .booking-date-day { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 700; color: var(--bark); line-height: 1; }
@@ -101,7 +121,7 @@ body {
 /* Pet edit/add modal */
 .pet-modal-overlay { position: fixed; inset: 0; background: rgba(61,43,31,0.5); z-index: 200; display: flex; align-items: flex-start; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; padding: 36px 20px 20px; }
 .pet-modal-overlay.open { opacity: 1; pointer-events: all; }
-.pet-modal { background: white; border-radius: var(--radius); width: 100%; max-width: 440px; padding: 28px 24px; box-shadow: 0 8px 40px var(--shadow); max-height: 85vh; overflow-y: auto; }
+.pet-modal { background: var(--light-brown); border-radius: var(--radius); width: 100%; max-width: 440px; padding: 28px 24px; box-shadow: 0 8px 40px var(--shadow); max-height: 85vh; overflow-y: auto; }
 .pet-modal h3 { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--bark); margin-bottom: 20px; }
 .pet-modal .field-group { margin-bottom: 14px; }
 .pet-modal textarea { width: 100%; padding: 12px 14px; border: 1.5px solid var(--sand); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--bark); resize: vertical; min-height: 70px; outline: none; }
@@ -111,7 +131,7 @@ body {
 /* Confirm modal */
 .confirm-modal-overlay { position: fixed; inset: 0; background: rgba(61,43,31,0.5); z-index: 250; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; padding: 20px; }
 .confirm-modal-overlay.open { opacity: 1; pointer-events: all; }
-.confirm-modal { background: white; border-radius: var(--radius); width: 100%; max-width: 360px; padding: 32px 28px; box-shadow: 0 8px 40px var(--shadow); text-align: center; }
+.confirm-modal { background: var(--light-brown); border-radius: var(--radius); width: 100%; max-width: 360px; padding: 32px 28px; box-shadow: 0 8px 40px var(--shadow); text-align: center; }
 .confirm-modal-icon { font-size: 40px; margin-bottom: 12px; }
 .confirm-modal h3 { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--bark); margin-bottom: 8px; }
 .confirm-modal p { font-size: 14px; color: var(--bark-light); line-height: 1.5; margin-bottom: 20px; }
@@ -123,12 +143,15 @@ body {
 
 /* Back button */
 .back-btn { position: absolute; top: 16px; left: 16px; background: rgba(255,255,255,0.15); border: none; color: white; width: 36px; height: 36px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+/* Static back buttons sit on the cream card background, so give them a dark
+   outline and ink-coloured arrow so the control is clearly visible. */
+.back-btn[style*="position:static"] { border: 1.5px solid var(--bark); color: var(--bark); }
 
 .hidden { display: none !important; }
 
 /* Registration pet cards */
 .reg-pets-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.reg-pet-card { display: flex; align-items: center; gap: 8px; background: white; border: 1.5px solid var(--sand); border-radius: var(--radius-sm); padding: 8px 12px; cursor: pointer; transition: all 0.2s; font-size: 13px; }
+.reg-pet-card { display: flex; align-items: center; gap: 8px; background: var(--light-brown); border: 1.5px solid var(--sand); border-radius: var(--radius-sm); padding: 8px 12px; cursor: pointer; transition: all 0.2s; font-size: 13px; }
 .reg-pet-card:hover { border-color: var(--terra); background: #fef3ed; }
 
 /* Report button on minder profile hero */
@@ -142,7 +165,7 @@ body {
 /* Report modal */
 .report-modal-overlay { position: fixed; inset: 0; background: rgba(61,43,31,0.55); z-index: 260; display: flex; align-items: flex-start; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.25s; padding: 40px 16px 16px; }
 .report-modal-overlay.open { opacity: 1; pointer-events: all; }
-.report-modal { background: white; border-radius: var(--radius); width: 100%; max-width: 420px; padding: 24px 22px; box-shadow: 0 8px 40px var(--shadow); max-height: 90vh; overflow-y: auto; }
+.report-modal { background: var(--light-brown); border-radius: var(--radius); width: 100%; max-width: 420px; padding: 24px 22px; box-shadow: 0 8px 40px var(--shadow); max-height: 90vh; overflow-y: auto; }
 .report-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .report-modal-header h3 { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--bark); margin: 0; }
 .report-modal-close { background: none; border: none; font-size: 24px; color: var(--bark-light); cursor: pointer; line-height: 1; padding: 0 6px; }
@@ -164,7 +187,7 @@ body {
 .service-prices-grid { display: flex; flex-direction: column; gap: 8px; }
 .service-price-row { display: flex; align-items: center; gap: 12px; background: var(--warm-white); border: 1px solid var(--sand-light); border-radius: 10px; padding: 8px 12px; }
 .service-price-row label { flex: 1; font-size: 14px; color: var(--bark); font-weight: 500; }
-.service-price-input { display: flex; align-items: center; gap: 4px; background: var(--cream); border: 1px solid var(--sand); border-radius: 8px; padding: 4px 8px; }
+.service-price-input { display: flex; align-items: center; gap: 4px; background: var(--light-brown); border: 1px solid var(--sand); border-radius: 8px; padding: 4px 8px; }
 .service-price-input .currency { color: var(--bark-light); font-size: 13px; }
 .service-price-input .per { color: var(--bark-light); font-size: 12px; }
 .service-price-input input { width: 60px; border: none; background: transparent; outline: none; font-size: 14px; color: var(--bark); text-align: right; font-family: inherit; }

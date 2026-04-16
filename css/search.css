@@ -1,5 +1,5 @@
 /* Search page filters bar */
-.search-filters { padding: 20px 24px; background: transparent; border-bottom: 1px solid var(--bark-light); display: flex; flex-direction: column; gap: 12px; }
+.search-filters { padding: 20px 24px; background: transparent; display: flex; flex-direction: column; gap: 12px; }
 .search-bar-row { display: flex; gap: 8px; align-items: center; }
 .filter-row { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
 .filter-row::-webkit-scrollbar { display: none; }
